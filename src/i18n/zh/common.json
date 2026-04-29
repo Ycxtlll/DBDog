@@ -1,0 +1,23 @@
+{
+  "app_name": "DBDog",
+  "loading": "加载中...",
+  "error": "错误",
+  "cancel": "取消",
+  "save": "保存",
+  "delete": "删除",
+  "edit": "编辑",
+  "close": "关闭",
+  "refresh": "刷新",
+  "search": "搜索",
+  "no_results": "无结果",
+  "confirm": "确认",
+  "yes": "是",
+  "no": "否",
+  "ok": "确定",
+  "theme_light": "浅色",
+  "theme_dark": "深色",
+  "language_en": "英语",
+  "language_zh": "中文",
+  "settings": "设置",
+  "about": "关于"
+}

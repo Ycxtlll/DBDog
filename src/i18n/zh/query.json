@@ -1,0 +1,14 @@
+{
+  "executing": "执行中...",
+  "executed_in": "耗时 {{ms}} 毫秒",
+  "rows_affected": "影响 {{count}} 行",
+  "rows_returned": "返回 {{count}} 行",
+  "truncated": "结果已截断（显示前 {{limit}} 行）",
+  "no_results": "查询无结果",
+  "export": "导出",
+  "export_csv": "导出为CSV",
+  "export_json": "导出为JSON",
+  "export_excel": "导出为Excel",
+  "filter": "筛选",
+  "clear_filter": "清除筛选"
+}

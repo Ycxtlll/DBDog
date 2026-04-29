@@ -1,0 +1,13 @@
+{
+  "title": "设置",
+  "general": "通用",
+  "editor": "编辑器",
+  "appearance": "外观",
+  "theme": "主题",
+  "language": "语言",
+  "font_size": "字体大小",
+  "default_limit": "默认查询限制",
+  "tab_size": "制表符大小",
+  "connection_timeout": "连接超时（秒）",
+  "cache_ttl": "缓存有效期（秒）"
+}

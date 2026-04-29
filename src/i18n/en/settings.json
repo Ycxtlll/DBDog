@@ -1,0 +1,13 @@
+{
+  "title": "Settings",
+  "general": "General",
+  "editor": "Editor",
+  "appearance": "Appearance",
+  "theme": "Theme",
+  "language": "Language",
+  "font_size": "Font Size",
+  "default_limit": "Default Query Limit",
+  "tab_size": "Tab Size",
+  "connection_timeout": "Connection Timeout (sec)",
+  "cache_ttl": "Cache TTL (sec)"
+}

@@ -1,0 +1,23 @@
+{
+  "app_name": "DBDog",
+  "loading": "Loading...",
+  "error": "Error",
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "edit": "Edit",
+  "close": "Close",
+  "refresh": "Refresh",
+  "search": "Search",
+  "no_results": "No results",
+  "confirm": "Confirm",
+  "yes": "Yes",
+  "no": "No",
+  "ok": "OK",
+  "theme_light": "Light",
+  "theme_dark": "Dark",
+  "language_en": "English",
+  "language_zh": "Chinese",
+  "settings": "Settings",
+  "about": "About"
+}
