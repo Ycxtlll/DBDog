@@ -14,10 +14,10 @@ pub struct ConnectionManager {
 }
 
 impl ConnectionManager {
-    pub async fn new(app_data_dir: PathBuf) -> Result<Self> {
+    pub fn new(app_data_dir: PathBuf) -> Result<Self> {
         let config_path = app_data_dir.join("connections.json");
         let configs = if config_path.exists() {
-            let content = tokio::fs::read_to_string(&config_path).await.map_err(|e| {
+            let content = std::fs::read_to_string(&config_path).map_err(|e| {
                 AppError::Config(format!("Failed to read connections: {}", e))
             })?;
             serde_json::from_str(&content).unwrap_or_default()

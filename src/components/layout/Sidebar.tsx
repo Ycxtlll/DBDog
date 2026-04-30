@@ -8,6 +8,7 @@ import BookmarkPanel from '../sidebar/BookmarkPanel';
 import { ErDiagramView } from '../er/ErDiagramView';
 import { ExplainVisualizer } from '../explain/ExplainVisualizer';
 import { HealthDashboard } from '../health/HealthDashboard';
+import { SchemaDiffView } from '../diff/SchemaDiffView';
 
 const Sidebar: React.FC = () => {
   const { sidebarPanel, isSidebarOpen, sidebarWidth } = useUIStore();
@@ -37,6 +38,7 @@ const Sidebar: React.FC = () => {
       {sidebarPanel === 'er' && <ErDiagramView />}
       {sidebarPanel === 'explain' && <ExplainVisualizer />}
       {sidebarPanel === 'health' && <HealthDashboard />}
+      {sidebarPanel === 'diff' && <SchemaDiffView />}
     </div>
   );
 };

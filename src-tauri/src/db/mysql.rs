@@ -2,11 +2,12 @@ use async_trait::async_trait;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlRow};
 use sqlx::{MySql, Row, Column};
 use std::time::{Duration, Instant};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 use crate::db::driver::*;
 use crate::db::types::*;
-use crate::error::{AppError, Result};
+use crate::error::Result;
 
 pub struct MysqlDriver;
 
@@ -417,6 +418,46 @@ impl DatabaseMetadata for MysqlDriver {
         }
 
         Ok(hits)
+    }
+
+    async fn capture_snapshot(
+        &self,
+        pool: &DatabasePool,
+        database: &str,
+    ) -> Result<DatabaseSnapshot> {
+        // Capture tables
+        let tables = self.list_tables(pool, database, None).await?;
+        let mut table_details = Vec::new();
+        for table in tables.iter().filter(|t| t.table_type == "BASE TABLE") {
+            match self.describe_table(pool, database, &table.name).await {
+                Ok(detail) => table_details.push(detail),
+                Err(e) => tracing::warn!("Failed to describe table {}: {}", table.name, e),
+            }
+        }
+
+        // Capture views (as TableInfo)
+        let view_names = self.list_views(pool, database).await?;
+        let views = view_names.into_iter().map(|name| TableInfo {
+            name,
+            schema: database.to_string(),
+            table_type: "VIEW".to_string(),
+            row_count: None,
+            comment: None,
+        }).collect();
+
+        // Capture triggers (all triggers in the database, not per table)
+        let triggers = self.get_triggers(pool, database, "%").await?;
+
+        // Note: snapshot id, connection_id, captured_at will be filled by caller
+        Ok(DatabaseSnapshot {
+            id: String::new(),
+            connection_id: String::new(),
+            database_name: database.to_string(),
+            captured_at: chrono::Utc::now().to_rfc3339(),
+            tables: table_details,
+            views,
+            triggers,
+        })
     }
 }
 

@@ -40,3 +40,4 @@ desktop.ini
 .claude/plans/
 .claude/memory/
 .claude/scheduled_tasks.json
+.claude/settings.local.json

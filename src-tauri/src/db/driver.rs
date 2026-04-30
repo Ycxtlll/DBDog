@@ -71,6 +71,11 @@ pub trait DatabaseMetadata: Send + Sync + 'static {
         pool: &DatabasePool,
         query: &str,
     ) -> Result<Vec<SchemaSearchHit>>;
+    async fn capture_snapshot(
+        &self,
+        pool: &DatabasePool,
+        database: &str,
+    ) -> Result<DatabaseSnapshot>;
 }
 
 #[async_trait]

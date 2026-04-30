@@ -1,8 +1,12 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::path::PathBuf;
+use std::fs;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::db::types::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryHistoryEntry {
@@ -36,6 +40,11 @@ pub struct LocalDb {
 
 impl LocalDb {
     pub fn new(path: PathBuf) -> Result<Self, rusqlite::Error> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+            })?;
+        }
         let conn = Connection::open(path)?;
         Self::run_migrations(&conn)?;
         Ok(Self {
@@ -275,5 +284,57 @@ impl LocalDb {
             result.push(folder?);
         }
         Ok(result)
+    }
+
+    pub async fn insert_snapshot(&self, snapshot: &DatabaseSnapshot) -> Result<String, rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        let json = serde_json::to_string(snapshot).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        conn.execute(
+            "INSERT INTO schema_snapshots (id, connection_id, database_name, snapshot_json) VALUES (?1, ?2, ?3, ?4)",
+            params![snapshot.id, snapshot.connection_id, snapshot.database_name, json],
+        )?;
+        Ok(snapshot.id.clone())
+    }
+
+    pub async fn get_snapshot(&self, id: &str) -> Result<Option<DatabaseSnapshot>, rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT snapshot_json FROM schema_snapshots WHERE id = ?1")?;
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            let json: String = row.get(0)?;
+            let snapshot: DatabaseSnapshot = serde_json::from_str(&json).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            Ok(Some(snapshot))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn list_snapshots(&self, connection_id: Option<&str>) -> Result<Vec<DatabaseSnapshot>, rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        let query = match connection_id {
+            Some(_cid) => "SELECT snapshot_json FROM schema_snapshots WHERE connection_id = ?1 ORDER BY captured_at DESC",
+            None => "SELECT snapshot_json FROM schema_snapshots ORDER BY captured_at DESC",
+        };
+        let mut stmt = conn.prepare(query)?;
+        let mapper = |row: &rusqlite::Row| {
+            let json: String = row.get(0)?;
+            let snapshot: DatabaseSnapshot = serde_json::from_str(&json).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            Ok(snapshot)
+        };
+        let rows = match connection_id {
+            Some(cid) => stmt.query_map(params![cid], mapper)?,
+            None => stmt.query_map([], mapper)?,
+        };
+        let mut snapshots = Vec::new();
+        for snapshot in rows {
+            snapshots.push(snapshot?);
+        }
+        Ok(snapshots)
+    }
+
+    pub async fn delete_snapshot(&self, id: &str) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        conn.execute("DELETE FROM schema_snapshots WHERE id = ?1", params![id])?;
+        Ok(())
     }
 }

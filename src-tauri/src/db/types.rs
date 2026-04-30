@@ -183,3 +183,41 @@ pub struct SchemaSearchHit {
     pub parent: Option<String>, // parent table name for columns
     pub match_field: String,    // which field matched
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseSnapshot {
+    pub id: String,
+    pub connection_id: String,
+    pub database_name: String,
+    pub captured_at: String,
+    pub tables: Vec<TableDetail>,
+    pub views: Vec<TableInfo>,
+    pub triggers: Vec<TriggerInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SchemaChange {
+    TableAdded { table: TableDetail },
+    TableDropped { table: TableInfo },
+    TableModified {
+        table_name: String,
+        columns_added: Vec<ColumnInfo>,
+        columns_dropped: Vec<ColumnInfo>,
+        columns_modified: Vec<ColumnInfo>,
+        indexes_added: Vec<IndexInfo>,
+        indexes_dropped: Vec<IndexInfo>,
+        foreign_keys_added: Vec<ForeignKeyInfo>,
+        foreign_keys_dropped: Vec<ForeignKeyInfo>,
+    },
+    ViewAdded { view: TableInfo },
+    ViewDropped { view: TableInfo },
+    TriggerAdded { trigger: TriggerInfo },
+    TriggerDropped { trigger: TriggerInfo },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemaDiff {
+    pub from_snapshot_id: String,
+    pub to_snapshot_id: String,
+    pub changes: Vec<SchemaChange>,
+}

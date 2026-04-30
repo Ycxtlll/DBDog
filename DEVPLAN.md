@@ -32,11 +32,11 @@
 - [x] Interactive: drag, zoom, pan
 - [x] EXPLAIN visualizer with color coding
 
-## Phase 5: Schema Diff + Health Dashboard (IN PROGRESS)
-- [ ] Schema snapshot: full database schema capture
-- [ ] Diff algorithm: tables/columns/indexes/FKs added/removed/modified
-- [ ] Side-by-side or unified diff UI
-- [ ] Migration SQL generation (ALTER TABLE statements)
+## Phase 5: Schema Diff + Health Dashboard (COMPLETED)
+- [x] Schema snapshot: full database schema capture
+- [x] Diff algorithm: tables/columns/indexes/FKs added/removed/modified
+- [x] Side-by-side or unified diff UI (basic)
+- [x] Migration SQL generation (ALTER TABLE statements)
 - [x] Health dashboard: process list with kill button
 - [x] Server variables and status variables display
 - [x] Auto-refresh every 5 seconds

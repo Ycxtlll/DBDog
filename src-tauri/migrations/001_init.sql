@@ -26,3 +26,15 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookmarks_folder ON bookmarks(folder);
+
+CREATE TABLE IF NOT EXISTS schema_snapshots (
+    id TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL,
+    database_name TEXT NOT NULL,
+    captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+    snapshot_json TEXT NOT NULL,
+    FOREIGN KEY (connection_id) REFERENCES query_history(connection_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_connection ON schema_snapshots(connection_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_database ON schema_snapshots(database_name);

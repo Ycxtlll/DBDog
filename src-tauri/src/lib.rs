@@ -24,8 +24,7 @@ pub async fn run() {
                 .app_data_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
 
-            let connection_manager = tokio::runtime::Handle::current()
-                .block_on(config::connections::ConnectionManager::new(app_data_dir.clone()))
+            let connection_manager = config::connections::ConnectionManager::new(app_data_dir.clone())
                 .expect("Failed to initialize connection manager");
 
             let state = AppState::new(connection_manager, app_data_dir);
@@ -67,6 +66,11 @@ pub async fn run() {
             commands::history::get_bookmarks,
             commands::history::delete_bookmark,
             commands::history::get_bookmark_folders,
+            commands::diff::capture_snapshot,
+            commands::diff::list_snapshots,
+            commands::diff::delete_snapshot,
+            commands::diff::compare_snapshots,
+            commands::diff::generate_migration_sql,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
