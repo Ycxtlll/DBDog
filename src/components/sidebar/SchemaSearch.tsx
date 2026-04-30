@@ -71,8 +71,8 @@ export const SchemaSearch: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-sidebar)' }}>
-      <div className="p-2" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-        <div className="flex items-center gap-2 px-2 py-1 rounded" style={{ background: 'var(--bg-hover)' }}>
+      <div className="p-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+        <div className="flex items-center gap-3 px-3 py-2 rounded" style={{ background: 'var(--bg-hover)' }}>
           <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
           <input
             type="text"
@@ -85,7 +85,7 @@ export const SchemaSearch: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-1">
+      <div className="flex-1 overflow-auto p-3">
         {loading && (
           <div className="flex items-center justify-center p-4">
             <div className="animate-spin" style={{ color: 'var(--text-tertiary)' }}>
@@ -103,7 +103,7 @@ export const SchemaSearch: React.FC = () => {
         {!loading && results.map((hit, index) => (
           <div
             key={index}
-            className="flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-xs"
+            className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer text-xs"
             onClick={() => handleSelect(hit)}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}

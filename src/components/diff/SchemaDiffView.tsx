@@ -15,9 +15,14 @@ export const SchemaDiffView: React.FC = () => {
   }, [activeConnectionId]);
 
   const loadSnapshots = async () => {
+    if (!activeConnectionId) {
+      setSnapshots([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const list = await diffService.listSnapshots(activeConnectionId);
+      const list = await diffService.listSnapshots(activeConnectionId!);
       setSnapshots(list);
     } catch (e) {
       console.error('Failed to load snapshots', e);

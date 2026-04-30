@@ -1,4 +1,5 @@
-import { TableDetail, TableInfo, TriggerInfo, ColumnInfo, IndexInfo, ForeignKeyInfo } from './schema';
+import { TableDetail, TableInfo, TriggerInfo, IndexInfo, ForeignKeyInfo } from './schema';
+import { ColumnInfo } from './query';
 
 export interface DatabaseSnapshot {
   id: string;

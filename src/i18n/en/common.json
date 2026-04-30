@@ -20,5 +20,11 @@
   "language_en": "English",
   "language_zh": "Chinese",
   "settings": "Settings",
-  "about": "About"
+  "about": "About",
+  "schema_loading": "Loading schema...",
+  "no_database_connection": "No database connection",
+  "connect_to_browse": "Connect to a database to browse schema",
+  "tree_view": "Tree view",
+  "search_schema": "Search schema",
+  "copy_name": "Copy name"
 }

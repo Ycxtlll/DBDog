@@ -20,5 +20,11 @@
   "language_en": "英语",
   "language_zh": "中文",
   "settings": "设置",
-  "about": "关于"
+  "about": "关于",
+  "schema_loading": "加载架构中...",
+  "no_database_connection": "无数据库连接",
+  "connect_to_browse": "连接到数据库以浏览架构",
+  "tree_view": "树状视图",
+  "search_schema": "搜索架构",
+  "copy_name": "复制名称"
 }

@@ -21,5 +21,10 @@
   "database": "Database",
   "ssl_mode": "SSL Mode",
   "max_connections": "Max Connections",
-  "confirm_delete": "Are you sure you want to delete this connection?"
+  "confirm_delete": "Are you sure you want to delete this connection?",
+  "creating_connection": "Creating: {{name}}",
+  "enter_connection_details": "Enter connection details",
+  "no_connections": "No connections yet",
+  "testing": "Testing...",
+  "saving": "Saving..."
 }

@@ -49,11 +49,27 @@
 - [ ] Copy/paste from grid as TSV (for Excel) or JSON
 - [ ] Column virtualization for wide tables
 
-## Phase 7: Keyboard-first + Polish
+## Phase 7: Keyboard-first + Polish (IN PROGRESS)
+
+- [x] UI layout optimization: spacing, margins, fonts, button alignment
+- [x] Connection management usability improvements
+  - Double-click to connect/disconnect connections
+  - Auto-connect after saving new connection
+  - Smart focus management in connection dialog
+- [x] Database tree usability enhancements
+  - Double-click table to generate SELECT * query
+  - Drag-and-drop tables/columns to SQL editor
+  - Double-click database to expand/collapse
+- [x] Comprehensive keyboard shortcuts
+  - Ctrl+Enter: Run query
+  - Ctrl+N: New tab
+  - Ctrl+W: Close tab
+  - Ctrl+S: Save connection (in dialog)
+  - Ctrl+Shift+F: Format SQL
+- [x] Internationalization improvements (fix mixed language issues)
 - [ ] Cmd+K command palette (Fuse.js)
 - [ ] Vim mode for editor (@replit/codemirror-vim)
 - [ ] Split tab editing (side-by-side SQL editors)
-- [ ] Comprehensive keyboard shortcuts
 - [ ] Window state persistence (size, position, sidebar width)
 - [ ] Loading skeletons, empty states, error boundaries
 - [ ] Connection auto-reconnect with exponential backoff

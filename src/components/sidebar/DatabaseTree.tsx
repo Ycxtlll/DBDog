@@ -263,6 +263,48 @@ const DatabaseTree: React.FC = () => {
     setContextMenu({ x: e.clientX, y: e.clientY, node });
   };
 
+  const handleDoubleClick = (node: TreeNode) => {
+    if (node.type === 'table') {
+      // 双击表节点生成SELECT *查询
+      const sql = `SELECT * FROM \`${node.database}\`.\`${node.name}\` LIMIT 100;`;
+      if (activeConnectionId) {
+        const tabId = addTab(activeConnectionId, node.database);
+        setTimeout(() => {
+          const { tabs, updateTabSql } = useQueryStore.getState();
+          const tab = tabs.find(t => t.id === tabId);
+          if (tab) {
+            updateTabSql(tabId, sql);
+            setActiveTab(tabId);
+          }
+        }, 0);
+      }
+    } else if (node.type === 'database') {
+      // 双击数据库节点快速展开/折叠
+      toggleNode(node);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, node: TreeNode) => {
+    if (node.type === 'table') {
+      e.dataTransfer.setData('text/plain', `\`${node.database}\`.\`${node.name}\``);
+      e.dataTransfer.setData('application/dbdog-table', JSON.stringify({
+        database: node.database,
+        table: node.name,
+        type: 'table'
+      }));
+      e.dataTransfer.effectAllowed = 'copy';
+    } else if (node.type === 'column') {
+      e.dataTransfer.setData('text/plain', `\`${node.name}\``);
+      e.dataTransfer.setData('application/dbdog-column', JSON.stringify({
+        database: node.database,
+        table: node.table,
+        column: node.name,
+        type: 'column'
+      }));
+      e.dataTransfer.effectAllowed = 'copy';
+    }
+  };
+
   const handleContextAction = (action: string) => {
     if (!contextMenu) return;
     const { node } = contextMenu;
@@ -328,116 +370,118 @@ const DatabaseTree: React.FC = () => {
 
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-xs p-4" style={{ color: 'var(--text-tertiary)' }}>
-        <Database size={48} className="mb-2 opacity-30" />
-        <p className="text-center">Connect to a database to browse schema</p>
+      <div className="flex-col-center h-full p-6 text-center">
+        <div className="w-16 h-16 rounded-full flex-center bg-tertiary/30 mb-4">
+          <Database size={32} className="text-tertiary" />
+        </div>
+        <p className="text-sm text-muted mb-1">{t('common:no_database_connection')}</p>
+        <p className="text-xs text-tertiary">{t('common:connect_to_browse')}</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--bg-sidebar)' }}>
-      {viewMode === 'search' ? (
+    <div className="flex flex-col h-full bg-sidebar">
+      {(viewMode as ViewMode) === 'search' ? (
         <SchemaSearch />
       ) : (
         <>
-          <div className="flex items-center justify-between p-2" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-            <div className="flex items-center gap-1">
+          <div className="flex items-center justify-between p-3 border-b border-divider bg-elevated">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setViewMode('tree')}
-                className="p-1 rounded"
-                style={{
-                  color: (viewMode as ViewMode) === 'tree' ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                  background: (viewMode as ViewMode) === 'tree' ? 'var(--bg-active)' : 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if ((viewMode as ViewMode) !== 'tree') e.currentTarget.style.background = 'var(--bg-hover)';
-                }}
-                onMouseLeave={(e) => {
-                  if ((viewMode as ViewMode) !== 'tree') e.currentTarget.style.background = 'transparent';
-                }}
-                title="Tree view"
+                className={`btn btn-ghost btn-sm p-1.5 ${(viewMode as ViewMode) === 'tree' ? 'bg-accent-subtle text-accent' : 'text-muted'}`}
+                title={t('common:tree_view')}
               >
-                <LayoutList size={14} />
+                <LayoutList size={18} strokeWidth={(viewMode as ViewMode) === 'tree' ? 2.2 : 1.8} />
               </button>
               <button
                 onClick={() => setViewMode('search')}
-                className="p-1 rounded"
-                style={{
-                  color: (viewMode as ViewMode) === 'search' ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                  background: (viewMode as ViewMode) === 'search' ? 'var(--bg-active)' : 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if ((viewMode as ViewMode) !== 'search') e.currentTarget.style.background = 'var(--bg-hover)';
-                }}
-                onMouseLeave={(e) => {
-                  if ((viewMode as ViewMode) !== 'search') e.currentTarget.style.background = 'transparent';
-                }}
-                title="Search"
+                className={`btn btn-ghost btn-sm p-1.5 ${(viewMode as ViewMode) === 'search' ? 'bg-accent-subtle text-accent' : 'text-muted'}`}
+                title={t('common:search_schema')}
               >
-                <Search size={14} />
+                <Search size={18} strokeWidth={(viewMode as ViewMode) === 'search' ? 2.2 : 1.8} />
               </button>
             </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={refreshAll}
-            className="p-1 rounded"
-            style={{ color: 'var(--text-secondary)' }}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-            title={t('common:refresh')}
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-auto p-1">
-        {treeNodes.length === 0 ? (
-          <div className="flex items-center justify-center h-32">
-            <Loader2 size={20} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
-          </div>
-        ) : (
-          treeNodes.map((node, index) => {
-            const isLoading = (node.type === 'database' || node.type === 'table') && node.loading;
-            return (
-              <div
-                key={index}
-                className="flex items-center gap-1 px-2 py-1 rounded cursor-pointer text-xs"
-                style={{
-                  marginLeft: node.type === 'table' ? 16 : node.type === 'column' ? 32 : 0,
-                }}
-                onClick={() => toggleNode(node)}
-                onContextMenu={(e) => handleRightClick(e, node)}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={refreshAll}
+                className="btn btn-ghost btn-sm p-1.5 text-muted"
+                title={t('common:refresh') || 'Refresh'}
               >
-                {isLoading ? (
-                  <Loader2 size={14} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
-                ) : (
-                  (node.type === 'database' || node.type === 'table') && (
-                    node.expanded ? <ChevronDown size={14} style={{ color: 'var(--text-tertiary)' }} /> :
-                      <ChevronRight size={14} style={{ color: 'var(--text-tertiary)' }} />
-                  )
-                )}
-                {!isLoading && (
-                  node.type === 'database' ? <Database size={14} style={{ color: 'var(--text-secondary)' }} /> :
-                  node.type === 'table' ? <Table size={14} style={{ color: 'var(--text-secondary)' }} /> :
-                  <Columns size={14} style={{
-                    color: node.isPrimaryKey ? 'var(--status-connected)' : 'var(--text-tertiary)'
-                  }} />
-                )}
-                <span style={{ color: 'var(--text-primary)' }}>{node.name}</span>
-                {node.type === 'column' && (
-                  <span className="ml-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {node.dataType}
-                  </span>
-                )}
+                <RefreshCw size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-auto p-3">
+            {treeNodes.length === 0 ? (
+              <div className="flex-col-center h-64 gap-3">
+                <Loader2 size={24} className="animate-spin text-tertiary" />
+                <p className="text-sm text-muted">{t('common:schema_loading')}</p>
               </div>
-            );
-          })
-        )}
-      </div>
+            ) : (
+              <div className="space-y-1">
+                {treeNodes.map((node, index) => {
+                  const isLoading = (node.type === 'database' || node.type === 'table') && node.loading;
+                  return (
+                    <div
+                      key={index}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all hover:bg-hover group ${
+                        node.type === 'table' ? 'ml-4' : node.type === 'column' ? 'ml-8' : ''
+                      }`}
+                      onClick={() => toggleNode(node)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleDoubleClick(node);
+                      }}
+                      onContextMenu={(e) => handleRightClick(e, node)}
+                      draggable={node.type === 'table' || node.type === 'column'}
+                      onDragStart={(e) => handleDragStart(e, node)}
+                    >
+                      {isLoading ? (
+                        <Loader2 size={16} className="animate-spin text-tertiary flex-shrink-0" />
+                      ) : (
+                        (node.type === 'database' || node.type === 'table') && (
+                          <div className="flex-shrink-0 text-tertiary">
+                            {node.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </div>
+                        )
+                      )}
+                      {!isLoading && (
+                        <div className="flex-shrink-0">
+                          {node.type === 'database' ? (
+                            <Database size={16} className="text-secondary" />
+                          ) : node.type === 'table' ? (
+                            <Table size={16} className="text-secondary" />
+                          ) : (
+                            <Columns size={16} className={node.isPrimaryKey ? 'text-success' : 'text-tertiary'} />
+                          )}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-primary truncate">{node.name}</span>
+                          {node.type === 'column' && node.isPrimaryKey && (
+                            <span className="badge badge-success text-xs">PK</span>
+                          )}
+                          {node.type === 'column' && node.nullable && (
+                            <span className="badge badge-secondary text-xs">NULL</span>
+                          )}
+                        </div>
+                        {node.type === 'column' && (
+                          <div className="text-xs text-tertiary mt-0.5">{node.dataType}</div>
+                        )}
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Copy size={14} className="text-tertiary" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {contextMenu && (
             <div
@@ -492,7 +536,7 @@ const DatabaseTree: React.FC = () => {
               >
                 <div className="flex items-center gap-2">
                   <Copy size={12} />
-                  Copy name
+                  {t('common:copy_name')}
                 </div>
               </button>
             </div>

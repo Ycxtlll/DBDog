@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Plus, X, Play, PlayCircle, AlignLeft } from 'lucide-react';
 import { format } from 'sql-formatter';
 import { useQueryStore } from '../../stores/queryStore';
@@ -91,6 +91,54 @@ const EditorPanel: React.FC = () => {
     }
   }, [activeTab, updateTabSql]);
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (!activeTab) return;
+
+    // 尝试获取拖拽的数据
+    const textData = e.dataTransfer.getData('text/plain');
+    if (textData) {
+      // 在当前位置插入文本，这里简单追加到末尾
+      const newSql = activeTab.sql + (activeTab.sql.trim() ? '\n' : '') + textData;
+      updateTabSql(activeTab.id, newSql);
+    }
+  }, [activeTab, updateTabSql]);
+
+  // 全局键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + N: 新建标签页
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        let connId = activeConnectionId;
+        if (!connId && activeConnections.size > 0) {
+          connId = Array.from(activeConnections.keys())[0];
+        }
+        addTab(connId || undefined);
+      }
+      // Ctrl/Cmd + W: 关闭当前标签页
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) {
+        e.preventDefault();
+        closeTab(activeTabId);
+      }
+      // Ctrl/Cmd + Shift + F: 格式化SQL
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        if (activeTab && activeTab.sql.trim()) {
+          handleFormat();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeConnectionId, activeConnections, addTab, activeTabId, closeTab, activeTab, handleFormat]);
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
       {/* Tab bar */}
@@ -123,7 +171,14 @@ const EditorPanel: React.FC = () => {
           </div>
         ))}
         <button
-          onClick={() => addTab(activeConnectionId || undefined)}
+          onClick={() => {
+            let connId = activeConnectionId;
+            if (!connId && activeConnections.size > 0) {
+              // 如果没有活动连接，但存在已连接的连接，使用第一个连接的ID
+              connId = Array.from(activeConnections.keys())[0];
+            }
+            addTab(connId || undefined);
+          }}
           className="flex items-center justify-center w-7 h-7 mx-1 rounded cursor-pointer border-none"
           style={{ background: 'transparent', color: 'var(--text-secondary)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
@@ -183,7 +238,14 @@ const EditorPanel: React.FC = () => {
               <PlayCircle size={48} className="mx-auto mb-3 opacity-30" />
               <p className="text-sm mb-2">{t('select_connection')}</p>
               <button
-                onClick={() => addTab(activeConnectionId || undefined)}
+                onClick={() => {
+                  let connId = activeConnectionId;
+                  if (!connId && activeConnections.size > 0) {
+                    // 如果没有活动连接，但存在已连接的连接，使用第一个连接的ID
+                    connId = Array.from(activeConnections.keys())[0];
+                  }
+                  addTab(connId || undefined);
+                }}
                 className="px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer border-none"
                 style={{ background: 'var(--accent-primary)', color: 'var(--text-inverse)' }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
@@ -197,7 +259,11 @@ const EditorPanel: React.FC = () => {
           activeTab && (
             <>
               {/* SQL Editor area */}
-              <div style={{ height: '40%', minHeight: 120, borderBottom: '1px solid var(--border-primary)' }}>
+              <div
+                style={{ height: '40%', minHeight: 120, borderBottom: '1px solid var(--border-primary)' }}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
                 <SqlEditor
                   value={activeTab.sql}
                   onChange={(sql) => updateTabSql(activeTab.id, sql)}

@@ -28,7 +28,7 @@ const ActivityBar: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-between h-full py-4"
       style={{ width: '56px', background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-primary)' }}>
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-3">
         <div className="mb-2 px-2">
           <div className="text-xs font-semibold text-center gradient-text" style={{ fontSize: '10px', letterSpacing: '0.1em' }}>
             DBDog
@@ -39,7 +39,7 @@ const ActivityBar: React.FC = () => {
             key={id}
             onClick={() => handleClick(id)}
             title={label}
-            className="flex items-center justify-center w-11 h-11 rounded-xl transition-all cursor-pointer border-none relative group"
+            className="flex items-center justify-center w-10 h-10 rounded-lg transition-all cursor-pointer border-none relative group"
             style={{
               background: sidebarPanel === id && isSidebarOpen ? 'var(--accent-subtle)' : 'transparent',
               color: sidebarPanel === id && isSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)',
@@ -59,7 +59,7 @@ const ActivityBar: React.FC = () => {
               }
             }}
           >
-            <Icon size={22} strokeWidth={sidebarPanel === id && isSidebarOpen ? 2.3 : 1.9}
+            <Icon size={20} strokeWidth={sidebarPanel === id && isSidebarOpen ? 2.3 : 1.9}
               className="transition-transform duration-200 group-hover:scale-110" />
             {sidebarPanel === id && isSidebarOpen && (
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-8 rounded-full"
@@ -74,7 +74,7 @@ const ActivityBar: React.FC = () => {
         ))}
       </div>
 
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-col items-center gap-3">
         <button
           onClick={toggleSidebar}
           title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
