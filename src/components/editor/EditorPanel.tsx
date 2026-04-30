@@ -1,7 +1,9 @@
 import React, { useCallback } from 'react';
 import { Plus, X, Play, PlayCircle, AlignLeft } from 'lucide-react';
+import { format } from 'sql-formatter';
 import { useQueryStore } from '../../stores/queryStore';
 import { useConnectionStore } from '../../stores/connectionStore';
+import { useHistoryStore } from '../../stores/historyStore';
 import { queryService } from '../../services/queryService';
 import { useTranslation } from 'react-i18next';
 import SqlEditor from './SqlEditor';
@@ -9,7 +11,8 @@ import ResultGrid from '../grid/ResultGrid';
 
 const EditorPanel: React.FC = () => {
   const { tabs, activeTabId, addTab, closeTab, setActiveTab, updateTabSql, setTabExecuting, setTabResult, setTabUpdateResult, setTabError } = useQueryStore();
-  const { activeConnectionId } = useConnectionStore();
+  const { activeConnectionId, activeConnections } = useConnectionStore();
+  const { addHistoryEntry } = useHistoryStore();
   const { t } = useTranslation('editor');
   const { t: tq } = useTranslation('query');
 
@@ -17,6 +20,9 @@ const EditorPanel: React.FC = () => {
 
   const handleRun = useCallback(async () => {
     if (!activeTab || !activeConnectionId || !activeTab.sql.trim()) return;
+
+    const connection = activeConnections.get(activeConnectionId);
+    const connectionName = connection?.name || 'Unknown';
 
     setTabExecuting(activeTab.id, true);
     try {
@@ -26,24 +32,59 @@ const EditorPanel: React.FC = () => {
       if (upperSql.startsWith('SELECT') || upperSql.startsWith('SHOW') || upperSql.startsWith('DESCRIBE') || upperSql.startsWith('EXPLAIN')) {
         const result = await queryService.execute(activeConnectionId, sql);
         setTabResult(activeTab.id, result);
+        // Log to history
+        addHistoryEntry({
+          connectionId: activeConnectionId,
+          connectionName,
+          databaseName: activeTab.database,
+          sql,
+          durationMs: result.execution_time_ms,
+          rowCount: result.row_count,
+          success: true,
+        });
       } else {
         const result = await queryService.update(activeConnectionId, sql);
         setTabUpdateResult(activeTab.id, result);
+        // Log to history
+        addHistoryEntry({
+          connectionId: activeConnectionId,
+          connectionName,
+          databaseName: activeTab.database,
+          sql,
+          durationMs: result.execution_time_ms,
+          rowCount: result.rows_affected,
+          success: true,
+        });
       }
     } catch (e: any) {
-      setTabError(activeTab.id, e?.toString() || 'Unknown error');
+      const errorMessage = e?.toString() || 'Unknown error';
+      setTabError(activeTab.id, errorMessage);
+      // Log error to history
+      if (connection) {
+        addHistoryEntry({
+          connectionId: activeConnectionId,
+          connectionName,
+          databaseName: activeTab.database,
+          sql: activeTab.sql.trim(),
+          durationMs: undefined,
+          rowCount: undefined,
+          success: false,
+          errorMessage,
+        });
+      }
     }
-  }, [activeTab, activeConnectionId, setTabExecuting, setTabResult, setTabUpdateResult, setTabError]);
+  }, [activeTab, activeConnectionId, activeConnections, setTabExecuting, setTabResult, setTabUpdateResult, setTabError, addHistoryEntry]);
 
   const handleFormat = useCallback(() => {
     if (!activeTab) return;
     try {
-      // Basic SQL formatting — will use sql-formatter library in Phase 3
-      const formatted = activeTab.sql
-        .replace(/\b(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|ON|AND|OR|ORDER BY|GROUP BY|HAVING|LIMIT|OFFSET|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|AS)\b/gi,
-          (m) => '\n' + m.toUpperCase())
-        .replace(/^\n/, '')
-        .replace(/\n{3,}/g, '\n\n');
+      const formatted = format(activeTab.sql, {
+        language: 'mysql',
+        tabWidth: 2,
+        useTabs: false,
+        keywordCase: 'upper',
+        linesBetweenQueries: 2,
+      });
       updateTabSql(activeTab.id, formatted);
     } catch {
       // Ignore formatting errors

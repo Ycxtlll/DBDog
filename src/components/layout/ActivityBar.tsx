@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Clock, Bookmark, Activity, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Database, Clock, Bookmark, Activity, PanelLeftClose, PanelLeft, GitGraph, SearchCheck } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +11,8 @@ const ActivityBar: React.FC = () => {
     { id: 'connections' as const, icon: Database, label: t('connections:title', { ns: 'connections' }) || 'Connections' },
     { id: 'history' as const, icon: Clock, label: 'History' },
     { id: 'bookmarks' as const, icon: Bookmark, label: 'Bookmarks' },
+    { id: 'er' as const, icon: GitGraph, label: 'ER Diagram' },
+    { id: 'explain' as const, icon: SearchCheck, label: 'EXPLAIN' },
     { id: 'health' as const, icon: Activity, label: 'Health' },
   ];
 

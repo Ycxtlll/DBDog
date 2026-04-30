@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type SidebarPanel = 'connections' | 'history' | 'bookmarks' | 'health' | 'er' | 'none';
+type SidebarPanel = 'connections' | 'history' | 'bookmarks' | 'health' | 'er' | 'explain' | 'none';
 
 interface UIState {
   sidebarPanel: SidebarPanel;

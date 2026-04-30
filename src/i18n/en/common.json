@@ -9,6 +9,7 @@
   "close": "Close",
   "refresh": "Refresh",
   "search": "Search",
+  "search_placeholder": "Search databases, tables, columns...",
   "no_results": "No results",
   "confirm": "Confirm",
   "yes": "Yes",

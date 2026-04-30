@@ -9,6 +9,7 @@
   "close": "关闭",
   "refresh": "刷新",
   "search": "搜索",
+  "search_placeholder": "搜索数据库、表、列...",
   "no_results": "无结果",
   "confirm": "确认",
   "yes": "是",

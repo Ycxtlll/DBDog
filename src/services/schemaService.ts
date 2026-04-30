@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { TableInfo, TableDetail, IndexInfo, ForeignKeyInfo, ProcessInfo } from '../types/schema';
+import type { TableInfo, TableDetail, IndexInfo, ForeignKeyInfo, ProcessInfo, SchemaSearchHit } from '../types/schema';
 import type { ColumnInfo } from '../types/query';
 
 export const schemaService = {
@@ -29,6 +29,9 @@ export const schemaService = {
 
   listViews: (connectionId: string, database: string) =>
     invoke<string[]>('list_views', { connectionId, database }),
+
+  searchSchema: (connectionId: string, query: string) =>
+    invoke<SchemaSearchHit[]>('search_schema', { connectionId, query }),
 };
 
 export const healthService = {

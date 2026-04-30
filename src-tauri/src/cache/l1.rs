@@ -1,18 +1,7 @@
 use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
 
 use crate::db::types::*;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SchemaSnapshot {
-    pub tables: Vec<TableInfo>,
-    pub columns: Vec<ColumnInfo>,
-    pub indexes: Vec<IndexInfo>,
-    pub foreign_keys: Vec<ForeignKeyInfo>,
-}
 
 struct CacheEntry<T> {
     data: T,
@@ -47,7 +36,7 @@ impl SchemaCache {
             tables: DashMap::new(),
             columns: DashMap::new(),
             table_details: DashMap::new(),
-            default_ttl: Duration::from_secs(300), // 5 minutes
+            default_ttl: Duration::from_secs(300),
         }
     }
 
@@ -103,14 +92,13 @@ impl SchemaCache {
     }
 
     pub fn invalidate_connection(&self, connection_id: &str) {
-        // Remove all entries for this connection
         self.databases.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
         self.tables.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
         self.columns.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
         self.table_details.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
     }
 
-    pub fn invalidate_database(&self, connection_id: &str, database: &str) {
+    pub fn invalidate_database(&self, _connection_id: &str, database: &str) {
         self.tables.retain(|k, _| !k.contains(&format!(":tables:{}:", database)));
         self.columns.retain(|k, _| !k.contains(&format!(":columns:{}:", database)));
         self.table_details.retain(|k, _| !k.contains(&format!(":detail:{}:", database)));

@@ -346,6 +346,78 @@ impl DatabaseMetadata for MysqlDriver {
             })
             .collect())
     }
+
+    async fn search_schema(
+        &self,
+        pool: &DatabasePool,
+        query: &str,
+    ) -> Result<Vec<SchemaSearchHit>> {
+        let mut hits = Vec::new();
+        let like_pattern = format!("%{}%", query);
+
+        // Search databases
+        let db_sql = "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME LIKE ? AND SCHEMA_NAME NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')";
+        let db_rows = sqlx::query(db_sql)
+            .bind(&like_pattern)
+            .fetch_all(pool)
+            .await?;
+        for row in db_rows.iter() {
+            if let Ok(db_name) = row.try_get::<String, _>(0) {
+                hits.push(SchemaSearchHit {
+                    database: db_name.clone(),
+                    object_type: "database".to_string(),
+                    object_name: db_name,
+                    parent: None,
+                    match_field: "name".to_string(),
+                });
+            }
+        }
+
+        // Search tables
+        let table_sql = "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE ? AND TABLE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')";
+        let table_rows = sqlx::query(table_sql)
+            .bind(&like_pattern)
+            .fetch_all(pool)
+            .await?;
+        for row in table_rows.iter() {
+            if let (Ok(db_name), Ok(table_name)) = (
+                row.try_get::<String, _>(0),
+                row.try_get::<String, _>(1),
+            ) {
+                hits.push(SchemaSearchHit {
+                    database: db_name,
+                    object_type: "table".to_string(),
+                    object_name: table_name,
+                    parent: None,
+                    match_field: "name".to_string(),
+                });
+            }
+        }
+
+        // Search columns
+        let col_sql = "SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE COLUMN_NAME LIKE ? AND TABLE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')";
+        let col_rows = sqlx::query(col_sql)
+            .bind(&like_pattern)
+            .fetch_all(pool)
+            .await?;
+        for row in col_rows.iter() {
+            if let (Ok(db_name), Ok(table_name), Ok(col_name)) = (
+                row.try_get::<String, _>(0),
+                row.try_get::<String, _>(1),
+                row.try_get::<String, _>(2),
+            ) {
+                hits.push(SchemaSearchHit {
+                    database: db_name,
+                    object_type: "column".to_string(),
+                    object_name: col_name,
+                    parent: Some(table_name),
+                    match_field: "name".to_string(),
+                });
+            }
+        }
+
+        Ok(hits)
+    }
 }
 
 #[async_trait]

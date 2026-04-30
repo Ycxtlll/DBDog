@@ -66,6 +66,11 @@ pub trait DatabaseMetadata: Send + Sync + 'static {
         database: &str,
         table: &str,
     ) -> Result<Vec<ColumnInfo>>;
+    async fn search_schema(
+        &self,
+        pool: &DatabasePool,
+        query: &str,
+    ) -> Result<Vec<SchemaSearchHit>>;
 }
 
 #[async_trait]

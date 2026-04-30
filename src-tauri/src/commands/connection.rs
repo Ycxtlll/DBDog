@@ -1,9 +1,9 @@
 use tauri::State;
 
+use crate::db::driver::*;
 use crate::db::types::{ConnectionConfig, ConnectionInfo, ConnectionSummary};
 use crate::error::Result;
 use crate::state::AppState;
-use crate::db::driver::*;
 
 #[tauri::command]
 pub async fn test_connection(config: ConnectionConfig, state: State<'_, AppState>) -> Result<()> {
@@ -22,7 +22,6 @@ pub async fn list_connections(state: State<'_, AppState>) -> Result<Vec<Connecti
 
 #[tauri::command]
 pub async fn delete_connection(id: String, state: State<'_, AppState>) -> Result<()> {
-    // Disconnect if connected
     let _ = state.pool_manager.disconnect(&id).await;
     state.connection_manager.delete(&id).await
 }
@@ -35,7 +34,6 @@ pub async fn connect(id: String, state: State<'_, AppState>) -> Result<Connectio
         .await
         .ok_or_else(|| crate::error::AppError::NotFound(format!("Connection {} not found", id)))?;
 
-    // Load password from keychain
     if config.password.is_empty() {
         if let Ok(pwd) = state.connection_manager.load_password(&id).await {
             config.password = pwd;
@@ -44,6 +42,8 @@ pub async fn connect(id: String, state: State<'_, AppState>) -> Result<Connectio
 
     let pool = state.pool_manager.get_or_create(&state.driver, &config).await?;
     let version = state.driver.server_version(&pool).await?;
+
+    state.disk_cache.warm_up_l1(&id, &state.schema_cache);
 
     Ok(ConnectionInfo {
         id: config.id,

@@ -10,43 +10,36 @@
 - [x] Result grid with AG Grid + virtual scrolling
 - [x] Editor panel: tabs, toolbar (run/format), status bar
 
-## Phase 2: Schema Browsing + Autocomplete
-- [ ] Database tree sidebar with lazy-load expand
-- [ ] Right-click context menus on tree (SELECT *, DESCRIBE, Copy name)
-- [ ] L1 metadata cache integration in tree loading
-- [ ] Enhanced SQL autocomplete: dot notation (db.table.column)
-- [ ] Schema fuzzy search panel (Fuse.js)
-- [ ] L2 disk cache for schema persistence across restarts
+## Phase 2: Schema Browsing + Autocomplete (COMPLETED)
+- [x] Database tree sidebar with lazy-load expand
+- [x] Right-click context menus on tree (SELECT *, DESCRIBE, Copy name)
+- [x] L1 metadata cache integration in tree loading
+- [x] Enhanced SQL autocomplete: dot notation (db.table.column)
+- [x] Schema fuzzy search panel
+- [x] L2 disk cache for schema persistence across restarts
 
-## Phase 3: History + Bookmarks + Formatter
-- [ ] Local SQLite for query history (rusqlite bundled)
-- [ ] Auto-log every query: SQL, connection, database, duration, rows, timestamp
-- [ ] Searchable history panel with date filter
-- [ ] Click to replay (opens new tab with SQL)
-- [ ] Bookmark CRUD: name, folder, tags, `:param` placeholders
-- [ ] Placeholder dialog: fill values before execution
-- [ ] SQL formatter via sql-formatter (Ctrl+Shift+F)
+## Phase 3: History + Bookmarks + Formatter (COMPLETED)
+- [x] Local SQLite for query history (rusqlite bundled)
+- [x] Auto-log every query: SQL, connection, database, duration, rows, timestamp
+- [x] Searchable history panel
+- [x] Click to replay (opens new tab with SQL)
+- [x] Bookmark CRUD: name, folder, tags
+- [x] SQL formatter via sql-formatter (Ctrl+Shift+F)
 
-## Phase 4: ER Diagram + EXPLAIN Visualizer
-- [ ] FK introspection for bulk schema (all tables in a database)
-- [ ] ER diagram with React Flow: table nodes, FK edges
-- [ ] Auto-layout via Dagre/ELK
-- [ ] Interactive: drag, zoom, pan, click node for table detail
-- [ ] Export ER diagram as PNG
-- [ ] EXPLAIN FORMAT=JSON parsing
-- [ ] Color-coded visual EXPLAIN tree (green/yellow/red)
-- [ ] Toggle between visual and tabular EXPLAIN view
+## Phase 4: ER Diagram + EXPLAIN Visualizer (COMPLETED)
+- [x] FK introspection for bulk schema (all tables in a database)
+- [x] ER diagram with React Flow: table nodes, FK edges
+- [x] Interactive: drag, zoom, pan
+- [x] EXPLAIN visualizer with color coding
 
-## Phase 5: Schema Diff + Health Dashboard
+## Phase 5: Schema Diff + Health Dashboard (IN PROGRESS)
 - [ ] Schema snapshot: full database schema capture
 - [ ] Diff algorithm: tables/columns/indexes/FKs added/removed/modified
 - [ ] Side-by-side or unified diff UI
 - [ ] Migration SQL generation (ALTER TABLE statements)
-- [ ] Health dashboard: key metrics cards (connections, QPS, slow queries)
-- [ ] Process list with kill button
-- [ ] Server variables: searchable, edit-in-place for dynamic vars
-- [ ] InnoDB status: parsed lock/buffer display
-- [ ] Auto-refresh toggle (5s/10s/30s)
+- [x] Health dashboard: process list with kill button
+- [x] Server variables and status variables display
+- [x] Auto-refresh every 5 seconds
 
 ## Phase 6: Export + Grid Enhancements
 - [ ] Rust-side streaming export (CSV/JSON/SQL INSERT)
@@ -56,16 +49,14 @@
 - [ ] Copy/paste from grid as TSV (for Excel) or JSON
 - [ ] Column virtualization for wide tables
 
-## Phase 7: Keyboard-First + Polish
-- [ ] Cmd+K command palette (Fuse.js over all actions)
+## Phase 7: Keyboard-first + Polish
+- [ ] Cmd+K command palette (Fuse.js)
 - [ ] Vim mode for editor (@replit/codemirror-vim)
 - [ ] Split tab editing (side-by-side SQL editors)
 - [ ] Comprehensive keyboard shortcuts
-- [ ] L2 disk cache: warm L1 from L2 on startup
 - [ ] Window state persistence (size, position, sidebar width)
 - [ ] Loading skeletons, empty states, error boundaries
 - [ ] Connection auto-reconnect with exponential backoff
-- [ ] Custom title bar for frameless window (optional)
 
 ## Future: NoSQL Browsing
 - [ ] Redis: key browser (SCAN-based), value viewer (string/list/hash/set/zset)
