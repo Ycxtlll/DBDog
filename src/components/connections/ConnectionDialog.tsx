@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+import { X, TestTube, Save, Server, Database, KeyRound, Hash, Globe } from 'lucide-react';
 import { connectionService } from '../../services/connectionService';
 import { useConnectionStore } from '../../stores/connectionStore';
 import type { ConnectionConfig } from '../../types/connection';
@@ -66,12 +66,10 @@ const ConnectionDialog: React.FC<Props> = ({ onClose }) => {
       };
       const newConnectionId = await connectionService.save(config);
       await loadConnections();
-      // 尝试自动连接新创建的连接
       try {
         await connect(newConnectionId);
       } catch (connectError) {
         console.warn('Auto-connect failed:', connectError);
-        // 连接失败不影响保存，继续关闭对话框
       }
       onClose();
     } catch (e: any) {
@@ -84,12 +82,10 @@ const ConnectionDialog: React.FC<Props> = ({ onClose }) => {
 
   useEffect(() => {
     if (testResult?.ok && saveButtonRef.current) {
-      // 测试成功时自动聚焦到保存按钮
       saveButtonRef.current.focus();
     }
   }, [testResult]);
 
-  // 键盘快捷键：Ctrl+S保存
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -105,16 +101,13 @@ const ConnectionDialog: React.FC<Props> = ({ onClose }) => {
   }, [form.name, form.host, saving, handleSave]);
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50 bg-overlay/90"
-      onClick={onClose}
-    >
-      <div
-        className="rounded-lg shadow-xl w-full max-w-md bg-card border border-primary elevation-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-divider">
-          <h3 className="text-sm font-semibold text-primary">{t('new_connection')}</h3>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="flex items-center gap-2">
+            <Server size={18} className="text-accent" />
+            <h3>{t('new_connection')}</h3>
+          </div>
           <button
             onClick={onClose}
             className="btn btn-ghost btn-sm p-1"
@@ -124,52 +117,64 @@ const ConnectionDialog: React.FC<Props> = ({ onClose }) => {
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-5">
-          <div>
-            <label className="block text-xs font-medium mb-2.5 text-secondary uppercase tracking-wide">{t('name')}</label>
-            <input
-              className="input w-full"
-              value={form.name}
-              onChange={(e) => update('name', e.target.value)}
-              placeholder="My Database"
-            />
+        <div className="modal-body space-y-4">
+          <div className="form-group">
+            <label className="form-label">{t('name')}</label>
+            <div className="relative">
+              <Database size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" />
+              <input
+                className="form-input pl-8"
+                value={form.name}
+                onChange={(e) => update('name', e.target.value)}
+                placeholder="My Database"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="block text-xs font-medium mb-2.5 text-secondary uppercase tracking-wide">{t('host')}</label>
-              <input
-                className="input w-full"
-                value={form.host}
-                onChange={(e) => update('host', e.target.value)}
-                placeholder="127.0.0.1"
-              />
+            <div className="form-group col-span-2">
+              <label className="form-label">{t('host')}</label>
+              <div className="relative">
+                <Globe size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" />
+                <input
+                  className="form-input pl-8"
+                  value={form.host}
+                  onChange={(e) => update('host', e.target.value)}
+                  placeholder="127.0.0.1"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium mb-2.5 text-secondary uppercase tracking-wide">{t('port')}</label>
-              <input
-                className="input w-full"
-                type="number"
-                value={form.port}
-                onChange={(e) => update('port', parseInt(e.target.value) || 3306)}
-              />
+            <div className="form-group">
+              <label className="form-label">{t('port')}</label>
+              <div className="relative">
+                <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" />
+                <input
+                  className="form-input pl-8"
+                  type="number"
+                  value={form.port}
+                  onChange={(e) => update('port', parseInt(e.target.value) || 3306)}
+                />
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-2.5 text-secondary uppercase tracking-wide">{t('user')}</label>
-              <input
-                className="input w-full"
-                value={form.user}
-                onChange={(e) => update('user', e.target.value)}
-                placeholder="root"
-              />
+            <div className="form-group">
+              <label className="form-label">{t('user')}</label>
+              <div className="relative">
+                <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" />
+                <input
+                  className="form-input pl-8"
+                  value={form.user}
+                  onChange={(e) => update('user', e.target.value)}
+                  placeholder="root"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium mb-2.5 text-secondary uppercase tracking-wide">{t('password')}</label>
+            <div className="form-group">
+              <label className="form-label">{t('password')}</label>
               <input
-                className="input w-full"
+                className="form-input"
                 type="password"
                 value={form.password}
                 onChange={(e) => update('password', e.target.value)}
@@ -178,12 +183,12 @@ const ConnectionDialog: React.FC<Props> = ({ onClose }) => {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium mb-2.5 text-secondary uppercase tracking-wide">
-              {t('database')} <span className="text-tertiary font-normal">(optional)</span>
+          <div className="form-group">
+            <label className="form-label">
+              {t('database')} <span className="optional">(optional)</span>
             </label>
             <input
-              className="input w-full"
+              className="form-input"
               value={form.database || ''}
               onChange={(e) => update('database', e.target.value)}
               placeholder="Leave empty for all databases"
@@ -191,52 +196,59 @@ const ConnectionDialog: React.FC<Props> = ({ onClose }) => {
           </div>
 
           {testResult && (
-            <div className={`p-3 rounded-lg text-sm ${testResult.ok ? 'bg-success-subtle text-success' : 'bg-error-subtle text-error'}`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${testResult.ok ? 'bg-success' : 'bg-error'}`}></div>
-                {testResult.msg}
-              </div>
+            <div className={`alert ${testResult.ok ? 'alert-success' : 'alert-error'}`}>
+              <div className={`alert-dot ${testResult.ok ? 'bg-success' : 'bg-error'}`} />
+              {testResult.msg}
             </div>
           )}
 
           {saveError && (
-            <div className="p-3 rounded-lg text-sm bg-error-subtle text-error">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-error"></div>
-                {saveError}
-              </div>
+            <div className="alert alert-error">
+              <div className="alert-dot bg-error" />
+              {saveError}
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between px-5 py-4 border-t border-divider bg-secondary">
-          <div className="text-xs text-muted">
+        <div className="modal-footer">
+          <div className="text-xs text-muted mr-auto">
             {form.name ? t('connections:creating_connection', { name: form.name }) : t('connections:enter_connection_details')}
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleTest}
-              disabled={testing}
-              className="btn btn-secondary btn-sm"
-            >
-              {testing ? (
-                <>
-                  <span className="animate-spin mr-1.5">⟳</span>
-                  {t('testing')}
-                </>
-              ) : (
-                t('test_connection')
-              )}
-            </button>
-            <button
-              ref={saveButtonRef}
-              onClick={handleSave}
-              disabled={saving || !form.name}
-              className="btn btn-primary btn-sm"
-            >
-              {saving ? t('saving') : t('save')}
-            </button>
-          </div>
+          <button
+            onClick={handleTest}
+            disabled={testing}
+            className="btn btn-secondary btn-sm"
+          >
+            {testing ? (
+              <>
+                <span className="animate-spin mr-1.5">⟳</span>
+                {t('testing')}
+              </>
+            ) : (
+              <>
+                <TestTube size={14} className="mr-1.5" />
+                {t('test_connection')}
+              </>
+            )}
+          </button>
+          <button
+            ref={saveButtonRef}
+            onClick={handleSave}
+            disabled={saving || !form.name}
+            className="btn btn-primary btn-sm"
+          >
+            {saving ? (
+              <>
+                <span className="animate-spin mr-1.5">⟳</span>
+                {t('saving')}
+              </>
+            ) : (
+              <>
+                <Save size={14} className="mr-1.5" />
+                {t('save')}
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

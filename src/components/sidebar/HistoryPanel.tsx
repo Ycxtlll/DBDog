@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Clock } from 'lucide-react';
+import { Search, Clock, CheckCircle2, XCircle, Terminal } from 'lucide-react';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useQueryStore } from '../../stores/queryStore';
@@ -39,8 +39,8 @@ const HistoryPanel: React.FC = () => {
 
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
-    if (diff < 604800000) return `${Math.floor(diff / 86400000)} days ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
 
     return date.toLocaleDateString();
   }, []);
@@ -48,78 +48,69 @@ const HistoryPanel: React.FC = () => {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-sidebar)' }}>
       <div className="p-2" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-        <div className="flex items-center gap-2 px-2 py-1 rounded" style={{ background: 'var(--bg-hover)' }}>
-          <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
+        <div className="panel-search">
+          <Search size={14} className="text-tertiary" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('search_placeholder')}
-            className="flex-1 bg-transparent border-none outline-none text-xs"
-            style={{ color: 'var(--text-primary)' }}
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-1">
+      <div className="flex-1 overflow-auto p-2">
         {loading && (
-          <div className="flex items-center justify-center p-4">
-            <div className="animate-spin" style={{ color: 'var(--text-tertiary)' }}>
-              ⟳
-            </div>
+          <div className="empty-state">
+            <div className="animate-spin text-tertiary">⟳</div>
           </div>
         )}
 
         {!loading && history.length === 0 && (
-          <div className="flex items-center justify-center p-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            {t('no_results')}
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Terminal size={20} />
+            </div>
+            <div className="empty-state-title">{t('no_results')}</div>
+            <div className="empty-state-desc">Your query history will appear here</div>
           </div>
         )}
 
-        {!loading && history.map((entry) => (
-          <div
-            key={entry.id}
-            className="px-2 py-1.5 rounded cursor-pointer text-xs"
-            onClick={() => handleSelect(entry.sql, entry.databaseName)}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <span
-                style={{
-                  color: entry.success ? 'var(--success)' : 'var(--error)',
-                }}
+        {!loading && (
+          <div className="space-y-1">
+            {history.map((entry) => (
+              <div
+                key={entry.id}
+                className="group p-2.5 rounded-lg cursor-pointer hover:bg-hover transition-all"
+                onClick={() => handleSelect(entry.sql, entry.databaseName)}
               >
-                {entry.success ? '✓' : '✕'}
-              </span>
-              <span
-                className="flex-1 truncate font-medium"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {entry.connectionName}
-              </span>
-              <span
-                className="flex items-center gap-1"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                <Clock size={10} />
-                {formatDate(entry.createdAt)}
-              </span>
-            </div>
-            <div
-              className="truncate"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              {entry.sql}
-            </div>
-            {entry.durationMs && (
-              <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {entry.rowCount !== undefined ? `${entry.rowCount} rows · ` : ''}
-                {entry.durationMs}ms
+                <div className="flex items-center gap-2 mb-1.5">
+                  {entry.success ? (
+                    <CheckCircle2 size={14} className="text-success flex-shrink-0" />
+                  ) : (
+                    <XCircle size={14} className="text-error flex-shrink-0" />
+                  )}
+                  <span className="flex-1 truncate font-medium text-primary text-xs">
+                    {entry.connectionName}
+                  </span>
+                  <span className="flex items-center gap-1 text-tertiary text-[10px] flex-shrink-0">
+                    <Clock size={10} />
+                    {formatDate(entry.createdAt)}
+                  </span>
+                </div>
+                <div className="truncate text-secondary text-[11px] font-mono opacity-80 pl-5">
+                  {entry.sql}
+                </div>
+                {entry.durationMs && (
+                  <div className="text-[10px] text-tertiary mt-1 pl-5">
+                    {entry.rowCount !== undefined ? `${entry.rowCount} rows · ` : ''}
+                    {entry.durationMs}ms
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

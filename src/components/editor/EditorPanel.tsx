@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { Plus, X, Play, PlayCircle, AlignLeft } from 'lucide-react';
+import { Plus, X, Play, AlignLeft, Zap, FileCode } from 'lucide-react';
 import { format } from 'sql-formatter';
 import { useQueryStore } from '../../stores/queryStore';
 import { useConnectionStore } from '../../stores/connectionStore';
@@ -32,7 +32,6 @@ const EditorPanel: React.FC = () => {
       if (upperSql.startsWith('SELECT') || upperSql.startsWith('SHOW') || upperSql.startsWith('DESCRIBE') || upperSql.startsWith('EXPLAIN')) {
         const result = await queryService.execute(activeConnectionId, sql);
         setTabResult(activeTab.id, result);
-        // Log to history
         addHistoryEntry({
           connectionId: activeConnectionId,
           connectionName,
@@ -45,7 +44,6 @@ const EditorPanel: React.FC = () => {
       } else {
         const result = await queryService.update(activeConnectionId, sql);
         setTabUpdateResult(activeTab.id, result);
-        // Log to history
         addHistoryEntry({
           connectionId: activeConnectionId,
           connectionName,
@@ -59,7 +57,6 @@ const EditorPanel: React.FC = () => {
     } catch (e: any) {
       const errorMessage = e?.toString() || 'Unknown error';
       setTabError(activeTab.id, errorMessage);
-      // Log error to history
       if (connection) {
         addHistoryEntry({
           connectionId: activeConnectionId,
@@ -99,20 +96,15 @@ const EditorPanel: React.FC = () => {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     if (!activeTab) return;
-
-    // 尝试获取拖拽的数据
     const textData = e.dataTransfer.getData('text/plain');
     if (textData) {
-      // 在当前位置插入文本，这里简单追加到末尾
       const newSql = activeTab.sql + (activeTab.sql.trim() ? '\n' : '') + textData;
       updateTabSql(activeTab.id, newSql);
     }
   }, [activeTab, updateTabSql]);
 
-  // 全局键盘快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + N: 新建标签页
       if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
         let connId = activeConnectionId;
@@ -121,12 +113,10 @@ const EditorPanel: React.FC = () => {
         }
         addTab(connId || undefined);
       }
-      // Ctrl/Cmd + W: 关闭当前标签页
       if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) {
         e.preventDefault();
         closeTab(activeTabId);
       }
-      // Ctrl/Cmd + Shift + F: 格式化SQL
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
         e.preventDefault();
         if (activeTab && activeTab.sql.trim()) {
@@ -142,29 +132,17 @@ const EditorPanel: React.FC = () => {
   return (
     <div className="flex flex-col flex-1 overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
       {/* Tab bar */}
-      <div
-        className="flex items-center overflow-x-auto"
-        style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-primary)', minHeight: 35 }}
-      >
+      <div className="tab-bar">
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className="flex items-center gap-1 px-3 py-1.5 cursor-pointer select-none text-xs whitespace-nowrap"
-            style={{
-              background: tab.id === activeTabId ? 'var(--bg-primary)' : 'transparent',
-              borderRight: '1px solid var(--border-primary)',
-              color: tab.id === activeTabId ? 'var(--text-primary)' : 'var(--text-secondary)',
-              borderBottom: tab.id === activeTabId ? '2px solid var(--accent-primary)' : '2px solid transparent',
-            }}
+            className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
           >
-            <span>{tab.title}</span>
+            <span className="max-w-[140px] truncate">{tab.title}</span>
             <button
               onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
-              className="flex items-center justify-center w-4 h-4 rounded cursor-pointer border-none p-0"
-              style={{ background: 'transparent', color: 'var(--text-tertiary)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--error)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+              className="tab-close"
             >
               <X size={12} />
             </button>
@@ -174,15 +152,11 @@ const EditorPanel: React.FC = () => {
           onClick={() => {
             let connId = activeConnectionId;
             if (!connId && activeConnections.size > 0) {
-              // 如果没有活动连接，但存在已连接的连接，使用第一个连接的ID
               connId = Array.from(activeConnections.keys())[0];
             }
             addTab(connId || undefined);
           }}
-          className="flex items-center justify-center w-7 h-7 mx-1 rounded cursor-pointer border-none"
-          style={{ background: 'transparent', color: 'var(--text-secondary)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          className="toolbar-btn mx-1"
           title={t('new_tab')}
         >
           <Plus size={16} />
@@ -192,38 +166,30 @@ const EditorPanel: React.FC = () => {
       {/* Toolbar */}
       {activeTab && (
         <div
-          className="flex items-center gap-1 px-2 py-1"
+          className="flex items-center gap-2 px-3 py-1.5"
           style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-primary)' }}
         >
           <button
             onClick={handleRun}
             disabled={!activeConnectionId || !activeTab.sql.trim() || activeTab.isExecuting}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer border-none"
-            style={{
-              background: activeConnectionId ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-              color: activeConnectionId ? 'var(--text-inverse)' : 'var(--text-tertiary)',
-            }}
-            onMouseEnter={(e) => { if (activeConnectionId) e.currentTarget.style.background = 'var(--accent-hover)'; }}
-            onMouseLeave={(e) => { if (activeConnectionId) e.currentTarget.style.background = 'var(--accent-primary)'; }}
+            className="toolbar-btn toolbar-btn-primary"
             title="Ctrl+Enter"
           >
-            <Play size={12} />
+            <Play size={13} />
             {t('run')}
           </button>
           <button
             onClick={handleFormat}
             disabled={!activeTab.sql.trim()}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer border-none"
-            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
+            className="toolbar-btn"
             title="Ctrl+Shift+F"
           >
-            <AlignLeft size={12} />
+            <AlignLeft size={13} />
             {t('format')}
           </button>
           {!activeConnectionId && (
-            <span className="text-xs ml-2" style={{ color: 'var(--warning)' }}>
+            <span className="text-xs ml-2 flex items-center gap-1" style={{ color: 'var(--warning)' }}>
+              <Zap size={12} />
               {t('no_connection')}
             </span>
           )}
@@ -234,23 +200,22 @@ const EditorPanel: React.FC = () => {
       <div className="flex flex-col flex-1 overflow-hidden">
         {!activeTab && tabs.length === 0 ? (
           <div className="flex items-center justify-center flex-1" style={{ color: 'var(--text-tertiary)' }}>
-            <div className="text-center">
-              <PlayCircle size={48} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm mb-2">{t('select_connection')}</p>
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <FileCode size={24} />
+              </div>
+              <div className="empty-state-title">{t('select_connection')}</div>
               <button
                 onClick={() => {
                   let connId = activeConnectionId;
                   if (!connId && activeConnections.size > 0) {
-                    // 如果没有活动连接，但存在已连接的连接，使用第一个连接的ID
                     connId = Array.from(activeConnections.keys())[0];
                   }
                   addTab(connId || undefined);
                 }}
-                className="px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer border-none"
-                style={{ background: 'var(--accent-primary)', color: 'var(--text-inverse)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent-primary)'; }}
+                className="btn btn-primary btn-sm mt-2"
               >
+                <Plus size={14} className="mr-1.5" />
                 {t('new_tab')}
               </button>
             </div>
@@ -260,6 +225,7 @@ const EditorPanel: React.FC = () => {
             <>
               {/* SQL Editor area */}
               <div
+                className="relative"
                 style={{ height: '40%', minHeight: 120, borderBottom: '1px solid var(--border-primary)' }}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
@@ -274,28 +240,45 @@ const EditorPanel: React.FC = () => {
               {/* Results area */}
               <div className="flex-1 overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
                 {activeTab.isExecuting && (
-                  <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-                    <span className="text-sm">{tq('executing')}</span>
+                  <div className="flex items-center justify-center h-full">
+                    <div className="empty-state">
+                      <div className="animate-spin text-tertiary mb-2">⟳</div>
+                      <div className="empty-state-title">{tq('executing')}</div>
+                    </div>
                   </div>
                 )}
                 {activeTab.error && (
-                  <div className="p-3 text-xs" style={{ color: 'var(--error)', background: 'rgba(231,76,60,0.05)' }}>
-                    {activeTab.error}
+                  <div className="p-4">
+                    <div className="alert alert-error">
+                      <div className="alert-dot bg-error" />
+                      {activeTab.error}
+                    </div>
                   </div>
                 )}
                 {activeTab.result && !activeTab.isExecuting && (
                   <ResultGrid result={activeTab.result} />
                 )}
                 {activeTab.updateResult && !activeTab.isExecuting && (
-                  <div className="flex items-center justify-center h-full" style={{ color: 'var(--success)' }}>
-                    <span className="text-sm">
-                      {tq('rows_affected', { count: activeTab.updateResult.rows_affected })} — {tq('executed_in', { ms: activeTab.updateResult.execution_time_ms })}
-                    </span>
+                  <div className="flex items-center justify-center h-full">
+                    <div className="empty-state">
+                      <div className="empty-state-icon bg-success-subtle">
+                        <Zap size={20} className="text-success" />
+                      </div>
+                      <div className="empty-state-title text-success">
+                        {tq('rows_affected', { count: activeTab.updateResult.rows_affected })}
+                      </div>
+                      <div className="empty-state-desc">
+                        {tq('executed_in', { ms: activeTab.updateResult.execution_time_ms })}
+                      </div>
+                    </div>
                   </div>
                 )}
                 {!activeTab.result && !activeTab.updateResult && !activeTab.isExecuting && !activeTab.error && (
-                  <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-                    <span className="text-sm">{tq('no_results')}</span>
+                  <div className="flex items-center justify-center h-full">
+                    <div className="empty-state">
+                      <div className="empty-state-title">{tq('no_results')}</div>
+                      <div className="empty-state-desc">Run a query to see results here</div>
+                    </div>
                   </div>
                 )}
               </div>

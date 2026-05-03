@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { queryService } from '../../services/queryService';
+import { Play, SearchCheck, AlertTriangle, Zap } from 'lucide-react';
 
 export const ExplainVisualizer: React.FC = () => {
   const { activeConnectionId, activeConnections } = useConnectionStore();
@@ -35,96 +36,122 @@ export const ExplainVisualizer: React.FC = () => {
     return 'var(--text-secondary)';
   };
 
-  return (
-    <div className="flex flex-col h-full p-4" style={{ background: 'var(--bg-primary)' }}>
-      {!isConnected ? (
-        <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-          Connect to a database to use EXPLAIN visualizer
+  const getStepBadge = (type: string) => {
+    const lowerType = type.toLowerCase();
+    if (['all', 'index'].includes(lowerType)) return 'badge-error';
+    if (['range', 'ref', 'eq_ref'].includes(lowerType)) return 'badge-warning';
+    if (['const', 'system'].includes(lowerType)) return 'badge-success';
+    return 'badge-secondary';
+  };
+
+  if (!isConnected) {
+    return (
+      <div className="empty-state h-full">
+        <div className="empty-state-icon">
+          <SearchCheck size={24} />
         </div>
-      ) : (
-        <>
-          <div className="flex gap-2 mb-4">
-            <textarea
-              value={sql}
-              onChange={(e) => setSql(e.target.value)}
-              placeholder="Enter SQL to EXPLAIN"
-              className="flex-1 px-3 py-2 rounded border text-xs font-mono"
-              style={{
-                background: 'var(--bg-secondary)',
-                color: 'var(--text-primary)',
-                borderColor: 'var(--border-primary)',
-                minHeight: '60px',
-              }}
-              onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                  handleExplain();
-                }
-              }}
-            />
-            <button
-              onClick={handleExplain}
-              disabled={loading}
-              className="px-4 py-2 rounded text-xs font-medium"
-              style={{
-                background: 'var(--accent-primary)',
-                color: 'var(--text-inverse)',
-                opacity: loading ? 0.5 : 1,
-              }}
-            >
-              EXPLAIN
-            </button>
+        <div className="empty-state-title">EXPLAIN Visualizer</div>
+        <div className="empty-state-desc">Connect to a database to analyze query execution plans</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg-primary)' }}>
+      <div className="p-4" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+        <div className="flex gap-3">
+          <textarea
+            value={sql}
+            onChange={(e) => setSql(e.target.value)}
+            placeholder="Enter SQL to analyze..."
+            className="form-textarea flex-1 font-mono text-xs min-h-[60px]"
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                handleExplain();
+              }
+            }}
+          />
+          <button
+            onClick={handleExplain}
+            disabled={loading || !sql.trim()}
+            className="btn btn-primary btn-sm self-start"
+          >
+            {loading ? (
+              <span className="animate-spin mr-1.5">⟳</span>
+            ) : (
+              <Play size={14} className="mr-1.5" />
+            )}
+            EXPLAIN
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-4">
+        {error && (
+          <div className="alert alert-error mb-4">
+            <AlertTriangle size={14} />
+            {error}
           </div>
+        )}
 
-          {error && (
-            <div className="mb-4 p-3 rounded text-xs" style={{ background: 'rgba(231,76,60,0.1)', color: 'var(--error)' }}>
-              {error}
-            </div>
-          )}
+        {loading && (
+          <div className="empty-state">
+            <div className="animate-spin text-tertiary">⟳</div>
+            <div className="empty-state-title">Analyzing...</div>
+          </div>
+        )}
 
-          {loading && (
-            <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-              Loading...
-            </div>
-          )}
-
-          {!loading && result.length > 0 && (
-            <div className="flex-1 overflow-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>id</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>select_type</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>table</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>type</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>possible_keys</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>key</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>key_len</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>ref</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>rows</th>
-                    <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Extra</th>
+        {!loading && result.length > 0 && (
+          <div className="data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>id</th>
+                  <th>select_type</th>
+                  <th>table</th>
+                  <th>type</th>
+                  <th>possible_keys</th>
+                  <th>key</th>
+                  <th>key_len</th>
+                  <th>ref</th>
+                  <th>rows</th>
+                  <th>Extra</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.map((row, i) => (
+                  <tr key={i}>
+                    <td>{row.id}</td>
+                    <td>{row.select_type}</td>
+                    <td className="font-medium">{row.table}</td>
+                    <td>
+                      <span className={`badge ${getStepBadge(row.type)} text-[10px]`}>
+                        {row.type}
+                      </span>
+                    </td>
+                    <td className="text-secondary">{row.possible_keys}</td>
+                    <td className="font-medium">{row.key}</td>
+                    <td>{row.key_len}</td>
+                    <td className="text-secondary">{row.ref}</td>
+                    <td>{row.rows}</td>
+                    <td className="text-secondary">{row.Extra}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {result.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.id}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.select_type}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.table}</td>
-                      <td className="p-2" style={{ color: getStepColor(row.type) }}>{row.type}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.possible_keys}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.key}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.key_len}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.ref}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.rows}</td>
-                      <td className="p-2" style={{ color: 'var(--text-primary)' }}>{row.Extra}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!loading && result.length === 0 && !error && (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Zap size={20} />
             </div>
-          )}
-        </>
-      )}
+            <div className="empty-state-title">Ready to analyze</div>
+            <div className="empty-state-desc">Enter a SQL query and click EXPLAIN to see the execution plan</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

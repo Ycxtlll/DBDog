@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { diffService } from '../../services/diffService';
 import type { DatabaseSnapshot } from '../../types/diff';
+import { GitCompare, Camera, Clock, Database, AlertCircle } from 'lucide-react';
 
 export const SchemaDiffView: React.FC = () => {
   const { activeConnectionId } = useConnectionStore();
@@ -33,44 +34,68 @@ export const SchemaDiffView: React.FC = () => {
 
   const handleCapture = async () => {
     if (!activeConnectionId) return;
-    // TODO: need to select database
     alert('Not implemented yet');
   };
 
   if (!activeConnectionId) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-        Connect to a database to use schema diff
+      <div className="empty-state h-full">
+        <div className="empty-state-icon">
+          <GitCompare size={24} />
+        </div>
+        <div className="empty-state-title">Schema Diff</div>
+        <div className="empty-state-desc">Connect to a database to compare schema snapshots</div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-primary)' }}>
-      <div className="p-2 border-b" style={{ borderColor: 'var(--border-primary)' }}>
+      <div className="panel-header">
+        <div className="flex items-center gap-2">
+          <GitCompare size={14} className="text-accent" />
+          <span className="panel-title">Schema Diff</span>
+        </div>
         <button
           onClick={handleCapture}
-          className="px-3 py-1 rounded text-xs font-medium"
-          style={{ background: 'var(--accent-primary)', color: 'var(--text-inverse)' }}
+          className="btn btn-primary btn-sm"
         >
+          <Camera size={14} className="mr-1.5" />
           Capture Snapshot
         </button>
       </div>
+
       <div className="flex-1 overflow-auto p-4">
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Snapshots</h3>
         {loading ? (
-          <div>Loading...</div>
+          <div className="empty-state">
+            <div className="animate-spin text-tertiary">⟳</div>
+            <div className="empty-state-title">Loading snapshots...</div>
+          </div>
         ) : snapshots.length > 0 ? (
           <div className="space-y-2">
             {snapshots.map(snap => (
-              <div key={snap.id} className="p-2 border rounded" style={{ borderColor: 'var(--border-primary)' }}>
-                <div className="font-medium">{snap.database_name}</div>
-                <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{snap.captured_at}</div>
+              <div key={snap.id} className="card p-4 flex items-center gap-3 cursor-pointer hover:border-accent transition-colors">
+                <div className="w-10 h-10 rounded-lg flex-center bg-accent-subtle flex-shrink-0">
+                  <Database size={18} className="text-accent" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-primary text-sm">{snap.database_name}</div>
+                  <div className="flex items-center gap-1 text-tertiary text-[11px] mt-0.5">
+                    <Clock size={10} />
+                    {snap.captured_at}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <div style={{ color: 'var(--text-tertiary)' }}>No snapshots captured yet.</div>
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <AlertCircle size={20} />
+            </div>
+            <div className="empty-state-title">No snapshots yet</div>
+            <div className="empty-state-desc">Capture a snapshot to start tracking schema changes</div>
+          </div>
         )}
       </div>
     </div>

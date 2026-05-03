@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Database, Table, Columns } from 'lucide-react';
+import { Search, Database, Table, Columns, ArrowRight } from 'lucide-react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useQueryStore } from '../../stores/queryStore';
 import { schemaService } from '../../services/schemaService';
@@ -72,63 +72,72 @@ export const SchemaSearch: React.FC = () => {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-sidebar)' }}>
       <div className="p-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-        <div className="flex items-center gap-3 px-3 py-2 rounded" style={{ background: 'var(--bg-hover)' }}>
-          <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
+        <div className="panel-search">
+          <Search size={14} className="text-tertiary" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('common:search_placeholder')}
-            className="flex-1 bg-transparent border-none outline-none text-xs"
-            style={{ color: 'var(--text-primary)' }}
+            autoFocus
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-3">
+      <div className="flex-1 overflow-auto p-2">
         {loading && (
-          <div className="flex items-center justify-center p-4">
-            <div className="animate-spin" style={{ color: 'var(--text-tertiary)' }}>
-              ⟳
-            </div>
+          <div className="empty-state">
+            <div className="animate-spin text-tertiary">⟳</div>
           </div>
         )}
 
         {!loading && results.length === 0 && query.trim().length >= 2 && (
-          <div className="flex items-center justify-center p-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            {t('common:no_results')}
+          <div className="empty-state">
+            <div className="empty-state-title">{t('common:no_results')}</div>
+            <div className="empty-state-desc">Try a different search term</div>
           </div>
         )}
 
-        {!loading && results.map((hit, index) => (
-          <div
-            key={index}
-            className="flex items-center gap-3 px-3 py-2 rounded cursor-pointer text-xs"
-            onClick={() => handleSelect(hit)}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-          >
-            {hit.object_type === 'database' && <Database size={14} style={{ color: 'var(--text-secondary)' }} />}
-            {hit.object_type === 'table' && <Table size={14} style={{ color: 'var(--text-secondary)' }} />}
-            {hit.object_type === 'column' && <Columns size={14} style={{ color: 'var(--text-tertiary)' }} />}
-
-            <div className="flex-1 min-w-0">
-              <div className="truncate" style={{ color: 'var(--text-primary)' }}>
-                {hit.object_name}
-              </div>
-              {hit.parent && (
-                <div className="truncate" style={{ color: 'var(--text-tertiary)' }}>
-                  {hit.parent} · {hit.database}
-                </div>
-              )}
-              {!hit.parent && (
-                <div className="truncate" style={{ color: 'var(--text-tertiary)' }}>
-                  {hit.database}
-                </div>
-              )}
+        {!loading && query.trim().length < 2 && (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Search size={20} />
             </div>
+            <div className="empty-state-title">Search Schema</div>
+            <div className="empty-state-desc">Type at least 2 characters to search databases, tables, and columns</div>
           </div>
-        ))}
+        )}
+
+        {!loading && (
+          <div className="space-y-0.5">
+            {results.map((hit, index) => (
+              <div
+                key={index}
+                className="group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-hover transition-all"
+                onClick={() => handleSelect(hit)}
+              >
+                <div className="flex-shrink-0">
+                  {hit.object_type === 'database' && <Database size={15} className="text-secondary" />}
+                  {hit.object_type === 'table' && <Table size={15} className="text-secondary" />}
+                  {hit.object_type === 'column' && <Columns size={15} className="text-tertiary" />}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="truncate text-primary text-sm font-medium">{hit.object_name}</div>
+                  {hit.parent ? (
+                    <div className="truncate text-tertiary text-[11px]">
+                      {hit.parent} · {hit.database}
+                    </div>
+                  ) : (
+                    <div className="truncate text-tertiary text-[11px]">{hit.database}</div>
+                  )}
+                </div>
+
+                <ArrowRight size={14} className="text-tertiary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

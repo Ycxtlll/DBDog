@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Copy, Trash2, Edit2, Folder, Search } from 'lucide-react';
+import { Plus, Copy, Trash2, Edit2, Folder, Search, X, Save, Bookmark, Tag } from 'lucide-react';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useQueryStore } from '../../stores/queryStore';
@@ -108,12 +108,9 @@ const BookmarkPanel: React.FC = () => {
     b.sql.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Group by folder
   const groupedBookmarks = filteredBookmarks.reduce((acc, b) => {
     const folder = b.folder || '';
-    if (!acc[folder]) {
-      acc[folder] = [];
-    }
+    if (!acc[folder]) acc[folder] = [];
     acc[folder].push(b);
     return acc;
   }, {} as Record<string, BookmarkType[]>);
@@ -126,165 +123,144 @@ const BookmarkPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-sidebar)' }}>
-      <div className="flex items-center justify-between p-2" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-        <div className="flex items-center gap-1 flex-1">
-          <div className="flex items-center gap-2 px-2 py-1 rounded flex-1" style={{ background: 'var(--bg-hover)' }}>
-            <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('search_placeholder')}
-              className="flex-1 bg-transparent border-none outline-none text-xs"
-              style={{ color: 'var(--text-primary)' }}
-            />
-          </div>
+      <div className="panel-header">
+        <div className="panel-search flex-1 mr-2">
+          <Search size={14} className="text-tertiary" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('search_placeholder')}
+          />
         </div>
         <button
           onClick={handleCreateFromCurrent}
-          className="flex items-center justify-center w-7 h-7 ml-1 rounded"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          className="toolbar-btn"
           title="New Bookmark"
         >
           <Plus size={14} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto p-1">
+      <div className="flex-1 overflow-auto p-2">
         {loading && (
-          <div className="flex items-center justify-center p-4">
-            <div className="animate-spin" style={{ color: 'var(--text-tertiary)' }}>
-              ⟳
-            </div>
+          <div className="empty-state">
+            <div className="animate-spin text-tertiary">⟳</div>
           </div>
         )}
 
         {!loading && filteredBookmarks.length === 0 && (
-          <div className="flex items-center justify-center p-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            {t('no_results')}
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Bookmark size={20} />
+            </div>
+            <div className="empty-state-title">{t('no_results')}</div>
+            <div className="empty-state-desc">Save SQL queries as bookmarks for quick access</div>
           </div>
         )}
 
         {!loading && sortedFolders.map((folder) => (
-          <div key={folder}>
+          <div key={folder} className="mb-3">
             {folder && (
-              <div className="flex items-center gap-1 px-2 py-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                <Folder size={12} />
-                <span>{folder}</span>
+              <div className="flex items-center gap-1.5 px-2 py-1.5 mb-1">
+                <Folder size={12} className="text-tertiary" />
+                <span className="text-xs font-medium text-secondary">{folder}</span>
               </div>
             )}
-            {groupedBookmarks[folder].map((bookmark) => (
-              <div
-                key={bookmark.id}
-                className="px-2 py-1.5 rounded cursor-pointer text-xs"
-                onClick={() => handleSelect(bookmark.sql)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span
-                    className="flex-1 truncate font-medium"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {bookmark.name}
-                  </span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEdit(bookmark); }}
-                      className="flex items-center justify-center w-5 h-5 rounded"
-                      style={{ color: 'var(--text-secondary)' }}
-                      title="Edit"
-                    >
-                      <Edit2 size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleCopy(bookmark.sql); }}
-                      className="flex items-center justify-center w-5 h-5 rounded"
-                      style={{ color: 'var(--text-secondary)' }}
-                      title="Copy"
-                    >
-                      <Copy size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(bookmark.id); }}
-                      className="flex items-center justify-center w-5 h-5 rounded"
-                      style={{ color: 'var(--text-secondary)' }}
-                      title="Delete"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </div>
+            <div className="space-y-0.5">
+              {groupedBookmarks[folder].map((bookmark) => (
                 <div
-                  className="truncate"
-                  style={{ color: 'var(--text-secondary)' }}
+                  key={bookmark.id}
+                  className="group relative px-2.5 py-2 rounded-lg cursor-pointer text-xs hover:bg-hover transition-all"
+                  onClick={() => handleSelect(bookmark.sql)}
                 >
-                  {bookmark.sql}
-                </div>
-                {bookmark.tags && bookmark.tags.length > 0 && (
-                  <div className="flex items-center gap-1 mt-1">
-                    {bookmark.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-1 rounded text-xs"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="flex-1 truncate font-medium text-primary pr-2">
+                      {bookmark.name}
+                    </span>
+                    <div className="card-actions">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEdit(bookmark); }}
+                        className="toolbar-btn p-1"
+                        title="Edit"
                       >
-                        {tag}
-                      </span>
-                    ))}
+                        <Edit2 size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCopy(bookmark.sql); }}
+                        className="toolbar-btn p-1"
+                        title="Copy"
+                      >
+                        <Copy size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(bookmark.id); }}
+                        className="toolbar-btn p-1 hover:text-error"
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+                  <div className="truncate text-secondary opacity-80 font-mono text-[11px]">
+                    {bookmark.sql}
+                  </div>
+                  {bookmark.tags && bookmark.tags.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1.5">
+                      {bookmark.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}
+                        >
+                          <Tag size={8} />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
 
       {/* Bookmark Dialog */}
       {showDialog && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.5)' }}>
-          <div
-            className="p-4 rounded-lg shadow-lg w-full max-w-md"
-            style={{ background: 'var(--bg-primary)' }}
-          >
-            <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
-              {editingBookmark ? 'Edit Bookmark' : 'New Bookmark'}
-            </h3>
+        <div className="modal-overlay" onClick={() => setShowDialog(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex items-center gap-2">
+                <Bookmark size={18} className="text-accent" />
+                <h3>{editingBookmark ? 'Edit Bookmark' : 'New Bookmark'}</h3>
+              </div>
+              <button onClick={() => setShowDialog(false)} className="btn btn-ghost btn-sm p-1">
+                <X size={18} />
+              </button>
+            </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Name
-                </label>
+            <div className="modal-body space-y-3">
+              <div className="form-group">
+                <label className="form-label">Name</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-2 py-1 rounded text-xs border"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text-primary)',
-                    borderColor: 'var(--border-primary)',
-                  }}
+                  className="form-input"
+                  placeholder="Bookmark name"
+                  autoFocus
                 />
               </div>
 
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Folder
-                </label>
+              <div className="form-group">
+                <label className="form-label">Folder</label>
                 <input
                   type="text"
                   value={formData.folder}
                   onChange={(e) => setFormData({ ...formData, folder: e.target.value })}
-                  className="w-full px-2 py-1 rounded text-xs border"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text-primary)',
-                    borderColor: 'var(--border-primary)',
-                  }}
+                  className="form-input"
+                  placeholder="Folder name (optional)"
                   list="folder-list"
                 />
                 <datalist id="folder-list">
@@ -294,57 +270,41 @@ const BookmarkPanel: React.FC = () => {
                 </datalist>
               </div>
 
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Tags (comma-separated)
-                </label>
+              <div className="form-group">
+                <label className="form-label">Tags <span className="optional">(comma-separated)</span></label>
                 <input
                   type="text"
                   value={formData.tags}
                   onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                  className="w-full px-2 py-1 rounded text-xs border"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text-primary)',
-                    borderColor: 'var(--border-primary)',
-                  }}
+                  className="form-input"
+                  placeholder="tag1, tag2"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  SQL
-                </label>
+              <div className="form-group">
+                <label className="form-label">SQL</label>
                 <textarea
                   value={formData.sql}
                   onChange={(e) => setFormData({ ...formData, sql: e.target.value })}
-                  className="w-full px-2 py-1 rounded text-xs border h-32 resize-none"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text-primary)',
-                    borderColor: 'var(--border-primary)',
-                  }}
+                  className="form-textarea h-32 font-mono"
+                  placeholder="SQL query"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 mt-4">
+            <div className="modal-footer">
               <button
                 onClick={() => setShowDialog(false)}
-                className="px-3 py-1.5 rounded text-xs"
-                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                className="btn btn-secondary btn-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={!formData.name.trim() || !formData.sql.trim()}
-                className="px-3 py-1.5 rounded text-xs font-medium"
-                style={{
-                  background: formData.name.trim() && formData.sql.trim() ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                  color: formData.name.trim() && formData.sql.trim() ? 'var(--text-inverse)' : 'var(--text-tertiary)',
-                }}
+                className="btn btn-primary btn-sm"
               >
+                <Save size={14} className="mr-1.5" />
                 Save
               </button>
             </div>

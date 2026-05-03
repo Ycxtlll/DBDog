@@ -4,50 +4,52 @@ import '@xyflow/react/dist/style.css';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useSchemaCacheStore } from '../../stores/schemaCacheStore';
 import { schemaService } from '../../services/schemaService';
+import { Database, Loader2, GitGraph } from 'lucide-react';
 
 interface TableNodeData {
   database: string;
   table: string;
   columns: { name: string; type: string; primaryKey: boolean }[];
-  [key: string]: unknown; // Add index signature for Record<string, unknown>
+  [key: string]: unknown;
 }
 
 const TableNode = ({ data }: { data: TableNodeData }) => {
   return (
     <div
-      className="rounded shadow border"
+      className="rounded-xl shadow-md border overflow-hidden"
       style={{
-        background: 'var(--bg-primary)',
+        background: 'var(--bg-card)',
         borderColor: 'var(--border-primary)',
-        minWidth: '200px',
+        minWidth: '220px',
       }}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Top} style={{ background: 'var(--accent-primary)', width: 8, height: 8 }} />
       <div
-        className="px-3 py-2 border-b text-xs font-semibold"
+        className="px-4 py-2.5 border-b flex items-center gap-2"
         style={{
           background: 'var(--bg-secondary)',
           borderColor: 'var(--border-primary)',
           color: 'var(--text-primary)',
         }}
       >
-        {data.table}
+        <Database size={13} className="text-accent" />
+        <span className="text-xs font-semibold">{data.table}</span>
       </div>
       <div className="p-2">
         {data.columns.map((col) => (
           <div
             key={col.name}
-            className="flex items-center gap-2 px-2 py-1 text-xs"
+            className="flex items-center gap-2 px-3 py-1 rounded-md text-xs"
             style={{
               color: col.primaryKey ? 'var(--success)' : 'var(--text-secondary)',
             }}
           >
-            <span className="font-medium">{col.name}</span>
-            <span className="opacity-70">{col.type}</span>
+            <span className={`font-medium ${col.primaryKey ? 'font-semibold' : ''}`}>{col.name}</span>
+            <span className="text-tertiary text-[10px] ml-auto">{col.type}</span>
           </div>
         ))}
       </div>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Bottom} style={{ background: 'var(--accent-primary)', width: 8, height: 8 }} />
     </div>
   );
 };
@@ -71,10 +73,8 @@ export const ErDiagramView: React.FC = () => {
 
     setLoading(true);
     try {
-      // First, load tables for the database
       const tables = await schemaService.listTables(activeConnectionId, database);
 
-      // Then, load columns for each table
       const tableNodes: Node<TableNodeData>[] = [];
       const tableEdges: Edge[] = [];
       let x = 50;
@@ -100,22 +100,21 @@ export const ErDiagramView: React.FC = () => {
             },
           });
 
-          // Add edges for foreign keys
           for (const fk of foreignKeys) {
             tableEdges.push({
               id: `${database}.${table.name}-${fk.referenced_table}`,
               source: `${database}.${table.name}`,
               target: `${database}.${fk.referenced_table}`,
-              markerEnd: { type: MarkerType.ArrowClosed },
-              style: { stroke: 'var(--text-tertiary)' },
+              markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--text-tertiary)' },
+              style: { stroke: 'var(--border-secondary)', strokeWidth: 1.5 },
+              type: 'smoothstep',
             });
           }
 
-          // Position next table
-          x += 250;
-          if (x > 1000) {
+          x += 260;
+          if (x > 1200) {
             x = 50;
-            y += 300;
+            y += 320;
           }
         } catch (e) {
           console.error(`Failed to load table ${table.name}`, e);
@@ -146,63 +145,72 @@ export const ErDiagramView: React.FC = () => {
 
   if (!isConnected) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-        Connect to a database to view ER diagram
+      <div className="empty-state h-full">
+        <div className="empty-state-icon">
+          <GitGraph size={24} />
+        </div>
+        <div className="empty-state-title">ER Diagram</div>
+        <div className="empty-state-desc">Connect to a database to view ER diagram</div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-primary)' }}>
-      <div className="flex items-center gap-2 p-2 border-b" style={{ borderColor: 'var(--border-primary)' }}>
-        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-          Database:
-        </span>
-        <select
-          value={selectedDatabase}
-          onChange={(e) => setSelectedDatabase(e.target.value)}
-          className="px-2 py-1 rounded text-xs border"
-          style={{
-            background: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            borderColor: 'var(--border-primary)',
-          }}
-        >
-          <option value="">Select a database</option>
-          {databases.map((db) => (
-            <option key={db} value={db}>
-              {db}
-            </option>
-          ))}
-        </select>
+      <div className="panel-header">
+        <div className="flex items-center gap-2">
+          <Database size={14} className="text-accent" />
+          <span className="text-xs font-medium text-primary">Database</span>
+          <select
+            value={selectedDatabase}
+            onChange={(e) => setSelectedDatabase(e.target.value)}
+            className="form-select text-xs py-1"
+          >
+            <option value="">Select a database</option>
+            {databases.map((db) => (
+              <option key={db} value={db}>{db}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-          Loading...
+        <div className="empty-state flex-1">
+          <Loader2 size={24} className="animate-spin text-tertiary" />
+          <div className="empty-state-title">Loading schema...</div>
         </div>
       )}
 
       {!loading && (
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          fitView
-        >
-          <Background />
-          <Controls />
-          <MiniMap
-            nodeColor={() => 'var(--bg-secondary)'}
-            style={{
-              background: 'var(--bg-sidebar)',
-              borderColor: 'var(--border-primary)',
-            }}
-          />
-        </ReactFlow>
+        <div className="flex-1">
+          {nodes.length === 0 && selectedDatabase ? (
+            <div className="empty-state h-full">
+              <div className="empty-state-title">No tables found</div>
+            </div>
+          ) : (
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              nodeTypes={nodeTypes}
+              fitView
+            >
+              <Background gap={16} size={1} color="var(--border-divider)" />
+              <Controls />
+              <MiniMap
+                nodeColor={() => 'var(--bg-secondary)'}
+                maskColor="var(--bg-overlay)"
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-primary)',
+                  borderRadius: '8px',
+                }}
+              />
+            </ReactFlow>
+          )}
+        </div>
       )}
     </div>
   );

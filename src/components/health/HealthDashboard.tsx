@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { healthService } from '../../services/schemaService';
+import { Activity, RefreshCw, XCircle, Users, Gauge, Settings } from 'lucide-react';
 
 export const HealthDashboard: React.FC = () => {
   const { activeConnectionId, activeConnections } = useConnectionStore();
@@ -53,114 +54,137 @@ export const HealthDashboard: React.FC = () => {
 
   if (!isConnected) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-tertiary)' }}>
-        Connect to a database to view health dashboard
+      <div className="empty-state h-full">
+        <div className="empty-state-icon">
+          <Activity size={24} />
+        </div>
+        <div className="empty-state-title">Health Dashboard</div>
+        <div className="empty-state-desc">Connect to a database to monitor server health</div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-primary)' }}>
-      <div className="p-2 border-b" style={{ borderColor: 'var(--border-primary)' }}>
+      <div className="panel-header">
+        <div className="flex items-center gap-2">
+          <Activity size={14} className="text-accent" />
+          <span className="panel-title">Health Monitor</span>
+        </div>
         <button
           onClick={loadHealthData}
           disabled={loading}
-          className="px-3 py-1 rounded text-xs font-medium"
-          style={{
-            background: 'var(--accent-primary)',
-            color: 'var(--text-inverse)',
-            opacity: loading ? 0.5 : 1,
-          }}
+          className="toolbar-btn"
         >
-          Refresh
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       <div className="flex-1 overflow-auto p-4">
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Process List</h3>
-        {processList.length > 0 ? (
-          <div className="overflow-x-auto mb-6">
-            <table className="w-full text-xs">
+        {/* Process List */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Users size={14} className="text-secondary" />
+            <h3 className="section-title mb-0">Process List</h3>
+          </div>
+          {processList.length > 0 ? (
+            <div className="data-table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Id</th>
+                    <th>User</th>
+                    <th>Host</th>
+                    <th>Db</th>
+                    <th>Command</th>
+                    <th>Time</th>
+                    <th>State</th>
+                    <th>Info</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processList.map((proc) => (
+                    <tr key={proc.id}>
+                      <td className="font-medium">{proc.id}</td>
+                      <td>{proc.user}</td>
+                      <td className="text-secondary">{proc.host}</td>
+                      <td>{proc.db}</td>
+                      <td>
+                        <span className="badge badge-info text-[10px]">{proc.command}</span>
+                      </td>
+                      <td>{proc.time}s</td>
+                      <td className="text-secondary">{proc.state}</td>
+                      <td className="truncate max-w-[200px]" title={proc.info}>{proc.info}</td>
+                      <td>
+                        <button
+                          onClick={() => handleKillProcess(proc.id)}
+                          className="toolbar-btn p-1 text-error hover:bg-error-subtle"
+                          title="Kill process"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-xs text-tertiary">No processes</div>
+          )}
+        </div>
+
+        {/* Status Variables */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Gauge size={14} className="text-secondary" />
+            <h3 className="section-title mb-0">Status Variables</h3>
+          </div>
+          <div className="data-table-container">
+            <table className="data-table">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Id</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>User</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Host</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Db</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Command</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Time</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>State</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Info</th>
-                  <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}></th>
+                <tr>
+                  <th>Name</th>
+                  <th>Value</th>
                 </tr>
               </thead>
               <tbody>
-                {processList.map((proc) => (
-                  <tr key={proc.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                    <td className="p-2" style={{ color: 'var(--text-primary)' }}>{proc.id}</td>
-                    <td className="p-2" style={{ color: 'var(--text-primary)' }}>{proc.user}</td>
-                    <td className="p-2" style={{ color: 'var(--text-primary)' }}>{proc.host}</td>
-                    <td className="p-2" style={{ color: 'var(--text-primary)' }}>{proc.db}</td>
-                    <td className="p-2" style={{ color: 'var(--text-primary)' }}>{proc.command}</td>
-                    <td className="p-2" style={{ color: 'var(--text-primary)' }}>{proc.time}</td>
-                    <td className="p-2" style={{ color: 'var(--text-primary)' }}>{proc.state}</td>
-                    <td className="p-2 truncate max-w-xs" style={{ color: 'var(--text-primary)' }}>{proc.info}</td>
-                    <td className="p-2">
-                      <button
-                        onClick={() => handleKillProcess(proc.id)}
-                        className="px-2 py-1 rounded text-xs"
-                        style={{ background: 'var(--bg-tertiary)', color: 'var(--error)' }}
-                      >
-                        Kill
-                      </button>
-                    </td>
+                {statusVariables.map((v) => (
+                  <tr key={v.name}>
+                    <td className="font-medium text-secondary">{v.name}</td>
+                    <td>{v.value}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="mb-6 text-xs" style={{ color: 'var(--text-tertiary)' }}>No processes</div>
-        )}
-
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Status Variables</h3>
-        <div className="overflow-x-auto mb-6">
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Name</th>
-                <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {statusVariables.map((v) => (
-                <tr key={v.name} style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                  <td className="p-2" style={{ color: 'var(--text-primary)' }}>{v.name}</td>
-                  <td className="p-2" style={{ color: 'var(--text-primary)' }}>{v.value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
 
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>System Variables</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Name</th>
-                <th className="text-left p-2" style={{ color: 'var(--text-secondary)' }}>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {systemVariables.map((v) => (
-                <tr key={v.name} style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                  <td className="p-2" style={{ color: 'var(--text-primary)' }}>{v.name}</td>
-                  <td className="p-2" style={{ color: 'var(--text-primary)' }}>{v.value}</td>
+        {/* System Variables */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Settings size={14} className="text-secondary" />
+            <h3 className="section-title mb-0">System Variables</h3>
+          </div>
+          <div className="data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Value</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {systemVariables.map((v) => (
+                  <tr key={v.name}>
+                    <td className="font-medium text-secondary">{v.name}</td>
+                    <td>{v.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

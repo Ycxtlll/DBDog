@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Database, Table, ChevronRight, ChevronDown, Loader2, Columns, RefreshCw, Copy, Search, LayoutList } from 'lucide-react';
+import { Database, Table, ChevronRight, ChevronDown, Loader2, Columns, RefreshCw, Copy, Search, LayoutList, ArrowUpRight, Eye, FileCode } from 'lucide-react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useSchemaCacheStore } from '../../stores/schemaCacheStore';
 import { useQueryStore } from '../../stores/queryStore';
@@ -265,7 +265,6 @@ const DatabaseTree: React.FC = () => {
 
   const handleDoubleClick = (node: TreeNode) => {
     if (node.type === 'table') {
-      // 双击表节点生成SELECT *查询
       const sql = `SELECT * FROM \`${node.database}\`.\`${node.name}\` LIMIT 100;`;
       if (activeConnectionId) {
         const tabId = addTab(activeConnectionId, node.database);
@@ -279,7 +278,6 @@ const DatabaseTree: React.FC = () => {
         }, 0);
       }
     } else if (node.type === 'database') {
-      // 双击数据库节点快速展开/折叠
       toggleNode(node);
     }
   };
@@ -370,12 +368,12 @@ const DatabaseTree: React.FC = () => {
 
   if (!isConnected) {
     return (
-      <div className="flex-col-center h-full p-6 text-center">
-        <div className="w-16 h-16 rounded-full flex-center bg-tertiary/30 mb-4">
-          <Database size={32} className="text-tertiary" />
+      <div className="empty-state h-full">
+        <div className="empty-state-icon">
+          <Database size={24} />
         </div>
-        <p className="text-sm text-muted mb-1">{t('common:no_database_connection')}</p>
-        <p className="text-xs text-tertiary">{t('common:connect_to_browse')}</p>
+        <div className="empty-state-title">{t('common:no_database_connection')}</div>
+        <div className="empty-state-desc">{t('common:connect_to_browse')}</div>
       </div>
     );
   }
@@ -386,49 +384,47 @@ const DatabaseTree: React.FC = () => {
         <SchemaSearch />
       ) : (
         <>
-          <div className="flex items-center justify-between p-3 border-b border-divider bg-elevated">
-            <div className="flex items-center gap-2">
+          <div className="panel-header">
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setViewMode('tree')}
-                className={`btn btn-ghost btn-sm p-1.5 ${(viewMode as ViewMode) === 'tree' ? 'bg-accent-subtle text-accent' : 'text-muted'}`}
+                className={`toolbar-btn p-1 ${(viewMode as ViewMode) === 'tree' ? 'bg-accent-subtle text-accent' : 'text-muted'}`}
                 title={t('common:tree_view')}
               >
-                <LayoutList size={18} strokeWidth={(viewMode as ViewMode) === 'tree' ? 2.2 : 1.8} />
+                <LayoutList size={16} strokeWidth={(viewMode as ViewMode) === 'tree' ? 2.2 : 1.8} />
               </button>
               <button
                 onClick={() => setViewMode('search')}
-                className={`btn btn-ghost btn-sm p-1.5 ${(viewMode as ViewMode) === 'search' ? 'bg-accent-subtle text-accent' : 'text-muted'}`}
+                className={`toolbar-btn p-1 ${(viewMode as ViewMode) === 'search' ? 'bg-accent-subtle text-accent' : 'text-muted'}`}
                 title={t('common:search_schema')}
               >
-                <Search size={18} strokeWidth={(viewMode as ViewMode) === 'search' ? 2.2 : 1.8} />
+                <Search size={16} strokeWidth={(viewMode as ViewMode) === 'search' ? 2.2 : 1.8} />
               </button>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={refreshAll}
-                className="btn btn-ghost btn-sm p-1.5 text-muted"
-                title={t('common:refresh') || 'Refresh'}
-              >
-                <RefreshCw size={18} />
-              </button>
-            </div>
+            <button
+              onClick={refreshAll}
+              className="toolbar-btn p-1 text-muted"
+              title={t('common:refresh') || 'Refresh'}
+            >
+              <RefreshCw size={16} />
+            </button>
           </div>
 
-          <div className="flex-1 overflow-auto p-3">
+          <div className="flex-1 overflow-auto p-2">
             {treeNodes.length === 0 ? (
-              <div className="flex-col-center h-64 gap-3">
+              <div className="empty-state">
                 <Loader2 size={24} className="animate-spin text-tertiary" />
-                <p className="text-sm text-muted">{t('common:schema_loading')}</p>
+                <div className="empty-state-title">{t('common:schema_loading')}</div>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {treeNodes.map((node, index) => {
                   const isLoading = (node.type === 'database' || node.type === 'table') && node.loading;
                   return (
                     <div
                       key={index}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all hover:bg-hover group ${
-                        node.type === 'table' ? 'ml-4' : node.type === 'column' ? 'ml-8' : ''
+                      className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all hover:bg-hover ${
+                        node.type === 'table' ? 'ml-3' : node.type === 'column' ? 'ml-6' : ''
                       }`}
                       onClick={() => toggleNode(node)}
                       onDoubleClick={(e) => {
@@ -440,41 +436,41 @@ const DatabaseTree: React.FC = () => {
                       onDragStart={(e) => handleDragStart(e, node)}
                     >
                       {isLoading ? (
-                        <Loader2 size={16} className="animate-spin text-tertiary flex-shrink-0" />
+                        <Loader2 size={14} className="animate-spin text-tertiary flex-shrink-0" />
                       ) : (
                         (node.type === 'database' || node.type === 'table') && (
                           <div className="flex-shrink-0 text-tertiary">
-                            {node.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            {node.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </div>
                         )
                       )}
                       {!isLoading && (
                         <div className="flex-shrink-0">
                           {node.type === 'database' ? (
-                            <Database size={16} className="text-secondary" />
+                            <Database size={14} className="text-secondary" />
                           ) : node.type === 'table' ? (
-                            <Table size={16} className="text-secondary" />
+                            <Table size={14} className="text-secondary" />
                           ) : (
-                            <Columns size={16} className={node.isPrimaryKey ? 'text-success' : 'text-tertiary'} />
+                            <Columns size={14} className={node.isPrimaryKey ? 'text-success' : 'text-tertiary'} />
                           )}
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span className="text-sm text-primary truncate">{node.name}</span>
                           {node.type === 'column' && node.isPrimaryKey && (
-                            <span className="badge badge-success text-xs">PK</span>
+                            <span className="badge badge-success text-[10px] px-1">PK</span>
                           )}
                           {node.type === 'column' && node.nullable && (
-                            <span className="badge badge-secondary text-xs">NULL</span>
+                            <span className="badge badge-secondary text-[10px] px-1">NULL</span>
                           )}
                         </div>
                         {node.type === 'column' && (
-                          <div className="text-xs text-tertiary mt-0.5">{node.dataType}</div>
+                          <div className="text-[11px] text-tertiary mt-0.5">{node.dataType}</div>
                         )}
                       </div>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Copy size={14} className="text-tertiary" />
+                        <Copy size={13} className="text-tertiary" />
                       </div>
                     </div>
                   );
@@ -485,59 +481,31 @@ const DatabaseTree: React.FC = () => {
 
           {contextMenu && (
             <div
-              className="fixed z-50 p-1 rounded shadow-lg"
-              style={{
-                left: contextMenu.x,
-                top: contextMenu.y,
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-primary)',
-              }}
+              className="context-menu"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
             >
               {contextMenu.node.type === 'table' && (
                 <>
-                  <button
-                    className="block w-full text-left px-3 py-1.5 text-xs rounded"
-                    style={{ color: 'var(--text-primary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    onClick={() => handleContextAction('selectStar')}
-                  >
+                  <button className="context-menu-item" onClick={() => handleContextAction('selectStar')}>
+                    <ArrowUpRight size={14} />
                     SELECT *
                   </button>
-                  <button
-                    className="block w-full text-left px-3 py-1.5 text-xs rounded"
-                    style={{ color: 'var(--text-primary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    onClick={() => handleContextAction('describe')}
-                  >
+                  <button className="context-menu-item" onClick={() => handleContextAction('describe')}>
+                    <Eye size={14} />
                     DESCRIBE
                   </button>
-                  <div className="my-1" style={{ borderTop: '1px solid var(--border-primary)' }} />
+                  <div className="context-menu-divider" />
                 </>
               )}
               {contextMenu.node.type === 'column' && (
-                <button
-                  className="block w-full text-left px-3 py-1.5 text-xs rounded"
-                  style={{ color: 'var(--text-primary)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  onClick={() => handleContextAction('selectStar')}
-                >
+                <button className="context-menu-item" onClick={() => handleContextAction('selectStar')}>
+                  <FileCode size={14} />
                   SELECT column
                 </button>
               )}
-              <button
-                className="block w-full text-left px-3 py-1.5 text-xs rounded"
-                style={{ color: 'var(--text-primary)' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                onClick={() => handleContextAction('copyName')}
-              >
-                <div className="flex items-center gap-2">
-                  <Copy size={12} />
-                  {t('common:copy_name')}
-                </div>
+              <button className="context-menu-item" onClick={() => handleContextAction('copyName')}>
+                <Copy size={14} />
+                {t('common:copy_name')}
               </button>
             </div>
           )}
