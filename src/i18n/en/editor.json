@@ -9,5 +9,7 @@
   "vim_mode": "Vim Mode",
   "autocomplete": "Autocomplete",
   "no_connection": "No active connection",
-  "select_connection": "Select a connection to run queries"
+  "select_connection": "Select a connection to run queries",
+  "cancel": "Cancel",
+  "query_cancelled": "Query cancelled"
 }

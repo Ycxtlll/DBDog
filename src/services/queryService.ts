@@ -8,8 +8,8 @@ export const queryService = {
   update: (connectionId: string, sql: string) =>
     invoke<UpdateResult>('execute_update', { connectionId, sql }),
 
-  cancel: (connectionId: string, mysqlConnectionId: number) =>
-    invoke<void>('cancel_query', { connectionId, mysqlConnectionId }),
+  cancel: (connectionId: string) =>
+    invoke<void>('cancel_query', { connectionId }),
 
   explain: (connectionId: string, sql: string) =>
     invoke<QueryResult>('explain_query', { connectionId, sql }),

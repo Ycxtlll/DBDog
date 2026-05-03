@@ -10,5 +10,7 @@
   "export_json": "导出为JSON",
   "export_excel": "导出为Excel",
   "filter": "筛选",
-  "clear_filter": "清除筛选"
+  "clear_filter": "清除筛选",
+  "cancel": "取消",
+  "query_cancelled": "查询已取消"
 }

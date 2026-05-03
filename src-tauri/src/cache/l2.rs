@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use crate::db::types::*;
-use crate::error::{AppError, Result};
+use crate::error::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedEntry<T> {
@@ -142,6 +142,7 @@ impl DiskCache {
         data.updated_at = SystemTime::now();
     }
 
+    #[allow(dead_code)]
     pub fn get_columns(&self, connection_id: &str, database: &str, table: &str) -> Option<Vec<ColumnInfo>> {
         let key = format!("{}.{}", database, table);
         let data = self.data.read().unwrap();
@@ -153,6 +154,7 @@ impl DiskCache {
             .map(|e| e.data.clone())
     }
 
+    #[allow(dead_code)]
     pub fn set_columns(&self, connection_id: &str, database: &str, table: &str, columns: Vec<ColumnInfo>) {
         let key = format!("{}.{}", database, table);
         let mut data = self.data.write().unwrap();

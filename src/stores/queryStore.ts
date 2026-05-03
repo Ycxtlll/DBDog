@@ -13,10 +13,19 @@ interface QueryState {
   setTabResult: (id: string, result: QueryResult) => void;
   setTabUpdateResult: (id: string, result: UpdateResult) => void;
   setTabError: (id: string, error: string | undefined) => void;
+  setTabTitle: (id: string, title: string) => void;
   getActiveTab: () => QueryTab | undefined;
 }
 
 let tabCounter = 0;
+
+function generateTitle(sql: string): string {
+  const trimmed = sql.trim();
+  if (!trimmed) return '';
+  const firstLine = trimmed.split('\n')[0];
+  if (firstLine.length > 30) return firstLine.slice(0, 27) + '...';
+  return firstLine;
+}
 
 export const useQueryStore = create<QueryState>((set, get) => ({
   tabs: [],
@@ -42,13 +51,18 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   closeTab: (id: string) => {
     set((s) => {
+      const idx = s.tabs.findIndex((t) => t.id === id);
+      if (idx === -1) return s;
       const newTabs = s.tabs.filter((t) => t.id !== id);
-      const newActiveId =
-        s.activeTabId === id
-          ? newTabs.length > 0
-            ? newTabs[newTabs.length - 1].id
-            : null
-          : s.activeTabId;
+      let newActiveId = s.activeTabId;
+      if (s.activeTabId === id) {
+        if (newTabs.length > 0) {
+          // Activate left tab if exists, otherwise right tab
+          newActiveId = newTabs[Math.min(idx, newTabs.length - 1)]?.id ?? null;
+        } else {
+          newActiveId = null;
+        }
+      }
       return { tabs: newTabs, activeTabId: newActiveId };
     });
   },
@@ -57,7 +71,11 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   updateTabSql: (id: string, sql: string) => {
     set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === id ? { ...t, sql } : t)),
+      tabs: s.tabs.map((t) => {
+        if (t.id !== id) return t;
+        const title = generateTitle(sql) || t.title;
+        return { ...t, sql, title: title.startsWith('Query ') ? t.title : title };
+      }),
     }));
   },
 
@@ -86,6 +104,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   setTabError: (id: string, error: string | undefined) => {
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === id ? { ...t, error, isExecuting: false } : t)),
+    }));
+  },
+
+  setTabTitle: (id: string, title: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, title } : t)),
     }));
   },
 

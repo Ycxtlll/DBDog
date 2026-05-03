@@ -1,13 +1,29 @@
 use async_trait::async_trait;
-use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlRow};
-use sqlx::{MySql, Row, Column};
+use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
+use sqlx::{Row, Column};
 use std::time::{Duration, Instant};
-use chrono::{DateTime, Utc};
+// chrono::Utc used via full path in capture_snapshot
 use std::collections::HashMap;
 
 use crate::db::driver::*;
 use crate::db::types::*;
 use crate::error::Result;
+
+/// Roughly checks whether a SQL string already contains a LIMIT clause outside of strings.
+fn has_limit_clause(sql: &str) -> bool {
+    let mut cleaned = String::with_capacity(sql.len());
+    let mut in_string = false;
+    for c in sql.chars() {
+        if c == '\'' {
+            in_string = !in_string;
+            continue;
+        }
+        if !in_string {
+            cleaned.push(c);
+        }
+    }
+    cleaned.contains(" LIMIT ")
+}
 
 pub struct MysqlDriver;
 
@@ -22,7 +38,11 @@ impl DatabaseDriver for MysqlDriver {
 
     async fn test_connection(&self, config: &ConnectionConfig) -> Result<()> {
         let pool = self.create_pool(config).await?;
-        sqlx::query("SELECT 1").execute(&pool).await?;
+        // Use a short timeout for test connections
+        let row = sqlx::query("SELECT 1 as connected")
+            .fetch_one(&pool)
+            .await?;
+        let _ = row.try_get::<i32, _>("connected");
         pool.close().await;
         Ok(())
     }
@@ -55,10 +75,13 @@ impl DatabaseDriver for MysqlDriver {
         limit: Option<u64>,
     ) -> Result<QueryResult> {
         let effective_limit = limit.unwrap_or(1000);
-        let limited_sql = if sql.trim().to_uppercase().starts_with("SELECT")
-            && !sql.to_uppercase().contains(" LIMIT ")
-        {
-            format!("{} LIMIT {}", sql.trim().trim_end_matches(';'), effective_limit)
+        let trimmed = sql.trim();
+        let upper = trimmed.to_uppercase();
+        let is_select_like = upper.starts_with("SELECT")
+            || upper.starts_with("WITH")
+            || upper.starts_with("VALUES");
+        let limited_sql = if is_select_like && !has_limit_clause(&upper) {
+            format!("{} LIMIT {}", trimmed.trim_end_matches(';'), effective_limit)
         } else {
             sql.to_string()
         };
@@ -136,10 +159,16 @@ impl DatabaseDriver for MysqlDriver {
         })
     }
 
-    async fn cancel_query(&self, pool: &DatabasePool, connection_id: u64) -> Result<()> {
-        sqlx::query(format!("KILL QUERY {}", connection_id).as_str())
-            .execute(pool)
+    async fn cancel_query(&self, pool: &DatabasePool) -> Result<()> {
+        let row = sqlx::query("SELECT CONNECTION_ID() as id")
+            .fetch_one(pool)
             .await?;
+        let conn_id: i64 = row.try_get("id").unwrap_or(0);
+        if conn_id > 0 {
+            sqlx::query(format!("KILL QUERY {}", conn_id).as_str())
+                .execute(pool)
+                .await?;
+        }
         Ok(())
     }
 }

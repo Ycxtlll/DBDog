@@ -41,13 +41,13 @@
 - [x] Server variables and status variables display
 - [x] Auto-refresh every 5 seconds
 
-## Phase 6: Export + Grid Enhancements
-- [ ] Rust-side streaming export (CSV/JSON/SQL INSERT)
-- [ ] Frontend-side Excel export via SheetJS
-- [ ] Export UI: format picker, file save dialog, progress indicator
-- [ ] Excel-like column filters on grid (text/number/set)
-- [ ] Copy/paste from grid as TSV (for Excel) or JSON
-- [ ] Column virtualization for wide tables
+## Phase 6: Export + Grid Enhancements (COMPLETED)
+- [x] Rust-side streaming export (CSV/JSON/SQL INSERT)
+- [x] Frontend-side Excel export via SheetJS
+- [x] Export UI: format picker, file save dialog, progress indicator
+- [x] Excel-like column filters on grid (text/number/set)
+- [x] Copy/paste from grid as TSV (for Excel) or JSON
+- [x] Column virtualization for wide tables
 
 ## Phase 7: Keyboard-first + Polish (IN PROGRESS)
 

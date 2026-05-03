@@ -18,12 +18,15 @@ impl PoolManager {
     }
 
     pub async fn get_or_create(&self, driver: &MysqlDriver, config: &ConnectionConfig) -> Result<MySqlPool> {
+        // Fast path: already exists
         if let Some(pool) = self.pools.get(&config.id) {
             return Ok(pool.clone());
         }
+        // Slow path: create and insert atomically
         let pool = driver.create_pool(config).await?;
-        self.pools.insert(config.id.clone(), pool.clone());
-        Ok(pool)
+        // entry().or_insert() ensures only one pool is created per connection_id
+        let existing = self.pools.entry(config.id.clone()).or_insert_with(|| pool.clone());
+        Ok(existing.clone())
     }
 
     pub fn get(&self, connection_id: &str) -> Option<MySqlPool> {
@@ -37,6 +40,7 @@ impl PoolManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn is_connected(&self, connection_id: &str) -> bool {
         self.pools.contains_key(connection_id)
     }

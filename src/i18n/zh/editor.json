@@ -9,5 +9,7 @@
   "vim_mode": "Vim模式",
   "autocomplete": "自动补全",
   "no_connection": "无活动连接",
-  "select_connection": "选择连接以执行查询"
+  "select_connection": "选择连接以执行查询",
+  "cancel": "取消",
+  "query_cancelled": "查询已取消"
 }

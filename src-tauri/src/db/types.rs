@@ -17,6 +17,7 @@ pub struct ConnectionConfig {
 }
 
 impl ConnectionConfig {
+    #[allow(dead_code)]
     pub fn new(name: &str, db_type: &str, host: &str, port: u16, user: &str) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Database, Table, ChevronRight, ChevronDown, Loader2, Columns, RefreshCw, Copy, Search, LayoutList, ArrowUpRight, Eye, FileCode } from 'lucide-react';
+import { Database, Table, ChevronRight, ChevronDown, Loader2, Columns, RefreshCw, Copy, Search, LayoutList, ArrowUpRight, Eye, FileCode, AlertCircle } from 'lucide-react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useSchemaCacheStore } from '../../stores/schemaCacheStore';
 import { useQueryStore } from '../../stores/queryStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useToastStore } from '../../stores/toastStore';
 import { schemaService } from '../../services/schemaService';
 import { useTranslation } from 'react-i18next';
 import { SchemaSearch } from './SchemaSearch';
@@ -48,15 +49,18 @@ const DatabaseTree: React.FC = () => {
   const { setDatabases, setTables, setColumns, getDatabases, getTables, getColumns } = useSchemaCacheStore();
   const { addTab, setActiveTab } = useQueryStore();
   const { sidebarPanel } = useUIStore();
+  const addToast = useToastStore((s) => s.addToast);
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
+  const [treeError, setTreeError] = useState<string | null>(null);
   const { t } = useTranslation(['common', 'connections']);
 
   const isConnected = activeConnectionId && activeConnections.has(activeConnectionId);
 
   const loadDatabases = useCallback(async () => {
     if (!activeConnectionId) return;
+    setTreeError(null);
 
     try {
       const cached = getDatabases(activeConnectionId);
@@ -68,13 +72,15 @@ const DatabaseTree: React.FC = () => {
       const result = await schemaService.listDatabases(activeConnectionId);
       setDatabases(activeConnectionId, result);
       updateTreeWithDatabases(result);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to load databases:', e);
+      setTreeError(e?.toString() || 'Failed to load databases');
     }
   }, [activeConnectionId, getDatabases, setDatabases]);
 
   const loadTables = useCallback(async (database: string) => {
     if (!activeConnectionId) return;
+    setTreeError(null);
 
     const cached = getTables(activeConnectionId, database);
     if (cached.length > 0) {
@@ -90,8 +96,9 @@ const DatabaseTree: React.FC = () => {
       const result = await schemaService.listTables(activeConnectionId, database);
       setTables(activeConnectionId, database, result);
       updateTreeWithTables(database, result);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to load tables:', e);
+      setTreeError(e?.toString() || 'Failed to load tables');
       setTreeNodes(prev => prev.map(n =>
         n.type === 'database' && n.name === database ? { ...n, loading: false } : n
       ));
@@ -115,7 +122,7 @@ const DatabaseTree: React.FC = () => {
       const result = await schemaService.getColumns(activeConnectionId, database, table);
       setColumns(activeConnectionId, database, table, result);
       updateTreeWithColumns(database, table, result);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to load columns:', e);
       setTreeNodes(prev => prev.map(n =>
         n.type === 'table' && n.database === database && n.name === table ? { ...n, loading: false } : n
@@ -260,7 +267,9 @@ const DatabaseTree: React.FC = () => {
 
   const handleRightClick = (e: React.MouseEvent, node: TreeNode) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, node });
+    const x = Math.min(e.clientX, window.innerWidth - 180);
+    const y = Math.min(e.clientY, window.innerHeight - 150);
+    setContextMenu({ x, y, node });
   };
 
   const handleDoubleClick = (node: TreeNode) => {
@@ -330,6 +339,7 @@ const DatabaseTree: React.FC = () => {
       }
     } else if (action === 'copyName') {
       navigator.clipboard.writeText(node.name);
+      addToast(t('common:copied'), 'success');
     } else if (action === 'describe') {
       if (node.type === 'table' && activeConnectionId) {
         const sql = `DESCRIBE \`${node.database}\`.\`${node.name}\`;`;
@@ -344,13 +354,21 @@ const DatabaseTree: React.FC = () => {
     setContextMenu(null);
   };
 
+  const handleCopyNodeName = (e: React.MouseEvent, node: TreeNode) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(node.name);
+    addToast(t('common:copied'), 'success');
+  };
+
   const refreshAll = async () => {
     if (!activeConnectionId) return;
     try {
       await schemaService.refreshSchema(activeConnectionId);
       await loadDatabases();
-    } catch (e) {
+      addToast(t('common:refreshed'), 'success');
+    } catch (e: any) {
       console.error('Failed to refresh:', e);
+      addToast(e?.toString() || 'Refresh failed', 'error');
     }
   };
 
@@ -411,18 +429,29 @@ const DatabaseTree: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-auto p-2">
-            {treeNodes.length === 0 ? (
+            {treeError && (
+              <div className="alert alert-error mb-2 text-xs">
+                <AlertCircle size={12} />
+                {treeError}
+              </div>
+            )}
+            {treeNodes.length === 0 && !treeError ? (
               <div className="empty-state">
                 <Loader2 size={24} className="animate-spin text-tertiary" />
                 <div className="empty-state-title">{t('common:schema_loading')}</div>
               </div>
             ) : (
               <div className="space-y-0.5">
-                {treeNodes.map((node, index) => {
+                {treeNodes.map((node) => {
                   const isLoading = (node.type === 'database' || node.type === 'table') && node.loading;
+                  const key = node.type === 'database'
+                    ? `db-${node.name}`
+                    : node.type === 'table'
+                    ? `tbl-${node.database}-${node.name}`
+                    : `col-${node.database}-${node.table}-${node.name}`;
                   return (
                     <div
-                      key={index}
+                      key={key}
                       className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all hover:bg-hover ${
                         node.type === 'table' ? 'ml-3' : node.type === 'column' ? 'ml-6' : ''
                       }`}
@@ -469,9 +498,13 @@ const DatabaseTree: React.FC = () => {
                           <div className="text-[11px] text-tertiary mt-0.5">{node.dataType}</div>
                         )}
                       </div>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-hover"
+                        onClick={(e) => handleCopyNodeName(e, node)}
+                        title={t('common:copy_name')}
+                      >
                         <Copy size={13} className="text-tertiary" />
-                      </div>
+                      </button>
                     </div>
                   );
                 })}

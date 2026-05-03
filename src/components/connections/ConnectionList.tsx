@@ -1,13 +1,15 @@
 import React, { useEffect } from 'react';
-import { Plus, Trash2, Plug, Unplug, Server } from 'lucide-react';
+import { Plus, Trash2, Plug, Unplug, Server, AlertCircle } from 'lucide-react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useQueryStore } from '../../stores/queryStore';
+import { useToastStore } from '../../stores/toastStore';
 import { useTranslation } from 'react-i18next';
 import type { ConnectionSummary } from '../../types/connection';
 
 const ConnectionList: React.FC = () => {
   const { connections, loadConnections, connect, disconnect, deleteConnection, connectionStatuses } = useConnectionStore();
   const { addTab } = useQueryStore();
+  const addToast = useToastStore((s) => s.addToast);
   const [showDialog, setShowDialog] = React.useState(false);
   const { t } = useTranslation('connections');
 
@@ -18,22 +20,28 @@ const ConnectionList: React.FC = () => {
   const handleConnect = async (conn: ConnectionSummary) => {
     try {
       await connect(conn.id);
+      addToast(t('connected_to', { name: conn.name }), 'success');
     } catch (e: any) {
+      const msg = e?.toString() || 'Connection failed';
       console.error('Connection failed:', e);
+      addToast(msg, 'error');
     }
   };
 
   const handleDisconnect = async (id: string) => {
     try {
       await disconnect(id);
+      addToast(t('disconnected'), 'info');
     } catch (e) {
       console.error('Disconnect failed:', e);
+      addToast(t('disconnect_failed'), 'error');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm(t('confirm_delete'))) {
       await deleteConnection(id);
+      addToast(t('deleted'), 'info');
     }
   };
 
@@ -86,6 +94,7 @@ const ConnectionList: React.FC = () => {
             const status = connectionStatuses[conn.id] || 'disconnected';
             const isConnected = status === 'connected';
             const isConnecting = status === 'connecting';
+            const isError = status === 'error';
 
             return (
               <div
@@ -105,10 +114,11 @@ const ConnectionList: React.FC = () => {
                           ? 'var(--status-connected)'
                           : isConnecting
                           ? 'var(--status-connecting)'
-                          : status === 'error'
+                          : isError
                           ? 'var(--status-error)'
                           : 'var(--status-disconnected)',
                       }}
+                      aria-label={status}
                     />
                     {isConnected && (
                       <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-status-connected animate-pulse" />
@@ -117,8 +127,8 @@ const ConnectionList: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <div className="text-sm font-semibold truncate text-primary">{conn.name}</div>
-                      <span className={`badge badge-${isConnected ? 'success' : isConnecting ? 'warning' : 'secondary'} text-[10px]`}>
-                        {isConnected ? t('connected') : isConnecting ? t('connecting') : t('disconnected')}
+                      <span className={`badge badge-${isConnected ? 'success' : isConnecting ? 'warning' : isError ? 'error' : 'secondary'} text-[10px]`}>
+                        {isConnected ? t('connected') : isConnecting ? t('connecting') : isError ? t('error') : t('disconnected')}
                       </span>
                     </div>
                     <div className="text-[11px] truncate text-muted">
@@ -153,6 +163,12 @@ const ConnectionList: React.FC = () => {
                     </button>
                   </div>
                 </div>
+                {isError && (
+                  <div className="flex items-center gap-1.5 mt-2 text-[11px] text-error">
+                    <AlertCircle size={12} />
+                    {t('connection_error')}
+                  </div>
+                )}
               </div>
             );
           })}

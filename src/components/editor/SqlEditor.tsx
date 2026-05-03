@@ -25,6 +25,13 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
   const theme = useUIStore((s) => s.theme);
   const activeConnectionId = useConnectionStore((s) => s.activeConnectionId);
   const schemaCache = useSchemaCacheStore();
+  const onRunRef = useRef(onRun);
+  const onChangeRef = useRef(onChange);
+  const readOnlyRef = useRef(readOnly);
+
+  useEffect(() => { onRunRef.current = onRun; }, [onRun]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => { readOnlyRef.current = readOnly; }, [readOnly]);
 
   const buildCompletions = useCallback(
     (context: CompletionContext): CompletionResult | null => {
@@ -37,7 +44,6 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
       let options: { label: string; type: string; detail?: string; apply?: string }[] = [];
 
       if (!activeConnectionId) {
-        // Default SQL keywords
         options = [
           { label: 'SELECT', type: 'keyword' },
           { label: 'FROM', type: 'keyword' },
@@ -70,9 +76,18 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
           { label: 'AVG', type: 'function' },
           { label: 'MAX', type: 'function' },
           { label: 'MIN', type: 'function' },
+          { label: 'DATE_FORMAT', type: 'function' },
+          { label: 'CONCAT', type: 'function' },
+          { label: 'IFNULL', type: 'function' },
+          { label: 'COALESCE', type: 'function' },
+          { label: 'SUBSTRING', type: 'function' },
+          { label: 'REPLACE', type: 'function' },
+          { label: 'TRIM', type: 'function' },
+          { label: 'NOW', type: 'function' },
+          { label: 'CURDATE', type: 'function' },
+          { label: 'UNIX_TIMESTAMP', type: 'function' },
         ];
       } else {
-        // Schema-aware completions
         const databases = schemaCache.getDatabases(activeConnectionId);
         const allTables: { db: string; name: string }[] = [];
 
@@ -84,13 +99,11 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
         }
 
         if (parts.length === 1) {
-          // Suggest databases and tables
           options.push(
             ...databases.map((d) => ({ label: d, type: 'namespace' })),
             ...allTables.map((t) => ({ label: t.name, type: 'table', detail: t.db }))
           );
 
-          // Add keywords
           options.push(
             { label: 'SELECT', type: 'keyword' },
             { label: 'FROM', type: 'keyword' },
@@ -102,12 +115,10 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
             { label: 'LIMIT', type: 'keyword' },
           );
         } else if (parts.length === 2) {
-          // database.table - suggest tables in that database
           const dbName = parts[0];
           const tables = schemaCache.getTables(activeConnectionId, dbName);
           options = tables.map((t) => ({ label: t.name, type: 'table', detail: dbName }));
         } else if (parts.length === 3) {
-          // database.table.column - suggest columns
           const dbName = parts[0];
           const tableName = parts[1];
           const columns = schemaCache.getColumns(activeConnectionId, dbName, tableName);
@@ -135,14 +146,14 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
       {
         key: 'Ctrl-Enter',
         run: () => {
-          onRun();
+          onRunRef.current();
           return true;
         },
       },
       {
         key: 'Cmd-Enter',
         run: () => {
-          onRun();
+          onRunRef.current();
           return true;
         },
       },
@@ -171,7 +182,7 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
       runKeymap,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
-          onChange(update.state.doc.toString());
+          onChangeRef.current(update.state.doc.toString());
         }
       }),
       EditorView.theme({
@@ -186,7 +197,7 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
       extensions.push(oneDark);
     }
 
-    if (readOnly) {
+    if (readOnlyRef.current) {
       extensions.push(EditorState.readOnly.of(true));
     }
 
@@ -208,14 +219,18 @@ const SqlEditor: React.FC<Props> = ({ value, onChange, onRun, readOnly }) => {
     };
   }, [theme]); // Only re-create on theme change
 
-  // Sync external value changes
+  // Sync external value changes without losing cursor position
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const current = view.state.doc.toString();
     if (current !== value) {
+      const selection = view.state.selection;
       view.dispatch({
         changes: { from: 0, to: current.length, insert: value },
+        selection: selection.ranges.some((r) => r.from > value.length || r.to > value.length)
+          ? { anchor: value.length }
+          : selection,
       });
     }
   }, [value]);

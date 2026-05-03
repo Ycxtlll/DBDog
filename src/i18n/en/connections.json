@@ -10,6 +10,7 @@
   "disconnected": "Disconnected",
   "connecting": "Connecting...",
   "connection_error": "Connection Error",
+  "error": "Error",
   "test_success": "Connection successful!",
   "test_failed": "Connection failed",
   "name": "Name",
@@ -26,5 +27,8 @@
   "enter_connection_details": "Enter connection details",
   "no_connections": "No connections yet",
   "testing": "Testing...",
-  "saving": "Saving..."
+  "saving": "Saving...",
+  "connected_to": "Connected to {{name}}",
+  "disconnect_failed": "Disconnect failed",
+  "deleted": "Connection deleted"
 }

@@ -587,7 +587,10 @@ body {
   background: var(--bg-input);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
-  padding: 0.5rem 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   font-size: 0.8125rem;
   color: var(--text-primary);
   transition: all var(--transition-fast) ease;
@@ -608,7 +611,10 @@ body {
   background: var(--bg-input);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
-  padding: 0.5rem 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   font-size: 0.8125rem;
   color: var(--text-primary);
   transition: all var(--transition-fast) ease;
@@ -1159,3 +1165,37 @@ body {
 .rounded-xl { border-radius: var(--radius-xl); }
 .rounded-2xl { border-radius: var(--radius-2xl); }
 .rounded-full { border-radius: var(--radius-full); }
+
+/* Resize handles */
+.resize-handle-horizontal {
+  height: 4px;
+  cursor: row-resize;
+  background: transparent;
+  transition: background 150ms ease;
+  flex-shrink: 0;
+  z-index: 5;
+}
+
+.resize-handle-horizontal:hover,
+.resize-handle-horizontal:active {
+  background: var(--accent-primary);
+}
+
+/* Toast animations */
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Badge error */
+.badge-error {
+  background: var(--error-subtle);
+  color: var(--error);
+  border: 1px solid var(--error);
+}

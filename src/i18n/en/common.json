@@ -26,5 +26,7 @@
   "connect_to_browse": "Connect to a database to browse schema",
   "tree_view": "Tree view",
   "search_schema": "Search schema",
-  "copy_name": "Copy name"
+  "copy_name": "Copy name",
+  "copied": "Copied to clipboard",
+  "refreshed": "Refreshed"
 }

@@ -92,15 +92,19 @@ impl SchemaCache {
     }
 
     pub fn invalidate_connection(&self, connection_id: &str) {
-        self.databases.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
-        self.tables.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
-        self.columns.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
-        self.table_details.retain(|k, _| !k.starts_with(&format!("{}:", connection_id)));
+        let prefix = format!("{}:", connection_id);
+        self.databases.retain(|k, _| !k.starts_with(&prefix));
+        self.tables.retain(|k, _| !k.starts_with(&prefix));
+        self.columns.retain(|k, _| !k.starts_with(&prefix));
+        self.table_details.retain(|k, _| !k.starts_with(&prefix));
     }
 
-    pub fn invalidate_database(&self, _connection_id: &str, database: &str) {
-        self.tables.retain(|k, _| !k.contains(&format!(":tables:{}:", database)));
-        self.columns.retain(|k, _| !k.contains(&format!(":columns:{}:", database)));
-        self.table_details.retain(|k, _| !k.contains(&format!(":detail:{}:", database)));
+    pub fn invalidate_database(&self, connection_id: &str, database: &str) {
+        let table_prefix = format!("{}:tables:{}", connection_id, database);
+        let column_prefix = format!("{}:columns:{}", connection_id, database);
+        let detail_prefix = format!("{}:detail:{}", connection_id, database);
+        self.tables.retain(|k, _| !k.starts_with(&table_prefix));
+        self.columns.retain(|k, _| !k.starts_with(&column_prefix));
+        self.table_details.retain(|k, _| !k.starts_with(&detail_prefix));
     }
 }

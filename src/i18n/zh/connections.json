@@ -10,6 +10,7 @@
   "disconnected": "已断开",
   "connecting": "连接中...",
   "connection_error": "连接错误",
+  "error": "错误",
   "test_success": "连接成功！",
   "test_failed": "连接失败",
   "name": "名称",
@@ -26,5 +27,8 @@
   "enter_connection_details": "输入连接详情",
   "no_connections": "暂无连接",
   "testing": "测试中...",
-  "saving": "保存中..."
+  "saving": "保存中...",
+  "connected_to": "已连接到 {{name}}",
+  "disconnect_failed": "断开连接失败",
+  "deleted": "连接已删除"
 }

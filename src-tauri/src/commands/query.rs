@@ -15,7 +15,7 @@ pub async fn execute_query(
     let pool = state
         .pool_manager
         .get(&connection_id)
-        .ok_or_else(|| AppError::Connection("Not connected".to_string()))?;
+        .ok_or_else(|| AppError::Connection(format!("Connection '{}' is not active. Please connect first.", connection_id)))?;
 
     state.driver.execute_query(&pool, &sql, limit).await
 }
@@ -29,7 +29,7 @@ pub async fn execute_update(
     let pool = state
         .pool_manager
         .get(&connection_id)
-        .ok_or_else(|| AppError::Connection("Not connected".to_string()))?;
+        .ok_or_else(|| AppError::Connection(format!("Connection '{}' is not active. Please connect first.", connection_id)))?;
 
     let result = state.driver.execute_update(&pool, &sql).await?;
 
@@ -51,15 +51,14 @@ pub async fn execute_update(
 #[tauri::command]
 pub async fn cancel_query(
     connection_id: String,
-    mysql_connection_id: u64,
     state: State<'_, AppState>,
 ) -> Result<()> {
     let pool = state
         .pool_manager
         .get(&connection_id)
-        .ok_or_else(|| AppError::Connection("Not connected".to_string()))?;
+        .ok_or_else(|| AppError::Connection(format!("Connection '{}' is not active. Please connect first.", connection_id)))?;
 
-    state.driver.cancel_query(&pool, mysql_connection_id).await
+    state.driver.cancel_query(&pool).await
 }
 
 #[tauri::command]
@@ -71,7 +70,7 @@ pub async fn explain_query(
     let pool = state
         .pool_manager
         .get(&connection_id)
-        .ok_or_else(|| AppError::Connection("Not connected".to_string()))?;
+        .ok_or_else(|| AppError::Connection(format!("Connection '{}' is not active. Please connect first.", connection_id)))?;
 
     let explain_sql = format!("EXPLAIN {}", sql);
     state.driver.execute_query(&pool, &explain_sql, None).await

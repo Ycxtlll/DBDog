@@ -10,5 +10,7 @@
   "export_json": "Export as JSON",
   "export_excel": "Export as Excel",
   "filter": "Filter",
-  "clear_filter": "Clear Filter"
+  "clear_filter": "Clear Filter",
+  "cancel": "Cancel",
+  "query_cancelled": "Query cancelled"
 }

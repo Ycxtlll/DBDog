@@ -17,7 +17,7 @@ pub trait DatabaseDriver: Send + Sync + 'static {
         limit: Option<u64>,
     ) -> Result<QueryResult>;
     async fn execute_update(&self, pool: &DatabasePool, sql: &str) -> Result<UpdateResult>;
-    async fn cancel_query(&self, pool: &DatabasePool, connection_id: u64) -> Result<()>;
+    async fn cancel_query(&self, pool: &DatabasePool) -> Result<()>;
 }
 
 #[async_trait]

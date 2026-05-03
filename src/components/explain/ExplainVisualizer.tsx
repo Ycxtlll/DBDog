@@ -28,14 +28,6 @@ export const ExplainVisualizer: React.FC = () => {
 
   const isConnected = activeConnectionId && activeConnections.has(activeConnectionId);
 
-  const getStepColor = (type: string) => {
-    const lowerType = type.toLowerCase();
-    if (['all', 'index'].includes(lowerType)) return 'var(--error)';
-    if (['range', 'ref', 'eq_ref'].includes(lowerType)) return 'var(--warning)';
-    if (['const', 'system'].includes(lowerType)) return 'var(--success)';
-    return 'var(--text-secondary)';
-  };
-
   const getStepBadge = (type: string) => {
     const lowerType = type.toLowerCase();
     if (['all', 'index'].includes(lowerType)) return 'badge-error';

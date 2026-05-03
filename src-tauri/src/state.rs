@@ -13,6 +13,7 @@ pub struct AppState {
     pub connection_manager: ConnectionManager,
     pub schema_cache: SchemaCache,
     pub disk_cache: DiskCache,
+    #[allow(dead_code)]
     pub app_config: Arc<tokio::sync::RwLock<AppConfig>>,
     pub driver: MysqlDriver,
     pub local_db: Arc<LocalDb>,
