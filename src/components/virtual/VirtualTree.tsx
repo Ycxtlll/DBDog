@@ -20,6 +20,7 @@ interface VirtualTreeProps<T> {
   onToggle: (key: string) => void;
   renderNode: (node: T, depth: number, isExpanded: boolean) => React.ReactNode;
   rowHeight?: number;
+  hasChildren?: (data: T) => boolean;
 }
 
 export function VirtualTree<T>({
@@ -28,6 +29,7 @@ export function VirtualTree<T>({
   onToggle,
   renderNode,
   rowHeight = 28,
+  hasChildren: hasChildrenProp,
 }: VirtualTreeProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -35,10 +37,12 @@ export function VirtualTree<T>({
     const result: FlatNode<T>[] = [];
     function walk(nodes: TreeNode<T>[], depth: number) {
       for (const node of nodes) {
-        const hasChildren = !!node.children && node.children.length > 0;
+        const hasChildren =
+          hasChildrenProp?.(node.data) ??
+          (!!node.children && node.children.length > 0);
         result.push({ id: node.id, data: node.data, depth, hasChildren });
         if (hasChildren && expandedKeys.has(node.id)) {
-          walk(node.children!, depth + 1);
+          walk(node.children ?? [], depth + 1);
         }
       }
     }

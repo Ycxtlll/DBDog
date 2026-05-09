@@ -2,10 +2,18 @@ import { create } from "zustand";
 import type { QueryResult, QueryTab, UpdateResult } from "../types";
 import { generateId } from "../lib/utils";
 import * as queryService from "../services/queryService";
+import { parseTauriError } from "../lib/error";
+
+export interface QueryHistoryItem {
+  sql: string;
+  timestamp: number;
+}
 
 interface QueryState {
   tabs: QueryTab[];
   activeTabId: string | null;
+  history: QueryHistoryItem[];
+  historyExpanded: boolean;
   newTab: () => void;
   closeTab: (id: string) => void;
   setTabSql: (id: string, sql: string) => void;
@@ -20,11 +28,15 @@ interface QueryState {
   setTabError: (id: string, error: string) => void;
   setTabExecuting: (id: string, executing: boolean) => void;
   setTabCancelled: (id: string, cancelled: boolean) => void;
+  addHistory: (sql: string) => void;
+  toggleHistory: () => void;
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
   tabs: [],
   activeTabId: null,
+  history: [],
+  historyExpanded: false,
 
   newTab: () => {
     const tab: QueryTab = {
@@ -94,8 +106,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         const result = await queryService.executeUpdate(connectionId, sql);
         get().setTabResult(id, result, false);
       }
+      get().addHistory(sql);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = parseTauriError(err);
       get().setTabError(id, msg);
     } finally {
       get().setTabExecuting(id, false);
@@ -141,5 +154,15 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         t.id === id ? { ...t, isCancelled: cancelled } : t,
       ),
     }));
+  },
+
+  addHistory: (sql) => {
+    set((state) => ({
+      history: [{ sql, timestamp: Date.now() }, ...state.history].slice(0, 100),
+    }));
+  },
+
+  toggleHistory: () => {
+    set((state) => ({ historyExpanded: !state.historyExpanded }));
   },
 }));

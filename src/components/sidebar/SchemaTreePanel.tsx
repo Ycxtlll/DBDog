@@ -1,17 +1,28 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, RefreshCw, ChevronLeft, Table, Eye } from "lucide-react";
+import {
+  Search,
+  RefreshCw,
+  ChevronLeft,
+  Table,
+  Eye,
+  Database as DatabaseIcon,
+  Columns3,
+} from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useQueryStore } from "../../stores/queryStore";
 import * as schemaService from "../../services/schemaService";
-import type { Database, Table as TableType } from "../../types";
+import type { Database, Table as TableType, Column } from "../../types";
 import { VirtualTree, type TreeNode } from "../virtual/VirtualTree";
+import { parseTauriError } from "../../lib/error";
 
 interface SchemaNodeData {
-  type: "database" | "table";
+  type: "database" | "table" | "column";
   name: string;
   database?: string;
+  table?: string;
+  columnType?: string;
 }
 
 export function SchemaTreePanel() {
@@ -20,16 +31,21 @@ export function SchemaTreePanel() {
   const { setSidebarView } = useLayoutStore();
   const [databases, setDatabases] = useState<Database[]>([]);
   const [tablesMap, setTablesMap] = useState<Record<string, TableType[]>>({});
+  const [columnsMap, setColumnsMap] = useState<Record<string, Column[]>>({});
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [loadingDb, setLoadingDb] = useState<string | null>(null);
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadDatabases = useCallback(async () => {
     if (!activeId || statusMap[activeId] !== "connected") return;
     try {
+      setErrorMsg(null);
       const dbs = await schemaService.getDatabases(activeId);
       setDatabases(dbs);
     } catch (err) {
+      const msg = parseTauriError(err);
+      setErrorMsg("Load databases failed: " + msg);
       console.error("Failed to load databases:", err);
     }
   }, [activeId, statusMap]);
@@ -42,22 +58,53 @@ export function SchemaTreePanel() {
     const next = new Set(expandedKeys);
     if (next.has(key)) {
       next.delete(key);
-    } else {
-      next.add(key);
-      const [type, dbName] = key.split(":");
-      if (type === "db" && activeId && !tablesMap[dbName]) {
-        setLoadingDb(dbName);
+      setExpandedKeys(next);
+      return;
+    }
+
+    next.add(key);
+    setExpandedKeys(new Set(next));
+
+    if (key.startsWith("db:") && activeId) {
+      const dbName = key.slice(3);
+      if (!tablesMap[dbName]) {
+        setLoadingKey(key);
+        setErrorMsg(null);
         try {
           const tables = await schemaService.getTables(activeId, dbName);
           setTablesMap((prev) => ({ ...prev, [dbName]: tables }));
         } catch (err) {
+          const msg = parseTauriError(err);
+          setErrorMsg(`Load tables [${dbName}] failed: ${msg}`);
           console.error("Failed to load tables:", err);
         } finally {
-          setLoadingDb(null);
+          setLoadingKey(null);
+        }
+      }
+    } else if (key.startsWith("table:") && activeId) {
+      const parts = key.split(":");
+      const dbName = parts[1];
+      const tableName = parts[2];
+      const colKey = `${dbName}.${tableName}`;
+      if (!columnsMap[colKey]) {
+        setLoadingKey(key);
+        setErrorMsg(null);
+        try {
+          const details = await schemaService.getTableDetails(
+            activeId,
+            dbName,
+            tableName,
+          );
+          setColumnsMap((prev) => ({ ...prev, [colKey]: details.columns }));
+        } catch (err) {
+          const msg = parseTauriError(err);
+          setErrorMsg(`Load columns [${colKey}] failed: ${msg}`);
+          console.error("Failed to load columns:", err);
+        } finally {
+          setLoadingKey(null);
         }
       }
     }
-    setExpandedKeys(next);
   };
 
   const handleTableClick = (db: string, table: string) => {
@@ -78,6 +125,8 @@ export function SchemaTreePanel() {
     if (activeId) {
       schemaService.refreshSchema(activeId);
       setTablesMap({});
+      setColumnsMap({});
+      setExpandedKeys(new Set());
       loadDatabases();
     }
   };
@@ -88,10 +137,25 @@ export function SchemaTreePanel() {
     return {
       id: dbKey,
       data: { type: "database", name: db.name },
-      children: tables.map((table) => ({
-        id: `table:${db.name}:${table.name}`,
-        data: { type: "table", name: table.name, database: db.name },
-      })),
+      children: tables.map((table) => {
+        const tableKey = `table:${db.name}:${table.name}`;
+        const colKey = `${db.name}.${table.name}`;
+        const columns = columnsMap[colKey] ?? [];
+        return {
+          id: tableKey,
+          data: { type: "table", name: table.name, database: db.name },
+          children: columns.map((col) => ({
+            id: `col:${db.name}:${table.name}:${col.name}`,
+            data: {
+              type: "column",
+              name: col.name,
+              database: db.name,
+              table: table.name,
+              columnType: col.dataType,
+            },
+          })),
+        };
+      }),
     };
   });
 
@@ -99,11 +163,26 @@ export function SchemaTreePanel() {
     ? roots
         .map((db) => ({
           ...db,
-          children: db.children?.filter((t) =>
-            t.data.name.toLowerCase().includes(search.toLowerCase()),
-          ),
+          children: db.children
+            ?.map((table) => {
+              const colMatch = table.children?.filter((c) =>
+                c.data.name.toLowerCase().includes(search.toLowerCase()),
+              );
+              const tableMatch = table.data.name
+                .toLowerCase()
+                .includes(search.toLowerCase());
+              if (tableMatch || (colMatch && colMatch.length > 0)) {
+                return { ...table, children: colMatch ?? table.children };
+              }
+              return null;
+            })
+            .filter(Boolean) as TreeNode<SchemaNodeData>[] | undefined,
         }))
-        .filter((db) => db.children && db.children.length > 0)
+        .filter(
+          (db) =>
+            db.data.name.toLowerCase().includes(search.toLowerCase()) ||
+            (db.children && db.children.length > 0),
+        )
     : roots;
 
   if (!activeId || statusMap[activeId] !== "connected") {
@@ -143,47 +222,82 @@ export function SchemaTreePanel() {
           <RefreshCw size={14} />
         </button>
       </div>
+
+      {errorMsg && (
+        <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border-b border-border">
+          {errorMsg}
+        </div>
+      )}
+
+      {loadingKey?.startsWith("db:") && (
+        <div className="px-3 py-1 text-xs text-muted-foreground">
+          Loading tables for {loadingKey.slice(3)}...
+        </div>
+      )}
+
       <div className="flex-1 overflow-hidden">
         <VirtualTree
           roots={filteredRoots}
           expandedKeys={expandedKeys}
           onToggle={handleToggle}
+          hasChildren={(data) =>
+            data.type === "database" || data.type === "table"
+          }
           renderNode={(data, _depth, _isExpanded) => {
             if (data.type === "database") {
+              const isLoading = loadingKey === `db:${data.name}`;
               return (
-                <span className="text-sm font-medium truncate">
-                  {data.name} {loadingDb === data.name && "..."}
+                <span className="text-sm font-medium truncate flex items-center gap-1">
+                  <DatabaseIcon size={12} className="text-muted-foreground" />
+                  {data.name}
+                  {isLoading && (
+                    <span className="text-xs text-muted-foreground animate-pulse">
+                      loading...
+                    </span>
+                  )}
+                </span>
+              );
+            }
+            if (data.type === "table") {
+              return (
+                <span className="text-sm truncate flex items-center gap-1 flex-1">
+                  <Table size={12} className="text-muted-foreground" />
+                  <span className="flex-1 truncate">{data.name}</span>
+                  <button
+                    className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (data.database) {
+                        useLayoutStore
+                          .getState()
+                          .openDrawer("tableStructure", {
+                            database: data.database,
+                            table: data.name,
+                          });
+                      }
+                    }}
+                    title={t("viewStructure")}
+                  >
+                    <Eye size={12} />
+                  </button>
+                  <button
+                    className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (data.database && data.name)
+                        handleTableClick(data.database, data.name);
+                    }}
+                    title="SELECT *"
+                  >
+                    <Columns3 size={12} />
+                  </button>
                 </span>
               );
             }
             return (
-              <span className="text-sm truncate flex items-center gap-1 flex-1">
-                <Table size={12} className="text-muted-foreground" />
-                <span
-                  className="flex-1 truncate"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (data.database)
-                      handleTableClick(data.database, data.name);
-                  }}
-                >
-                  {data.name}
-                </span>
-                <button
-                  className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (data.database) {
-                      useLayoutStore.getState().openDrawer("tableStructure", {
-                        database: data.database,
-                        table: data.name,
-                      });
-                    }
-                  }}
-                  title={t("viewStructure")}
-                >
-                  <Eye size={12} />
-                </button>
+              <span className="text-xs truncate flex items-center gap-1 text-muted-foreground">
+                <span className="font-medium">{data.name}</span>
+                <span className="text-[10px]">({data.columnType})</span>
               </span>
             );
           }}

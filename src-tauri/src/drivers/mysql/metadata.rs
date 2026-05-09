@@ -145,7 +145,7 @@ impl DatabaseMetadata for MySqlDriver {
     async fn fetch_tables(&self, pool: &MySqlPool, db: &str) -> Result<Vec<Table>, AppError> {
         let rows = sqlx::query(
             r#"
-            SELECT table_name AS name, engine, table_rows AS rows,
+            SELECT table_name AS name, engine, table_rows AS row_count,
                    ROUND(data_length / 1024 / 1024, 2) AS size_mb, table_comment AS comment
             FROM information_schema.tables
             WHERE table_schema = ? AND table_type = 'BASE TABLE'
@@ -158,11 +158,16 @@ impl DatabaseMetadata for MySqlDriver {
 
         let mut tables = Vec::new();
         for row in rows {
+            let size_mb: Option<f64> = row
+                .try_get::<Option<String>, _>("size_mb")
+                .ok()
+                .flatten()
+                .and_then(|s| s.parse().ok());
             tables.push(Table {
                 name: row.try_get("name").unwrap_or_default(),
                 engine: row.try_get("engine").ok(),
-                rows: row.try_get::<i64, _>("rows").ok().map(|v| v as u64),
-                size_mb: row.try_get::<f64, _>("size_mb").ok(),
+                rows: row.try_get::<Option<i64>, _>("row_count").ok().flatten().map(|v| v as u64),
+                size_mb,
                 comment: row.try_get("comment").ok(),
             });
         }
@@ -333,7 +338,7 @@ impl DatabaseMetadata for MySqlDriver {
     ) -> Result<String, AppError> {
         let sql = format!("SHOW CREATE TABLE `{}`.`{}`", db, table);
         let row = sqlx::query(&sql).fetch_one(pool).await?;
-        let create_sql: String = row.try_get("Create Table").unwrap_or_default();
+        let create_sql: String = row.try_get(1).unwrap_or_default();
         Ok(create_sql)
     }
 

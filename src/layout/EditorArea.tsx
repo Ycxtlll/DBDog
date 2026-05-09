@@ -4,6 +4,7 @@ import { EditorTabBar } from "../components/editor/EditorTabBar";
 import { SqlEditor } from "../components/editor/SqlEditor";
 import { ResultGrid } from "../components/grid/ResultGrid";
 import { TableStructureDrawer } from "../components/drawer/TableStructureDrawer";
+import { QueryHistory } from "../components/QueryHistory";
 
 export function EditorArea() {
   const { tabs, activeTabId } = useQueryStore();
@@ -33,6 +34,7 @@ export function EditorArea() {
           </>
         )}
       </div>
+      <QueryHistory />
       <TableStructureDrawer connectionId={activeConnectionId} />
     </div>
   );
