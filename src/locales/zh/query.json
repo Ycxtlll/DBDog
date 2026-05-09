@@ -1,0 +1,9 @@
+{
+  "rows": "行",
+  "rowsAffected": "行受影响",
+  "lastInsertId": "最后插入 ID",
+  "truncated": "已截断",
+  "export": "导出",
+  "exportCsv": "导出 CSV",
+  "exportJson": "导出 JSON"
+}

@@ -1,0 +1,16 @@
+{
+  "connections": "连接",
+  "newConnection": "新建连接",
+  "editConnection": "编辑连接",
+  "name": "名称",
+  "host": "主机",
+  "port": "端口",
+  "username": "用户名",
+  "password": "密码",
+  "database": "数据库",
+  "test": "测试",
+  "testSuccess": "连接成功",
+  "testFailed": "连接失败",
+  "sslMode": "SSL 模式",
+  "maxConnections": "最大连接数"
+}

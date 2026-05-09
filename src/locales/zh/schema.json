@@ -1,0 +1,11 @@
+{
+  "search": "搜索结构...",
+  "notConnected": "未连接",
+  "backToConnections": "返回连接列表",
+  "columns": "字段",
+  "indexes": "索引",
+  "foreignKeys": "外键",
+  "triggers": "触发器",
+  "sql": "建表 SQL",
+  "viewStructure": "查看结构"
+}

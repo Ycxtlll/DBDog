@@ -1,0 +1,16 @@
+{
+  "connections": "Connections",
+  "newConnection": "New Connection",
+  "editConnection": "Edit Connection",
+  "name": "Name",
+  "host": "Host",
+  "port": "Port",
+  "username": "Username",
+  "password": "Password",
+  "database": "Database",
+  "test": "Test",
+  "testSuccess": "Connection successful",
+  "testFailed": "Connection failed",
+  "sslMode": "SSL Mode",
+  "maxConnections": "Max Connections"
+}

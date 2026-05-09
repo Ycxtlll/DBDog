@@ -1,0 +1,11 @@
+{
+  "search": "Search schema...",
+  "notConnected": "Not connected",
+  "backToConnections": "Back to connections",
+  "columns": "Columns",
+  "indexes": "Indexes",
+  "foreignKeys": "Foreign Keys",
+  "triggers": "Triggers",
+  "sql": "CREATE SQL",
+  "viewStructure": "View Structure"
+}

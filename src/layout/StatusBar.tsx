@@ -1,0 +1,44 @@
+import { useTranslation } from "react-i18next";
+import { useConnectionStore } from "../stores/connectionStore";
+import { useQueryStore } from "../stores/queryStore";
+
+export function StatusBar() {
+  const { t } = useTranslation("common");
+  const { activeId, serverInfoMap, statusMap } = useConnectionStore();
+  const { tabs, activeTabId } = useQueryStore();
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const serverInfo = activeId ? serverInfoMap[activeId] : null;
+  const status = activeId ? statusMap[activeId] : null;
+
+  return (
+    <div className="h-6 flex items-center px-3 text-xs border-t border-border bg-muted text-muted-foreground select-none gap-4">
+      {serverInfo && status === "connected" ? (
+        <>
+          <span>MySQL {serverInfo.version}</span>
+          <span>ID: {serverInfo.connectionId}</span>
+        </>
+      ) : (
+        <span>{t("disconnected")}</span>
+      )}
+      {activeTab?.result && (
+        <>
+          <span>
+            {activeTab.isQueryResult
+              ? `Rows: ${(activeTab.result as { totalCount: number }).totalCount ?? 0}`
+              : `Affected: ${(activeTab.result as { rowsAffected: number }).rowsAffected ?? 0}`}
+          </span>
+          <span>{activeTab.result.elapsedMs}ms</span>
+        </>
+      )}
+      {activeTab?.isExecuting && (
+        <span className="text-primary animate-pulse">{t("executing")}</span>
+      )}
+      {activeTab?.isCancelled && (
+        <span className="text-yellow-500">{t("cancelled")}</span>
+      )}
+      {activeTab?.error && (
+        <span className="text-destructive">{t("error")}</span>
+      )}
+    </div>
+  );
+}

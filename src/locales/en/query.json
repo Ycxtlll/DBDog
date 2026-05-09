@@ -1,0 +1,9 @@
+{
+  "rows": "rows",
+  "rowsAffected": "rows affected",
+  "lastInsertId": "Last insert ID",
+  "truncated": "truncated",
+  "export": "Export",
+  "exportCsv": "Export CSV",
+  "exportJson": "Export JSON"
+}
