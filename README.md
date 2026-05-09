@@ -1,61 +1,83 @@
 # DBDog
 
-A powerful, cross-platform database GUI tool built with Tauri 2.x.
+一款面向开发者和 DBA 的跨平台桌面数据库管理工具。
 
-**Fast SQL querying. Smart autocomplete. Beautiful design.**
+**快速连接 · 智能编辑 · 本地优先**
 
-## Features
+---
 
-- **MySQL & MariaDB** support (Redis, Memcached, ZooKeeper coming soon)
-- **Schema-aware autocomplete** — databases, tables, columns with dot notation
-- **Virtual scrolling data grid** — handles millions of rows smoothly
-- **ER diagram auto-generation** — visualize foreign key relationships
-- **EXPLAIN visualizer** — color-coded query plan analysis
-- **Schema diff** — compare databases, generate migration SQL
-- **Command palette** (Ctrl+K) — keyboard-first navigation
-- **Query history** — auto-logged with stats, searchable, replayable
-- **Query bookmarks** — save queries with `:param` placeholders
-- **SQL formatter** — one-click pretty-print
-- **Connection health** — process list, server variables, InnoDB status
-- **Dark & Light themes** with Chinese and English UI
+## 功能
 
-## Tech Stack
+- **连接管理** — 保存多个数据库连接配置，密码由操作系统密钥链安全保管，一键连接/断开
+- **SQL 编辑器** — 多标签编辑、语法高亮、SQL 格式化、Schema 感知自动补全（`database.table.column`）
+- **智能查询** — 自动区分查询/更新语句，默认安全截断大结果集，长查询支持一键取消
+- **结果网格** — 虚拟滚动支撑百万级数据浏览，列头快速筛选排序，支持导出 CSV / JSON / Excel
+- **结构浏览** — 侧边栏树形导航数据库/表/列，一键查看表结构、索引、外键、触发器
+- **性能诊断** — 内置 EXPLAIN 可视化（全表扫描标红、索引命中标绿）
+- **命令面板** — `Ctrl+K` 唤起，模糊搜索所有操作，键盘优先
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Tauri 2.x |
-| Frontend | React 19 + TypeScript 5 + Vite 7 |
-| Backend | Rust (sqlx, tokio, dashmap) |
-| SQL Editor | CodeMirror 6 |
-| Data Grid | AG Grid Community |
-| State | Zustand |
-| i18n | react-i18next |
-| Icons | lucide-react |
+**即将推出**：ER 图、进程列表、InnoDB 状态监控、查询历史与书签
 
-## Getting Started
+## 快速开始
 
-### Prerequisites
-- [Rust](https://rustup.rs/) (stable)
-- [Node.js](https://nodejs.org/) 18+ and pnpm
-- [Tauri 2.x prerequisites](https://tauri.app/start/prerequisites/)
+### 1. 创建连接
 
-### Install & Run
+点击工具栏 **New Connection**，填写：
+- 名称：本地 MySQL
+- 主机：`localhost`
+- 端口：`3306`
+- 用户名 / 密码
+- 默认数据库（可选）
 
-```bash
-pnpm install
-pnpm tauri dev
+点击 **Test** 验证连接，点击 **Save** 保存。
+
+### 2. 执行查询
+
+选择连接，点击 **New Query** 打开编辑器：
+
+```sql
+SELECT * FROM users WHERE created_at > '2024-01-01';
 ```
 
-### Build
+按 `Ctrl+Enter` 执行，`Ctrl+Shift+Enter` 执行选中部分。结果展示在下方的网格中，超出行数上限时自动截断并提示。
 
-```bash
-pnpm tauri build
-```
+### 3. 浏览结构
 
-## Development
+左侧边栏展开数据库 → 表节点，右键点击表：
+- **View Structure** — 查看字段、索引、外键
+- **Select Top 100** — 在编辑器中生成查询语句
 
-See [DEVPLAN.md](DEVPLAN.md) for the full development roadmap and [CLAUDE.md](CLAUDE.md) for project guidelines.
+### 4. 诊断性能
 
-## License
+编辑器中输入查询后，点击 **Explain** 按钮，自动执行 `EXPLAIN` 并以颜色编码展示执行计划：
+- 🔴 红色 — 全表扫描（`type = ALL`）
+- 🟢 绿色 — 索引有效命中
+- 🟡 黄色 — 使用了临时表或文件排序
 
-See [LICENSE](LICENSE) for details.
+### 5. 使用命令面板
+
+按 `Ctrl+K`（或 `Cmd+K`）唤起命令面板，输入关键词快速执行：
+- 切换连接
+- 格式化 SQL
+- 切换主题
+- 打开设置
+
+## 设置
+
+通过 **Settings**（`Ctrl+,`）调整：
+
+| 设置项 | 说明 |
+|--------|------|
+| 主题 | Light / Dark |
+| 语言 | English / 简体中文 |
+| 编辑器字体大小 | 默认 14px |
+| 默认返回行数 | 默认 1000 |
+| Vim 模式 | 开关 |
+
+所有设置即时生效，无需重启。
+
+## 安全
+
+- 连接密码存储在操作系统密钥链中，配置文件不含任何明文密码
+- 所有查询使用参数化语句，防止 SQL 注入
+- 纯本地工具，数据不上传任何云端服务
