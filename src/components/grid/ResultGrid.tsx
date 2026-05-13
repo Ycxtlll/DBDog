@@ -1,7 +1,21 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
-import type { QueryTab } from "../../types";
+import { useUiStore } from "../../stores/uiStore";
+import type { QueryResult, QueryTab, UpdateResult } from "../../types";
+
+function getSystemTheme(): "dark" | "light" {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function resolveEffectiveTheme(
+  theme: "light" | "dark" | "system",
+): "light" | "dark" {
+  if (theme === "system") return getSystemTheme();
+  return theme;
+}
 
 interface ResultGridProps {
   tab: QueryTab;
@@ -9,6 +23,7 @@ interface ResultGridProps {
 
 export function ResultGrid({ tab }: ResultGridProps) {
   const { t } = useTranslation("query");
+  const { theme } = useUiStore();
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
@@ -16,17 +31,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
   if (!result) return null;
 
   if (!isQueryResult) {
-    const updateResult = result as {
-      rowsAffected: number;
-      lastInsertId?: number;
-      elapsedMs: number;
-    };
+    const updateResult = result as UpdateResult;
     return (
       <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
         <div className="text-lg font-medium">
           {updateResult.rowsAffected} {t("rowsAffected")}
         </div>
-        {updateResult.lastInsertId && (
+        {updateResult.lastInsertId !== undefined && (
           <div className="text-sm">
             {t("lastInsertId")}: {updateResult.lastInsertId}
           </div>
@@ -36,13 +47,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
     );
   }
 
-  const queryResult = result as {
-    columns: { name: string; dataType: string; nullable: boolean }[];
-    rows: unknown[][];
-    totalCount: number;
-    truncated: boolean;
-    elapsedMs: number;
-  };
+  const queryResult = result as QueryResult;
 
   const columnDefs = useMemo(
     () =>
@@ -50,10 +55,20 @@ export function ResultGrid({ tab }: ResultGridProps) {
         field: col.name,
         headerName: col.name,
         headerTooltip: `${col.name} (${col.dataType})`,
+        cellDataType: false,
         flex: 1,
         minWidth: 80,
         filter: getFilterType(col.dataType),
         sortable: true,
+        valueFormatter: (params: { value: unknown }) => {
+          if (params.value === null || params.value === undefined) {
+            return "NULL";
+          }
+          if (typeof params.value === "boolean") {
+            return params.value ? "true" : "false";
+          }
+          return String(params.value);
+        },
       })),
     [queryResult.columns],
   );
@@ -62,7 +77,11 @@ export function ResultGrid({ tab }: ResultGridProps) {
     return queryResult.rows.map((row) => {
       const obj: Record<string, unknown> = {};
       queryResult.columns.forEach((col, i) => {
-        obj[col.name] = row[i];
+        if (i < row.length) {
+          obj[col.name] = row[i];
+        } else {
+          obj[col.name] = null;
+        }
       });
       return obj;
     });
@@ -77,11 +96,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </span>
         <span>{queryResult.elapsedMs}ms</span>
       </div>
-      <div className="flex-1 min-h-0 ag-theme-quartz-dark">
+      <div className={`flex-1 min-h-0 ${resolveEffectiveTheme(theme) === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
         <AgGridReact
           columnDefs={columnDefs}
           rowData={rowData}
-          pagination={false}
+          pagination={true}
+          paginationPageSize={100}
+          paginationPageSizeSelector={[50, 100, 200, 500]}
           suppressRowClickSelection
           enableCellTextSelection
         />
@@ -91,7 +112,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
 }
 
 function getFilterType(dataType: string): string {
-  const upper = dataType.toUpperCase();
+  const upper = dataType?.toUpperCase() ?? "";
   if (
     upper.includes("INT") ||
     upper.includes("FLOAT") ||

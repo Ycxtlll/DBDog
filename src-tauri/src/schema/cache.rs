@@ -35,17 +35,18 @@ impl CachedValue {
     fn is_expired_l1(&self) -> bool {
         self.cached_at < chrono::Utc::now() - chrono::Duration::minutes(5)
     }
-
-    #[allow(dead_code)]
-    fn is_expired_l2(&self) -> bool {
-        self.cached_at < chrono::Utc::now() - chrono::Duration::hours(1)
-    }
 }
 
 pub struct SchemaCache {
     l1: DashMap<CacheKey, CachedValue>,
     #[allow(dead_code)]
     base_path: PathBuf,
+}
+
+impl Default for SchemaCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SchemaCache {
@@ -147,14 +148,45 @@ impl SchemaCache {
     }
 
     pub fn invalidate_on_ddl(&self, conn_id: &Uuid, sql: &str) {
-        let sql_upper = sql.to_uppercase();
-        if sql_upper.contains("CREATE")
-            || sql_upper.contains("ALTER")
-            || sql_upper.contains("DROP")
-            || sql_upper.contains("RENAME")
-            || sql_upper.contains("TRUNCATE")
-        {
+        let is_ddl = first_sql_token(sql).map_or(false, |token| {
+            matches!(
+                token.as_str(),
+                "CREATE" | "ALTER" | "DROP" | "RENAME" | "TRUNCATE"
+            )
+        });
+        if is_ddl {
             self.invalidate_connection(conn_id);
         }
+    }
+}
+
+/// Extracts the first SQL token (keyword/identifier) from a statement,
+/// skipping leading whitespace and simple `--` and `/* */` comments.
+/// This is a lightweight lexical scan, not a full parser.
+fn first_sql_token(sql: &str) -> Option<String> {
+    let mut s = sql;
+    loop {
+        s = s.trim_start();
+        if s.starts_with("--") {
+            if let Some(idx) = s.find('\n') {
+                s = &s[idx + 1..];
+                continue;
+            }
+            return None;
+        }
+        if s.starts_with("/*") {
+            if let Some(idx) = s.find("*/") {
+                s = &s[idx + 2..];
+                continue;
+            }
+            return None;
+        }
+        let end = s
+            .find(|c: char| !c.is_alphanumeric() && c != '_')
+            .unwrap_or(s.len());
+        if end == 0 {
+            return None;
+        }
+        return Some(s[..end].to_ascii_uppercase());
     }
 }

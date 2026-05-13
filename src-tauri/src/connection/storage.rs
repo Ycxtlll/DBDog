@@ -2,6 +2,7 @@ use super::model::ConnectionConfig;
 use crate::error::AppError;
 use std::path::PathBuf;
 use tauri::Manager;
+use tracing::{error, warn};
 
 pub struct ConnectionStorage {
     app_handle: tauri::AppHandle,
@@ -37,8 +38,16 @@ impl ConnectionStorage {
             match keyring::Entry::new("dbdog", &config.id.to_string())
                 .and_then(|e| e.get_password())
             {
-                Ok(password) => config.password = Some(password),
-                Err(_) => config.password = None,
+                Ok(password) if !password.is_empty() => {
+                    config.password = Some(password);
+                }
+                Ok(_) => {
+                    config.password = None;
+                }
+                Err(e) => {
+                    warn!("Failed to load password from keyring for {}: {}", config.id, e);
+                    config.password = None;
+                }
             }
         }
 
@@ -55,8 +64,21 @@ impl ConnectionStorage {
         }
 
         if let Some(ref password) = config.password {
-            let _ = keyring::Entry::new("dbdog", &config.id.to_string())
-                .and_then(|e| e.set_password(password));
+            if !password.is_empty() {
+                match keyring::Entry::new("dbdog", &config.id.to_string())
+                    .and_then(|e| e.set_password(password))
+                {
+                    Ok(()) => {}
+                    Err(e) => {
+                        error!("Failed to save password to keyring for {}: {}", config.id, e);
+                        return Err(AppError::ConfigError(format!(
+                            "Failed to save password to system keyring: {}. \
+                             Please ensure your system credential manager is available.",
+                            e
+                        )));
+                    }
+                }
+            }
         }
 
         let mut to_save = configs.clone();

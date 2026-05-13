@@ -27,8 +27,9 @@ interface SchemaNodeData {
 
 export function SchemaTreePanel() {
   const { t } = useTranslation("schema");
-  const { activeId, statusMap } = useConnectionStore();
-  const { setSidebarView } = useLayoutStore();
+  const activeId = useConnectionStore((s) => s.activeId);
+  const statusMap = useConnectionStore((s) => s.statusMap);
+  const setSidebarView = useLayoutStore((s) => s.setSidebarView);
   const [databases, setDatabases] = useState<Database[]>([]);
   const [tablesMap, setTablesMap] = useState<Record<string, TableType[]>>({});
   const [columnsMap, setColumnsMap] = useState<Record<string, Column[]>>({});
@@ -107,18 +108,13 @@ export function SchemaTreePanel() {
     }
   };
 
-  const handleTableClick = (db: string, table: string) => {
+  const handleTableClick = async (db: string, table: string) => {
+    if (!activeId) return;
     const queryStore = useQueryStore.getState();
-    if (!queryStore.activeTabId) {
-      queryStore.newTab();
-    }
-    const activeTab = queryStore.tabs.find(
-      (t) => t.id === queryStore.activeTabId,
-    );
-    if (activeTab) {
-      const sql = `SELECT * FROM \`${db}\`.\`${table}\` LIMIT 1000;`;
-      queryStore.setTabSql(activeTab.id, sql);
-    }
+    const tabId = queryStore.activeTabId ?? queryStore.newTab();
+    const sql = `SELECT * FROM \`${db}\`.\`${table}\` LIMIT 1000;`;
+    queryStore.setTabSql(tabId, sql);
+    await queryStore.execute(activeId, tabId);
   };
 
   const handleRefresh = () => {

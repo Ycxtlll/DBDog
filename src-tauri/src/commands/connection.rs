@@ -72,10 +72,17 @@ pub async fn connect(
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
 
+    // Normalize empty password to None
+    if config.password.as_deref().is_some_and(|s| s.is_empty()) {
+        config.password = None;
+    }
+
     // Fallback: use password from frontend if keyring is empty
     if config.password.is_none() {
         if let Some(pwd) = password {
-            config.password = Some(pwd);
+            if !pwd.is_empty() {
+                config.password = Some(pwd);
+            }
         }
     }
 

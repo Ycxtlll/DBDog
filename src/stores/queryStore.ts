@@ -1,24 +1,25 @@
 import { create } from "zustand";
-import type { QueryResult, QueryTab, UpdateResult } from "../types";
+import type { QueryHistoryItem, QueryResult, QueryTab, UpdateResult } from "../types";
 import { generateId } from "../lib/utils";
+import { splitSqlStatements } from "../lib/sql";
 import * as queryService from "../services/queryService";
 import { parseTauriError } from "../lib/error";
-
-export interface QueryHistoryItem {
-  sql: string;
-  timestamp: number;
-}
 
 interface QueryState {
   tabs: QueryTab[];
   activeTabId: string | null;
   history: QueryHistoryItem[];
   historyExpanded: boolean;
-  newTab: () => void;
+  newTab: () => string;
   closeTab: (id: string) => void;
   setTabSql: (id: string, sql: string) => void;
   setActiveTab: (id: string) => void;
-  execute: (connectionId: string, id: string, limit?: number) => Promise<void>;
+  execute: (
+    connectionId: string,
+    id: string,
+    limit?: number,
+    selectedSql?: string,
+  ) => Promise<void>;
   cancel: (connectionId: string, id: string, threadId: number) => Promise<void>;
   setTabResult: (
     id: string,
@@ -28,7 +29,7 @@ interface QueryState {
   setTabError: (id: string, error: string) => void;
   setTabExecuting: (id: string, executing: boolean) => void;
   setTabCancelled: (id: string, cancelled: boolean) => void;
-  addHistory: (sql: string) => void;
+  addHistory: (item: Omit<QueryHistoryItem, "timestamp">) => void;
   toggleHistory: () => void;
 }
 
@@ -50,6 +51,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       tabs: [...state.tabs, tab],
       activeTabId: tab.id,
     }));
+    return tab.id;
   },
 
   closeTab: (id) => {
@@ -79,37 +81,96 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
-  execute: async (connectionId, id, limit) => {
+  execute: async (connectionId, id, limit, selectedSql) => {
     get().setTabExecuting(id, true);
+    get().setTabError(id, "");
+    get().setTabCancelled(id, false);
     const tab = get().tabs.find((t) => t.id === id);
     if (!tab) return;
-    try {
-      const sql = tab.sql.trim();
-      if (!sql) return;
-      const firstWord = sql.split(/\s+/)[0]?.toUpperCase() ?? "";
-      const isQuery = [
-        "SELECT",
-        "SHOW",
-        "DESCRIBE",
-        "DESC",
-        "EXPLAIN",
-      ].includes(firstWord);
+    const rawSql = (selectedSql ?? tab.sql).trim();
+    if (!rawSql) return;
 
-      if (isQuery) {
-        const result = await queryService.executeQuery(
-          connectionId,
-          sql,
-          limit,
+    const statements = splitSqlStatements(rawSql);
+    if (statements.length === 0) return;
+
+    const startTime = performance.now();
+    let currentDatabase = tab.selectedDatabase;
+    let finalResult: QueryResult | UpdateResult | undefined;
+    let finalIsQuery = false;
+    let totalRowsCount = 0;
+
+    try {
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i];
+        const isLast = i === statements.length - 1;
+
+        const useMatch = stmt.match(/^USE\s+`?([^`\s]+)`?$/i);
+        if (useMatch) {
+          currentDatabase = useMatch[1];
+          set((state) => ({
+            tabs: state.tabs.map((t) =>
+              t.id === id ? { ...t, selectedDatabase: currentDatabase } : t,
+            ),
+          }));
+          if (isLast) {
+            finalResult = { rowsAffected: 0, elapsedMs: 0 } as UpdateResult;
+            finalIsQuery = false;
+          }
+          continue;
+        }
+
+        const firstWord = stmt.split(/\s+/)[0]?.toUpperCase() ?? "";
+        const isQuery = ["SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN"].includes(
+          firstWord,
         );
-        get().setTabResult(id, result, true);
-      } else {
-        const result = await queryService.executeUpdate(connectionId, sql);
-        get().setTabResult(id, result, false);
+
+        if (isQuery) {
+          const result = await queryService.executeQuery(
+            connectionId,
+            stmt,
+            limit,
+            currentDatabase,
+          );
+          totalRowsCount += result.totalCount ?? 0;
+          if (isLast) {
+            finalResult = result;
+            finalIsQuery = true;
+          }
+        } else {
+          const result = await queryService.executeUpdate(
+            connectionId,
+            stmt,
+            currentDatabase,
+          );
+          totalRowsCount += result.rowsAffected ?? 0;
+          if (isLast) {
+            finalResult = result;
+            finalIsQuery = false;
+          }
+        }
       }
-      get().addHistory(sql);
+
+      if (finalResult) {
+        get().setTabResult(id, finalResult, finalIsQuery);
+      }
+
+      const elapsedMs = Math.round(performance.now() - startTime);
+      get().addHistory({
+        sql: rawSql,
+        status: "success",
+        elapsedMs,
+        rowsCount: totalRowsCount,
+      });
     } catch (err) {
+      const elapsedMs = Math.round(performance.now() - startTime);
       const msg = parseTauriError(err);
       get().setTabError(id, msg);
+      get().addHistory({
+        sql: rawSql,
+        status: "error",
+        error: msg,
+        elapsedMs,
+      });
     } finally {
       get().setTabExecuting(id, false);
     }
@@ -156,9 +217,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     }));
   },
 
-  addHistory: (sql) => {
+  addHistory: (item) => {
     set((state) => ({
-      history: [{ sql, timestamp: Date.now() }, ...state.history].slice(0, 100),
+      history: [{ ...item, timestamp: Date.now() }, ...state.history].slice(
+        0,
+        100,
+      ),
     }));
   },
 

@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueryResult {
     pub columns: Vec<ColumnMeta>,
     pub rows: Vec<Vec<Value>>,
@@ -11,6 +12,7 @@ pub struct QueryResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateResult {
     pub rows_affected: u64,
     pub last_insert_id: Option<u64>,
@@ -18,6 +20,7 @@ pub struct UpdateResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ColumnMeta {
     pub name: String,
     pub data_type: String,

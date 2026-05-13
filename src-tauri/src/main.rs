@@ -7,6 +7,7 @@ mod error;
 mod query;
 mod schema;
 mod state;
+mod utils;
 
 use state::AppState;
 use tauri::Manager;

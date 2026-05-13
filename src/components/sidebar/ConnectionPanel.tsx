@@ -9,15 +9,13 @@ import { VirtualList } from "../virtual/VirtualList";
 
 export function ConnectionPanel() {
   const { t } = useTranslation("connections");
-  const {
-    configs,
-    statusMap,
-    activeId,
-    connect,
-    disconnect,
-    deleteConfig,
-    setActiveId,
-  } = useConnectionStore();
+  const configs = useConnectionStore((s) => s.configs);
+  const statusMap = useConnectionStore((s) => s.statusMap);
+  const activeId = useConnectionStore((s) => s.activeId);
+  const connect = useConnectionStore((s) => s.connect);
+  const disconnect = useConnectionStore((s) => s.disconnect);
+  const deleteConfig = useConnectionStore((s) => s.deleteConfig);
+  const setActiveId = useConnectionStore((s) => s.setActiveId);
   const { setSidebarView } = useLayoutStore();
   const [editing, setEditing] = useState<ConnectionConfig | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -171,7 +169,11 @@ function ConnectionForm({
   );
 
   const handleSave = async () => {
-    await saveConfig(form);
+    const payload = { ...form };
+    if (!payload.password || payload.password.trim() === "") {
+      delete payload.password;
+    }
+    await saveConfig(payload);
     onClose();
   };
 

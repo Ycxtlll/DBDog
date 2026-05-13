@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ChevronUp, ChevronDown, Clock } from "lucide-react";
+import { ChevronUp, ChevronDown, Clock, Check, X } from "lucide-react";
 import { useQueryStore } from "../stores/queryStore";
 import { formatElapsed } from "../lib/utils";
 
@@ -24,8 +24,11 @@ export function QueryHistory() {
           )}
         </div>
         <div className="flex items-center gap-1">
-          <span>{history.length}</span>
-          {historyExpanded ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+          {historyExpanded ? (
+            <ChevronDown size={12} />
+          ) : (
+            <ChevronUp size={12} />
+          )}
         </div>
       </button>
       {historyExpanded && (
@@ -33,7 +36,8 @@ export function QueryHistory() {
           {history.map((item, idx) => (
             <div
               key={idx}
-              className="px-3 py-1.5 text-xs border-t border-border/50 hover:bg-accent/50 cursor-pointer flex items-center justify-between"
+              className="px-3 py-1.5 text-xs border-t border-border/50 hover:bg-accent/50 cursor-pointer flex items-center gap-2"
+              title={item.error}
               onClick={() => {
                 const store = useQueryStore.getState();
                 const tab = store.tabs.find((t) => t.id === store.activeTabId);
@@ -42,8 +46,18 @@ export function QueryHistory() {
                 }
               }}
             >
+              {item.status === "success" ? (
+                <Check size={12} className="text-green-500 shrink-0" />
+              ) : (
+                <X size={12} className="text-red-500 shrink-0" />
+              )}
               <span className="truncate flex-1 font-mono">{item.sql}</span>
-              <span className="text-muted-foreground ml-2 shrink-0">
+              {item.elapsedMs !== undefined && (
+                <span className="text-muted-foreground shrink-0">
+                  {item.elapsedMs}ms
+                </span>
+              )}
+              <span className="text-muted-foreground shrink-0">
                 {formatElapsed(Date.now() - item.timestamp)} ago
               </span>
             </div>

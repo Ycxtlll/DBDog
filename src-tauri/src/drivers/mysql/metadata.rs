@@ -1,12 +1,12 @@
 use crate::connection::model::{ConnectionConfig, DatabaseType, SslMode};
 use crate::drivers::{DatabaseDriver, DatabaseMetadata};
 use crate::error::AppError;
-use crate::query::result::{QueryResult, UpdateResult};
+
 use crate::schema::model::*;
+use crate::utils::escape_mysql_identifier;
 use async_trait::async_trait;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPool, MySqlPoolOptions};
 use sqlx::Row;
-// Note: FromStr and Instant imported for future use
 
 pub struct MySqlDriver;
 
@@ -96,19 +96,6 @@ impl DatabaseDriver for MySqlDriver {
             .await
             .map_err(|e| AppError::ConnectionFailed(e.to_string()))?;
         Ok(pool)
-    }
-
-    async fn execute_query(
-        &self,
-        pool: &MySqlPool,
-        sql: &str,
-        limit: u32,
-    ) -> Result<QueryResult, AppError> {
-        crate::query::engine::execute_query(pool, sql, limit).await
-    }
-
-    async fn execute_update(&self, pool: &MySqlPool, sql: &str) -> Result<UpdateResult, AppError> {
-        crate::query::engine::execute_update(pool, sql).await
     }
 
     async fn cancel_query(&self, pool: &MySqlPool, thread_id: u64) -> Result<(), AppError> {
@@ -291,10 +278,10 @@ impl DatabaseMetadata for MySqlDriver {
             fks.push(ForeignKey {
                 name: row.try_get("constraint_name").unwrap_or_default(),
                 column: row.try_get("column_name").unwrap_or_default(),
-                referenced_table: row.try_get("referenced_table_name").unwrap_or_default(),
-                referenced_column: row.try_get("referenced_column_name").unwrap_or_default(),
-                update_rule: row.try_get("update_rule").unwrap_or_default(),
-                delete_rule: row.try_get("delete_rule").unwrap_or_default(),
+                referenced_table: row.try_get("referenced_table_name").ok(),
+                referenced_column: row.try_get("referenced_column_name").ok(),
+                update_rule: row.try_get("update_rule").ok(),
+                delete_rule: row.try_get("delete_rule").ok(),
             });
         }
         Ok(fks)
@@ -336,7 +323,11 @@ impl DatabaseMetadata for MySqlDriver {
         db: &str,
         table: &str,
     ) -> Result<String, AppError> {
-        let sql = format!("SHOW CREATE TABLE `{}`.`{}`", db, table);
+        let sql = format!(
+            "SHOW CREATE TABLE {}.{}",
+            escape_mysql_identifier(db),
+            escape_mysql_identifier(table)
+        );
         let row = sqlx::query(&sql).fetch_one(pool).await?;
         let create_sql: String = row.try_get(1).unwrap_or_default();
         Ok(create_sql)

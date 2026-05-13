@@ -7,8 +7,9 @@ import { TableStructureDrawer } from "../components/drawer/TableStructureDrawer"
 import { QueryHistory } from "../components/QueryHistory";
 
 export function EditorArea() {
-  const { tabs, activeTabId } = useQueryStore();
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeTab = useQueryStore((s) =>
+    s.tabs.find((t) => t.id === s.activeTabId),
+  );
   const activeConnectionId = useConnectionStore((s) => s.activeId);
 
   return (
@@ -24,6 +25,20 @@ export function EditorArea() {
                 onChange={(sql) =>
                   useQueryStore.getState().setTabSql(activeTab.id, sql)
                 }
+                onExecute={() => {
+                  if (activeConnectionId) {
+                    useQueryStore
+                      .getState()
+                      .execute(activeConnectionId, activeTab.id);
+                  }
+                }}
+                onExecuteSelection={(selectedSql) => {
+                  if (activeConnectionId) {
+                    useQueryStore
+                      .getState()
+                      .execute(activeConnectionId, activeTab.id, undefined, selectedSql);
+                  }
+                }}
               />
             </div>
             {activeTab.result && (

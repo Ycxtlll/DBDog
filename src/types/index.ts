@@ -80,10 +80,10 @@ export interface Index {
 export interface ForeignKey {
   name: string;
   column: string;
-  referencedTable: string;
-  referencedColumn: string;
-  updateRule: string;
-  deleteRule: string;
+  referencedTable?: string;
+  referencedColumn?: string;
+  updateRule?: string;
+  deleteRule?: string;
 }
 
 export interface Trigger {
@@ -118,6 +118,15 @@ export interface QueryTab {
   error?: string;
   selectedDatabase?: string;
   isQueryResult?: boolean;
+}
+
+export interface QueryHistoryItem {
+  sql: string;
+  timestamp: number;
+  status: "success" | "error";
+  error?: string;
+  elapsedMs?: number;
+  rowsCount?: number;
 }
 
 export interface AppSettings {

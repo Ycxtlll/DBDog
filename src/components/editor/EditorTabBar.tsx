@@ -9,6 +9,7 @@ export function EditorTabBar() {
   const { tabs, activeTabId, newTab, closeTab, setActiveTab, execute, cancel } =
     useQueryStore();
   const activeConnectionId = useConnectionStore((s) => s.activeId);
+  const serverInfoMap = useConnectionStore((s) => s.serverInfoMap);
   const { query } = useUiStore();
 
   const handleExecute = () => {
@@ -18,9 +19,9 @@ export function EditorTabBar() {
 
   const handleCancel = () => {
     if (!activeTabId || !activeConnectionId) return;
-    // Note: threadId is not tracked in this simplified implementation
-    // In production, we'd get threadId from SELECT CONNECTION_ID()
-    cancel(activeConnectionId, activeTabId, 0);
+    const threadId = Number(serverInfoMap[activeConnectionId]?.connectionId);
+    if (!threadId) return;
+    cancel(activeConnectionId, activeTabId, threadId);
   };
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -82,10 +83,14 @@ export function EditorTabBar() {
           disabled={!activeTabId}
           onClick={() => {
             if (activeTab) {
-              import("sql-formatter").then(({ format }) => {
-                const formatted = format(activeTab.sql, { language: "mysql" });
-                useQueryStore.getState().setTabSql(activeTab.id, formatted);
-              });
+              import("sql-formatter")
+                .then(({ format }) => {
+                  const formatted = format(activeTab.sql, { language: "mysql" });
+                  useQueryStore.getState().setTabSql(activeTab.id, formatted);
+                })
+                .catch((err) => {
+                  console.error("Failed to load sql-formatter:", err);
+                });
             }
           }}
           title={t("format")}

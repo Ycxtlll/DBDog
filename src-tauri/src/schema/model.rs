@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Database {
     pub name: String,
     pub charset: Option<String>,
@@ -8,6 +9,7 @@ pub struct Database {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Table {
     pub name: String,
     pub engine: Option<String>,
@@ -17,6 +19,7 @@ pub struct Table {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Column {
     pub name: String,
     pub ordinal_position: u32,
@@ -30,6 +33,7 @@ pub struct Column {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Index {
     pub name: String,
     pub columns: Vec<String>,
@@ -39,16 +43,18 @@ pub struct Index {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ForeignKey {
     pub name: String,
     pub column: String,
-    pub referenced_table: String,
-    pub referenced_column: String,
-    pub update_rule: String,
-    pub delete_rule: String,
+    pub referenced_table: Option<String>,
+    pub referenced_column: Option<String>,
+    pub update_rule: Option<String>,
+    pub delete_rule: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Trigger {
     pub name: String,
     pub event: String,
@@ -57,6 +63,7 @@ pub struct Trigger {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TableDetails {
     pub columns: Vec<Column>,
     pub indexes: Vec<Index>,
@@ -66,6 +73,7 @@ pub struct TableDetails {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub database: String,
     pub object_type: String,

@@ -20,11 +20,9 @@ export function TableStructureDrawer({
     "columns" | "indexes" | "foreignKeys" | "triggers" | "sql"
   >("columns");
 
-  const params = drawer.params as
-    | { database?: string; table?: string }
-    | undefined;
-  const db = params?.database;
-  const table = params?.table;
+  const params = drawer.params;
+  const db = typeof params?.database === "string" ? params.database : undefined;
+  const table = typeof params?.table === "string" ? params.table : undefined;
 
   useEffect(() => {
     if (drawer.type === "tableStructure" && connectionId && db && table) {
@@ -108,7 +106,10 @@ export function TableStructureDrawer({
             rowHeight={36}
             renderItem={(fk) => (
               <div className="px-3 py-2 border-b border-border/50 text-sm">
-                {fk.column} → {fk.referencedTable}.{fk.referencedColumn}
+                {fk.column}
+                {fk.referencedTable && fk.referencedColumn
+                  ? ` → ${fk.referencedTable}.${fk.referencedColumn}`
+                  : null}
               </div>
             )}
           />

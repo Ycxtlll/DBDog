@@ -4,9 +4,12 @@ import { useQueryStore } from "../stores/queryStore";
 
 export function StatusBar() {
   const { t } = useTranslation("common");
-  const { activeId, serverInfoMap, statusMap } = useConnectionStore();
-  const { tabs, activeTabId } = useQueryStore();
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeId = useConnectionStore((s) => s.activeId);
+  const serverInfoMap = useConnectionStore((s) => s.serverInfoMap);
+  const statusMap = useConnectionStore((s) => s.statusMap);
+  const activeTab = useQueryStore((s) =>
+    s.tabs.find((t) => t.id === s.activeTabId),
+  );
   const serverInfo = activeId ? serverInfoMap[activeId] : null;
   const status = activeId ? statusMap[activeId] : null;
 
@@ -37,7 +40,12 @@ export function StatusBar() {
         <span className="text-yellow-500">{t("cancelled")}</span>
       )}
       {activeTab?.error && (
-        <span className="text-destructive">{t("error")}</span>
+        <span
+          className="text-destructive truncate max-w-[300px]"
+          title={activeTab.error}
+        >
+          {activeTab.error}
+        </span>
       )}
     </div>
   );

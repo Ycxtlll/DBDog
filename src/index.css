@@ -60,6 +60,7 @@
 }
 
 /* AG Grid theme adjustments */
+.ag-theme-quartz,
 .ag-theme-quartz-dark {
   --ag-background-color: hsl(var(--card));
   --ag-foreground-color: hsl(var(--foreground));

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionConfig {
     pub id: Uuid,
     pub name: String,
@@ -25,6 +26,7 @@ pub enum DatabaseType {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum SslMode {
     Disabled,
     Required,
@@ -33,6 +35,7 @@ pub enum SslMode {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServerInfo {
     pub version: String,
     pub connection_id: String,

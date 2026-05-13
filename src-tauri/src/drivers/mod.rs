@@ -1,6 +1,6 @@
 use crate::connection::model::ConnectionConfig;
 use crate::error::AppError;
-use crate::query::result::{QueryResult, UpdateResult};
+
 use crate::schema::model::*;
 pub mod mysql;
 
@@ -11,13 +11,6 @@ use sqlx::mysql::MySqlPool;
 pub trait DatabaseDriver: Send + Sync {
     async fn test(&self, config: &ConnectionConfig) -> Result<String, AppError>;
     async fn connect(&self, config: &ConnectionConfig) -> Result<MySqlPool, AppError>;
-    async fn execute_query(
-        &self,
-        pool: &MySqlPool,
-        sql: &str,
-        limit: u32,
-    ) -> Result<QueryResult, AppError>;
-    async fn execute_update(&self, pool: &MySqlPool, sql: &str) -> Result<UpdateResult, AppError>;
     async fn cancel_query(&self, pool: &MySqlPool, thread_id: u64) -> Result<(), AppError>;
 }
 

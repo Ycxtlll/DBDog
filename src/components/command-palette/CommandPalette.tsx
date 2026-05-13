@@ -15,10 +15,15 @@ interface Command {
 
 export function CommandPalette() {
   const { t } = useTranslation("common");
-  const { commandPaletteOpen, setCommandPaletteOpen, setTheme } = useUiStore();
-  const { configs, activeId, connect, disconnect } = useConnectionStore();
-  const queryStore = useQueryStore();
-  const layoutStore = useLayoutStore();
+  const commandPaletteOpen = useUiStore((s) => s.commandPaletteOpen);
+  const setCommandPaletteOpen = useUiStore((s) => s.setCommandPaletteOpen);
+  const setTheme = useUiStore((s) => s.setTheme);
+  const configs = useConnectionStore((s) => s.configs);
+  const activeId = useConnectionStore((s) => s.activeId);
+  const connect = useConnectionStore((s) => s.connect);
+  const disconnect = useConnectionStore((s) => s.disconnect);
+  const queryStore = useQueryStore.getState();
+  const layoutStore = useLayoutStore.getState();
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -39,7 +44,6 @@ export function CommandPalette() {
   useEffect(() => {
     if (commandPaletteOpen) {
       setSearch("");
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [commandPaletteOpen]);
 
@@ -133,6 +137,9 @@ export function CommandPalette() {
     connect,
     disconnect,
   ]);
+  // Note: queryStore and layoutStore are stable references from getState().
+  // The actions read latest state at call time, so commands need not
+  // recompute on every store change.
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -156,6 +163,7 @@ export function CommandPalette() {
       >
         <input
           ref={inputRef}
+          autoFocus
           className="w-full px-4 py-3 bg-transparent text-foreground outline-none border-b border-border"
           placeholder={t("searchCommand")}
           value={search}
