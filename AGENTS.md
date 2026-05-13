@@ -36,13 +36,30 @@
 - **目录深度不超过 4 层**: 过深的嵌套意味着模块边界需要重新设计。
 - **公共 API 收敛**: 每个目录的 `mod.rs` / `index.ts` 是唯一的公共出口，禁止跨目录直接引用内部文件。
 
+### 2.4 行业标准与禁止野路子
+
+- **行业标准优先**: 所有实现必须优先采用所在技术栈的社区标准、官方推荐方案或经过广泛验证的设计模式。禁止为图省事而采用临时性、非标准的权宜之计。
+- **禁止野路子代码**: 严禁任何形式的"野路子"（hacky / workaround）代码行为，包括但不限于：
+  - 为绕过架构限制而写的临时补丁，而非修复根本问题；
+  - 使用 `as any` / `@ts-ignore` / 裸 `unwrap()` / `std::mem::transmute` 等危险操作规避类型系统或错误处理；
+  - 通过字符串拼接构造 SQL、IPC 协议或文件路径；
+  - 在代码中硬编码环境相关的魔法值、路径或凭据；
+  - 复制粘贴代码而不提取公共抽象；
+  - 用 `setTimeout` / `thread::sleep` 等延迟手段掩盖竞态条件或时序问题；
+  - 在 React 渲染阶段执行副作用、直接修改 DOM 绕过 React 生命周期；
+  - 绕过已定义的抽象层直接调用底层 API。
+- **技术债务零容忍**: 不得以"先上线后重构"为借口提交野路子代码。所有已识别的技术债务必须在合并前解决，或经团队评审后纳入有明确截止日期的 Issue 跟踪。
+- **评审红线**: Code Review 中一旦发现野路子代码，无论功能是否通过测试，一律视为阻塞性意见（Blocking Comment），必须修正后方可合并。
+
 ---
 
 ## 3. 接口兼容性
 
 ### 3.1 向后兼容 (Backward Compatibility)
 
-- **IPC 协议**: Tauri Command 的输入/输出结构一旦发布，字段只能新增（`Option<T>`），不能删除或修改类型。
+- **IPC 协议**:
+  - Tauri Command 的输入/输出结构一旦发布，字段只能新增（`Option<T>`），不能删除或修改类型。
+  - **字段命名**: IPC 结构体的 JSON 字段名必须统一使用 camelCase。Rust 侧通过 `#[serde(rename_all = "camelCase")]` 保证；TypeScript 侧通过接口定义保证。新增 IPC 结构体时必须显式声明该属性，Code Review 时作为强制检查项。
 - **配置文件**: `connections.json` 的结构变更必须提供迁移逻辑，旧配置必须能无损读取。
 - **SQLite Schema**: 表结构变更通过版本化迁移脚本（`migrations/00N_xxx.sql`）管理，禁止直接修改已有迁移。
 - **枚举扩展**: 新增枚举变体时，旧前端必须能安全忽略（使用 `#[serde(other)]` 或 `Option` 兜底）。
@@ -73,6 +90,7 @@
   - 函数/变量/模块: `snake_case`
   - 常量: `SCREAMING_SNAKE_CASE`
   - 泛型参数: 单个大写字母（`T`, `E`, `K`, `V`）或有意义的词（`Ctx`, `Config`）
+- **IPC 序列化命名**: 所有通过 Tauri Command 返回给前端的结构体（以及前端传入的输入结构体），必须在 `derive(Serialize)` / `derive(Deserialize)` 上附加 `#[serde(rename_all = "camelCase")]`，确保 JSON 字段名与前端 TypeScript 接口的驼峰命名严格一致。禁止前后端字段命名风格不一致导致运行时 `undefined`。
 - **文档**: 所有公共 API 必须有 `///` doc comment，说明用途、参数、返回值、错误条件
 - **Error Handling**: 使用 `thiserror` 定义结构化错误，`anyhow` 仅用于边界/主函数。禁止裸 `unwrap()`，必须 `expect("说明原因")` 或显式处理。
 - **异步**: 统一 `async/await`，禁止混用 `block_on`。Tokio runtime 由 Tauri 管理，不单独创建。
