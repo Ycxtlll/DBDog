@@ -46,7 +46,7 @@ export function SchemaTreePanel() {
       setDatabases(dbs);
     } catch (err) {
       const msg = parseTauriError(err);
-      setErrorMsg("Load databases failed: " + msg);
+      setErrorMsg(t("loadDatabasesFailed", { msg }));
       console.error("Failed to load databases:", err);
     }
   }, [activeId, statusMap]);
@@ -76,7 +76,7 @@ export function SchemaTreePanel() {
           setTablesMap((prev) => ({ ...prev, [dbName]: tables }));
         } catch (err) {
           const msg = parseTauriError(err);
-          setErrorMsg(`Load tables [${dbName}] failed: ${msg}`);
+          setErrorMsg(t("loadTablesFailed", { dbName, msg }));
           console.error("Failed to load tables:", err);
         } finally {
           setLoadingKey(null);
@@ -99,7 +99,7 @@ export function SchemaTreePanel() {
           setColumnsMap((prev) => ({ ...prev, [colKey]: details.columns }));
         } catch (err) {
           const msg = parseTauriError(err);
-          setErrorMsg(`Load columns [${colKey}] failed: ${msg}`);
+          setErrorMsg(t("loadColumnsFailed", { colKey, msg }));
           console.error("Failed to load columns:", err);
         } finally {
           setLoadingKey(null);
@@ -227,7 +227,7 @@ export function SchemaTreePanel() {
 
       {loadingKey?.startsWith("db:") && (
         <div className="px-3 py-1 text-xs text-muted-foreground">
-          Loading tables for {loadingKey.slice(3)}...
+          {t("loadingTables", { dbName: loadingKey.slice(3) })}
         </div>
       )}
 
@@ -248,7 +248,7 @@ export function SchemaTreePanel() {
                   {data.name}
                   {isLoading && (
                     <span className="text-xs text-muted-foreground animate-pulse">
-                      loading...
+                      {t("loading")}
                     </span>
                   )}
                 </span>

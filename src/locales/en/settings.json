@@ -4,5 +4,7 @@
   "language": "Language",
   "editor": "Editor",
   "query": "Query",
-  "performance": "Performance"
+  "performance": "Performance",
+  "chinese": "中文",
+  "english": "English"
 }

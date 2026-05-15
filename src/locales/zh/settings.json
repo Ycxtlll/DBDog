@@ -4,5 +4,7 @@
   "language": "语言",
   "editor": "编辑器",
   "query": "查询",
-  "performance": "性能"
+  "performance": "性能",
+  "chinese": "中文",
+  "english": "English"
 }

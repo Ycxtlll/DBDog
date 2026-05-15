@@ -6,5 +6,11 @@
   "export": "Export",
   "exportCsv": "Export CSV",
   "exportJson": "Export JSON",
-  "noHistory": "No history yet"
+  "noHistory": "No history yet",
+  "chars": "chars",
+  "close": "Close",
+  "copy": "Copy",
+  "copied": "Copied",
+  "clickToViewFullContent": "Click to view full content",
+  "timeAgo": "{{time}} ago"
 }

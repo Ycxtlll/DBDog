@@ -32,7 +32,6 @@ export const useLayoutStore = create<LayoutState>()(
       partialize: (state) => ({
         sidebarVisible: state.sidebarVisible,
         sidebarWidth: state.sidebarWidth,
-        sidebarView: state.sidebarView,
       }),
     },
   ),

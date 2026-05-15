@@ -12,5 +12,7 @@
   "testSuccess": "连接成功",
   "testFailed": "连接失败",
   "sslMode": "SSL 模式",
-  "maxConnections": "最大连接数"
+  "maxConnections": "最大连接数",
+  "namePlaceholder": "我的数据库",
+  "databasePlaceholder": "可选"
 }

@@ -3,9 +3,10 @@ import { useTranslation } from "react-i18next";
 import { Plus, Plug, Unplug, Trash2, Edit2, Database } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
-import * as connectionService from "../../services/connectionService";
+import { parseTauriError } from "../../lib/error";
 import type { ConnectionConfig } from "../../types";
 import { VirtualList } from "../virtual/VirtualList";
+import { ConnectionFormModal } from "../connection/ConnectionFormModal";
 
 export function ConnectionPanel() {
   const { t } = useTranslation("connections");
@@ -19,16 +20,24 @@ export function ConnectionPanel() {
   const { setSidebarView } = useLayoutStore();
   const [editing, setEditing] = useState<ConnectionConfig | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   const handleConnect = async (id: string) => {
+    setConnectError(null);
     if (statusMap[id] === "connected") {
       setActiveId(id);
       setSidebarView("schema");
     } else {
       const cfg = configs.find((c) => c.id === id);
-      await connect(id, cfg?.password);
-      setActiveId(id);
-      setSidebarView("schema");
+      try {
+        await connect(id, cfg?.password);
+        setActiveId(id);
+        setSidebarView("schema");
+      } catch (err) {
+        const msg = parseTauriError(err);
+        setConnectError(msg);
+        console.error("Failed to connect:", err);
+      }
     }
   };
 
@@ -56,6 +65,11 @@ export function ConnectionPanel() {
           <Plus size={16} />
         </button>
       </div>
+      {connectError && (
+        <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border-b border-border">
+          {connectError}
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         <VirtualList
           items={configs}
@@ -137,140 +151,8 @@ export function ConnectionPanel() {
         />
       </div>
       {showForm && (
-        <ConnectionForm config={editing} onClose={() => setShowForm(false)} />
+        <ConnectionFormModal config={editing} onClose={() => setShowForm(false)} />
       )}
-    </div>
-  );
-}
-
-function ConnectionForm({
-  config,
-  onClose,
-}: {
-  config: ConnectionConfig | null;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation("connections");
-  const saveConfig = useConnectionStore((s) => s.saveConfig);
-
-  const [form, setForm] = useState<ConnectionConfig>(
-    config ?? {
-      id: crypto.randomUUID(),
-      name: "",
-      type: "mysql",
-      host: "localhost",
-      port: 3306,
-      username: "root",
-      password: "",
-      database: "",
-      maxConnections: 10,
-      sslMode: "disabled",
-    },
-  );
-
-  const handleSave = async () => {
-    const payload = { ...form };
-    if (!payload.password || payload.password.trim() === "") {
-      delete payload.password;
-    }
-    await saveConfig(payload);
-    onClose();
-  };
-
-  const handleTest = async () => {
-    try {
-      const version = await connectionService.testConnection(form);
-      alert(t("testSuccess") + ": " + version);
-    } catch (err) {
-      alert(
-        t("testFailed") +
-          ": " +
-          (err instanceof Error ? err.message : String(err)),
-      );
-    }
-  };
-
-  return (
-    <div className="absolute inset-0 bg-background/95 z-50 flex flex-col p-4 gap-3 overflow-auto">
-      <h3 className="text-lg font-semibold">
-        {config ? t("editConnection") : t("newConnection")}
-      </h3>
-      <FormField
-        label={t("name")}
-        value={form.name}
-        onChange={(v) => setForm({ ...form, name: v })}
-      />
-      <FormField
-        label={t("host")}
-        value={form.host}
-        onChange={(v) => setForm({ ...form, host: v })}
-      />
-      <FormField
-        label={t("port")}
-        value={String(form.port)}
-        onChange={(v) => setForm({ ...form, port: Number(v) })}
-        type="number"
-      />
-      <FormField
-        label={t("username")}
-        value={form.username}
-        onChange={(v) => setForm({ ...form, username: v })}
-      />
-      <FormField
-        label={t("password")}
-        value={form.password ?? ""}
-        onChange={(v) => setForm({ ...form, password: v })}
-        type="password"
-      />
-      <FormField
-        label={t("database")}
-        value={form.database ?? ""}
-        onChange={(v) => setForm({ ...form, database: v })}
-      />
-      <div className="flex gap-2 mt-auto">
-        <button
-          className="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm"
-          onClick={handleSave}
-        >
-          {t("save")}
-        </button>
-        <button
-          className="px-3 py-1.5 border border-border rounded text-sm"
-          onClick={handleTest}
-        >
-          {t("test")}
-        </button>
-        <button
-          className="px-3 py-1.5 border border-border rounded text-sm"
-          onClick={onClose}
-        >
-          {t("cancel")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function FormField({
-  label,
-  value,
-  onChange,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs text-muted-foreground">{label}</label>
-      <input
-        type={type}
-        className="px-2 py-1 bg-background border border-border rounded text-sm"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
     </div>
   );
 }

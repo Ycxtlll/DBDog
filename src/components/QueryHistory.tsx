@@ -58,7 +58,7 @@ export function QueryHistory() {
                 </span>
               )}
               <span className="text-muted-foreground shrink-0">
-                {formatElapsed(Date.now() - item.timestamp)} ago
+                {t("timeAgo", { time: formatElapsed(Date.now() - item.timestamp) })}
               </span>
             </div>
           ))}

@@ -14,7 +14,7 @@ interface UiState extends AppSettings {
 
 const defaultSettings: AppSettings = {
   theme: "system",
-  language: "en",
+  language: "zh",
   editor: {
     tabSize: 2,
     fontSize: 14,

@@ -1,7 +1,5 @@
 {
-  "newQuery": "New Query",
   "execute": "Execute",
-  "cancel": "Cancel",
   "format": "Format",
   "explain": "Explain"
 }

@@ -12,5 +12,7 @@
   "testSuccess": "Connection successful",
   "testFailed": "Connection failed",
   "sslMode": "SSL Mode",
-  "maxConnections": "Max Connections"
+  "maxConnections": "Max Connections",
+  "namePlaceholder": "My Database",
+  "databasePlaceholder": "optional"
 }

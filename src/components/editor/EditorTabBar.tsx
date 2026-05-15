@@ -32,7 +32,7 @@ export function EditorTabBar() {
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className={`flex items-center gap-1 px-3 py-1.5 text-sm border-r border-border cursor-pointer select-none min-w-[100px] max-w-[200px] ${
+            className={`group flex items-center gap-1 px-3 py-1.5 text-sm border-r border-border cursor-pointer select-none min-w-[100px] max-w-[200px] ${
               tab.id === activeTabId
                 ? "bg-background text-foreground"
                 : "text-muted-foreground hover:bg-accent/50"

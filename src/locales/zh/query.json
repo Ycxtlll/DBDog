@@ -6,5 +6,11 @@
   "export": "导出",
   "exportCsv": "导出 CSV",
   "exportJson": "导出 JSON",
-  "noHistory": "暂无历史记录"
+  "noHistory": "暂无历史记录",
+  "chars": "字符",
+  "close": "关闭",
+  "copy": "复制",
+  "copied": "已复制",
+  "clickToViewFullContent": "点击查看完整内容",
+  "timeAgo": "{{time}}前"
 }

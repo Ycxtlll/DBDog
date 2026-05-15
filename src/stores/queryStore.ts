@@ -42,7 +42,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   newTab: () => {
     const tab: QueryTab = {
       id: generateId(),
-      name: "New Query",
+      name: "",
       sql: "",
       isExecuting: false,
       isCancelled: false,

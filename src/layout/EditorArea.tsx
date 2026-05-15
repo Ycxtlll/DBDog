@@ -42,7 +42,7 @@ export function EditorArea() {
               />
             </div>
             {activeTab.result && (
-              <div className="flex-1 min-h-0 border-t border-border">
+              <div className="flex-[3] min-h-0 border-t border-border">
                 <ResultGrid tab={activeTab} />
               </div>
             )}

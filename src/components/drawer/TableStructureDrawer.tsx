@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { useLayoutStore } from "../../stores/layoutStore";
 import * as schemaService from "../../services/schemaService";
+import { parseTauriError } from "../../lib/error";
 import type { TableDetails } from "../../types";
 import { VirtualList } from "../virtual/VirtualList";
 
@@ -19,20 +20,31 @@ export function TableStructureDrawer({
   const [activeTab, setActiveTab] = useState<
     "columns" | "indexes" | "foreignKeys" | "triggers" | "sql"
   >("columns");
+  const [error, setError] = useState<string | null>(null);
 
   const params = drawer.params;
   const db = typeof params?.database === "string" ? params.database : undefined;
   const table = typeof params?.table === "string" ? params.table : undefined;
 
   useEffect(() => {
-    if (drawer.type === "tableStructure" && connectionId && db && table) {
-      schemaService
-        .getTableDetails(connectionId, db, table)
-        .then(setDetails)
-        .catch(console.error);
-    } else {
-      setDetails(null);
+    async function load() {
+      if (drawer.type === "tableStructure" && connectionId && db && table) {
+        setError(null);
+        try {
+          const data = await schemaService.getTableDetails(connectionId, db, table);
+          setDetails(data);
+        } catch (err) {
+          const msg = parseTauriError(err);
+          setError(msg);
+          setDetails(null);
+          console.error("Failed to load table details:", err);
+        }
+      } else {
+        setDetails(null);
+        setError(null);
+      }
     }
+    load();
   }, [drawer.type, connectionId, db, table]);
 
   if (drawer.type !== "tableStructure") return null;
@@ -61,6 +73,11 @@ export function TableStructureDrawer({
           </button>
         ))}
       </div>
+      {error && (
+        <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border-b border-border">
+          {error}
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         {activeTab === "columns" && details && (
           <VirtualList
