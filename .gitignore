@@ -84,6 +84,13 @@ logs/
 .kimi/cache/
 
 # =============================================================================
+# Claude Code / Agent
+# =============================================================================
+# Keep .claude/CLAUDE.md and other docs, ignore local settings only
+.claude/settings.json
+.claude/settings.local.json
+
+# =============================================================================
 # Project-specific
 # =============================================================================
 # Local SQLite database (dev only)

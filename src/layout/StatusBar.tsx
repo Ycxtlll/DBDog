@@ -45,11 +45,9 @@ export function StatusBar() {
         <span className="text-yellow-500">{t("cancelled")}</span>
       )}
       {activeTab?.error && (
-        <span
-          className="text-destructive truncate max-w-[300px]"
-          title={activeTab.error}
-        >
-          {activeTab.error}
+        <span className="text-destructive flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
+          {t("error")}
         </span>
       )}
         <div className="flex-1" />

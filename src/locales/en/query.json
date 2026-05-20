@@ -12,5 +12,6 @@
   "copy": "Copy",
   "copied": "Copied",
   "clickToViewFullContent": "Click to view full content",
-  "timeAgo": "{{time}} ago"
+  "timeAgo": "{{time}} ago",
+  "error": "Error"
 }

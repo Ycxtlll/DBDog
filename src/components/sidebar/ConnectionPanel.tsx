@@ -4,6 +4,7 @@ import { Plus, Plug, Unplug, Trash2, Edit2, Database } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { parseTauriError } from "../../lib/error";
+import { showError } from "../../stores/toastStore";
 import type { ConnectionConfig } from "../../types";
 import { VirtualList } from "../virtual/VirtualList";
 import { ConnectionFormModal } from "../connection/ConnectionFormModal";
@@ -20,10 +21,8 @@ export function ConnectionPanel() {
   const { setSidebarView } = useLayoutStore();
   const [editing, setEditing] = useState<ConnectionConfig | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
 
   const handleConnect = async (id: string) => {
-    setConnectError(null);
     if (statusMap[id] === "connected") {
       setActiveId(id);
       setSidebarView("schema");
@@ -35,7 +34,7 @@ export function ConnectionPanel() {
         setSidebarView("schema");
       } catch (err) {
         const msg = parseTauriError(err);
-        setConnectError(msg);
+        showError(msg);
         console.error("Failed to connect:", err);
       }
     }
@@ -65,11 +64,6 @@ export function ConnectionPanel() {
           <Plus size={16} />
         </button>
       </div>
-      {connectError && (
-        <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border-b border-border">
-          {connectError}
-        </div>
-      )}
       <div className="flex-1 overflow-hidden">
         <VirtualList
           items={configs}

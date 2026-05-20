@@ -1,7 +1,13 @@
 import { MainLayout } from "./layout/MainLayout";
+import { ToastContainer } from "./components/ui/ToastContainer";
 
 function App() {
-  return <MainLayout />;
+  return (
+    <>
+      <MainLayout />
+      <ToastContainer />
+    </>
+  );
 }
 
 export default App;

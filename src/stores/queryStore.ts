@@ -4,6 +4,7 @@ import { generateId } from "../lib/utils";
 import { splitSqlStatements } from "../lib/sql";
 import * as queryService from "../services/queryService";
 import { parseTauriError } from "../lib/error";
+import { showError } from "./toastStore";
 
 interface QueryState {
   tabs: QueryTab[];
@@ -165,6 +166,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       const elapsedMs = Math.round(performance.now() - startTime);
       const msg = parseTauriError(err);
       get().setTabError(id, msg);
+      showError(msg);
       get().addHistory({
         sql: rawSql,
         status: "error",
