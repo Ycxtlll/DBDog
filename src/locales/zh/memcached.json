@@ -17,17 +17,12 @@
   "deleteItem": "删除",
   "confirmDelete": "确定删除 Key \"{{key}}\"？",
   "confirmFlushAll": "确定清空此 Memcached 实例的所有数据？此操作不可撤销。",
-  "deleteSuccess": "已删除",
-  "flushSuccess": "已清空全部缓存",
-  "key": "Key",
   "flags": "标志位",
   "size": "大小",
   "expiration": "过期时间",
   "value": "值",
   "valueTruncated": "仅显示前 2KB（共 {{size}}）",
   "empty": "（空）",
-  "notFound": "Key 不存在",
   "loading": "加载中...",
-  "dismiss": "关闭提示",
   "never": "永不过期"
 }

@@ -7,8 +7,8 @@
   "foreignKeys": "Foreign Keys",
   "triggers": "Triggers",
   "sql": "CREATE SQL",
+  "viewData": "SELECT *",
   "viewStructure": "View Structure",
-  "loadingTables": "Loading tables for {{dbName}}...",
   "loadDatabasesFailed": "Load databases failed: {{msg}}",
   "loadTablesFailed": "Load tables [{{dbName}}] failed: {{msg}}",
   "loadColumnsFailed": "Load columns [{{colKey}}] failed: {{msg}}"

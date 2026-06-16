@@ -1,5 +1,6 @@
 use crate::connection::model::{ConnectionConfig, DatabaseType, ServerInfo};
 use crate::drivers::memcached::MemcachedDriver;
+use crate::drivers::zookeeper::ZkDriver;
 use crate::drivers::mysql::metadata::MySqlDriver;
 use crate::drivers::{DatabaseDriver, DatabaseMetadata};
 use crate::error::AppError;
@@ -43,6 +44,7 @@ pub async fn test_connection(
             driver.test(&config).await
         }
         DatabaseType::Memcached => MemcachedDriver::test(&config).await,
+        DatabaseType::Zookeeper => ZkDriver::test(&config).await,
     }
 }
 #[tauri::command]
@@ -60,6 +62,13 @@ pub async fn connect(
     match config.db_type {
         DatabaseType::Memcached => {
             let version = MemcachedDriver::test(&config).await?;
+            Ok(ServerInfo {
+                version,
+                connection_id: format!("{}:{}", config.host, config.port),
+            })
+        }
+        DatabaseType::Zookeeper => {
+            let version = ZkDriver::test(&config).await?;
             Ok(ServerInfo {
                 version,
                 connection_id: format!("{}:{}", config.host, config.port),
@@ -103,10 +112,7 @@ async fn connect_mysql(
     }
 
     if config.password.is_none() {
-        return Err(AppError::ConnectionFailed(
-            "Password not found. Please edit the connection and re-enter the password."
-                .to_string(),
-        ));
+        return Err(AppError::PasswordRequired);
     }
 
     let driver = MySqlDriver::new();

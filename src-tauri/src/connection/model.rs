@@ -26,6 +26,7 @@ pub struct ConnectionConfig {
 pub enum DatabaseType {
     Mysql,
     Memcached,
+    Zookeeper,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

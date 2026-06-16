@@ -11,6 +11,7 @@
   "test": "测试",
   "testSuccess": "连接成功",
   "testFailed": "连接失败",
+  "passwordRequired": "未找到密码，请编辑连接并重新输入密码。",
   "sslMode": "SSL 模式",
   "maxConnections": "最大连接数",
   "type": "类型",

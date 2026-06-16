@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Plug, Unplug, Trash2, Edit2, Database, Cpu } from "lucide-react";
+import { Plus, Plug, Unplug, Trash2, Edit2, Database, Cpu, Network } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
-import { parseTauriError } from "../../lib/error";
+import { translateTauriError } from "../../lib/error";
 import { showError } from "../../stores/toastStore";
 import type { ConnectionConfig } from "../../types";
 import { VirtualList } from "../virtual/VirtualList";
@@ -24,7 +24,10 @@ export function ConnectionPanel() {
 
   const handleConnect = async (id: string) => {
     const cfg = configs.find((c) => c.id === id);
-    const targetView = cfg?.type === "memcached" ? "memcached" : "schema";
+    const targetView =
+      cfg?.type === "memcached" ? "memcached"
+      : cfg?.type === "zookeeper" ? "zookeeper"
+      : "schema";
     if (statusMap[id] === "connected") {
       setActiveId(id);
       setSidebarView(targetView);
@@ -34,7 +37,7 @@ export function ConnectionPanel() {
         setActiveId(id);
         setSidebarView(targetView);
       } catch (err) {
-        const msg = parseTauriError(err);
+        const msg = translateTauriError(err, t);
         showError(msg);
         console.error("Failed to connect:", err);
       }
@@ -80,6 +83,8 @@ export function ConnectionPanel() {
               <div className="flex items-center gap-2 min-w-0">
                 {config.type === "memcached" ? (
                   <Cpu size={14} className="shrink-0 text-muted-foreground" />
+                ) : config.type === "zookeeper" ? (
+                  <Network size={14} className="shrink-0 text-muted-foreground" />
                 ) : (
                   <Database size={14} className="shrink-0 text-muted-foreground" />
                 )}

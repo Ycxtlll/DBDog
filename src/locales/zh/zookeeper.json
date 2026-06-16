@@ -1,0 +1,13 @@
+{
+  "title": "ZooKeeper",
+  "refresh": "刷新",
+  "backToConnections": "返回连接列表",
+  "loadingNodes": "加载节点树...",
+  "noNodes": "无节点",
+  "znodes": "节点数",
+  "connections": "连接数",
+  "nodeStats": "节点状态",
+  "nodeData": "数据",
+  "emptyValue": "（空）",
+  "valueTruncated": "仅显示前 2KB（共 {{size}}）"
+}

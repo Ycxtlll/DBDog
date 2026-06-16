@@ -1,7 +1,7 @@
 {
   "name": "dbdog",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,17 +16,11 @@
     "@codemirror/view": "^6.36.0",
     "@tanstack/react-virtual": "^3.11.0",
     "@tauri-apps/api": "^2.2.0",
-    "@tauri-apps/plugin-dialog": "^2.2.0",
-    "@tauri-apps/plugin-fs": "^2.2.0",
-    "@tauri-apps/plugin-os": "^2.2.0",
-    "@tauri-apps/plugin-shell": "^2.2.0",
     "@uiw/codemirror-theme-vscode": "^4.23.0",
     "@uiw/react-codemirror": "^4.23.0",
     "ag-grid-community": "^32.3.0",
     "ag-grid-react": "^32.3.0",
-    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "codemirror": "^6.0.1",
     "i18next": "^24.2.0",
     "i18next-browser-languagedetector": "^8.0.2",
     "lucide-react": "^0.468.0",
@@ -48,7 +42,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "vite": "^6.0.3"
   }
 }

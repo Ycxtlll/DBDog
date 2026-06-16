@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMemo, useRef } from "react";
+import { ChevronRight } from "lucide-react";
 
 export interface TreeNode<T> {
   id: string;
@@ -86,9 +87,12 @@ export function VirtualTree<T>({
               }}
             >
               {node.hasChildren && (
-                <span className="mr-1 text-xs select-none">
-                  {isExpanded ? "▼" : "▶"}
-                </span>
+                <ChevronRight
+                  size={14}
+                  className={`shrink-0 text-muted-foreground transition-transform duration-150 ${
+                    isExpanded ? "rotate-90" : ""
+                  }`}
+                />
               )}
               {renderNode(node.data, node.depth, isExpanded)}
             </div>

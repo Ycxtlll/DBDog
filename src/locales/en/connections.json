@@ -11,6 +11,7 @@
   "test": "Test",
   "testSuccess": "Connection successful",
   "testFailed": "Connection failed",
+  "passwordRequired": "Password not found. Please edit and re-enter the password.",
   "sslMode": "SSL Mode",
   "maxConnections": "Max Connections",
   "type": "Type",

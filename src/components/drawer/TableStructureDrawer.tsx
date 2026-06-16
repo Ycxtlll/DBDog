@@ -6,6 +6,10 @@ import * as schemaService from "../../services/schemaService";
 import { parseTauriError } from "../../lib/error";
 import type { TableDetails } from "../../types";
 import { VirtualList } from "../virtual/VirtualList";
+import CodeMirror from "@uiw/react-codemirror";
+import { sql } from "@codemirror/lang-sql";
+import { vscodeDark } from "@uiw/codemirror-theme-vscode";
+
 
 interface TableStructureDrawerProps {
   connectionId: string | null;
@@ -146,9 +150,16 @@ export function TableStructureDrawer({
           />
         )}
         {activeTab === "sql" && details && (
-          <pre className="p-3 text-xs overflow-auto whitespace-pre-wrap font-mono">
-            {details.createTableSql}
-          </pre>
+          <div className="h-full overflow-auto">
+            <CodeMirror
+              value={details.createTableSql}
+              extensions={[sql()]}
+              readOnly
+              theme={vscodeDark}
+              basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
+              className="text-xs"
+            />
+          </div>
         )}
       </div>
     </div>

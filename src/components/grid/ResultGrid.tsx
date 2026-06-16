@@ -80,28 +80,22 @@ export function ResultGrid({ tab }: ResultGridProps) {
         headerTooltip: `${col.name} (${col.dataType})`,
         cellDataType: false,
         flex: 1,
-        minWidth: 80,
+        minWidth: Math.max(100, col.name.length * 9 + 24),
+        wrapHeaderText: true,
         filter: getFilterType(col.dataType),
         sortable: true,
         valueFormatter: (params: { value: unknown }) => {
-          if (params.value === null || params.value === undefined) {
-            return "NULL";
-          }
-          if (typeof params.value === "boolean") {
-            return params.value ? "true" : "false";
-          }
+          if (params.value === null || params.value === undefined) return "NULL";
+          if (typeof params.value === "boolean") return params.value ? "true" : "false";
           return String(params.value);
         },
         tooltipValueGetter: (params: ITooltipParams) => {
           const formatted = formatCellValue(params.value);
-          if (formatted.length <= 200) {
-            return formatted;
-          }
+          if (formatted.length <= 200) return formatted;
           return formatted.slice(0, 200) + "...";
         },
         cellRenderer: (params: ICellRendererParams) => {
-          const value = params.value;
-          const formatted = formatCellValue(value);
+          const formatted = formatCellValue(params.value);
           const displayText =
             formatted.length > 50
               ? formatted.slice(0, 50) + "..."
@@ -133,7 +127,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           );
         },
       })),
-    [queryResult.columns],
+    [queryResult.columns, t],
   );
 
   const rowData = useMemo(() => {
@@ -190,12 +184,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
 }
 
 function formatCellValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return "NULL";
-  }
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "boolean") return value ? "true" : "false";
   return String(value);
 }
 

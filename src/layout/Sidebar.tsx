@@ -2,6 +2,7 @@ import { useLayoutStore } from "../stores/layoutStore";
 import { ConnectionPanel } from "../components/sidebar/ConnectionPanel";
 import { SchemaTreePanel } from "../components/sidebar/SchemaTreePanel";
 import { MemcachedPanel } from "../components/memcached/MemcachedPanel";
+import { ZookeeperPanel } from "../components/zookeeper/ZookeeperPanel";
 
 export function Sidebar() {
   const { sidebarVisible, sidebarWidth } = useLayoutStore();
@@ -28,6 +29,9 @@ function SidebarContent() {
   }
   if (sidebarView === "memcached") {
     return <MemcachedPanel />;
+  }
+  if (sidebarView === "zookeeper") {
+    return <ZookeeperPanel />;
   }
   return <ConnectionPanel />;
 }

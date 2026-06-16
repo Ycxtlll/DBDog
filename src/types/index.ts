@@ -1,7 +1,7 @@
 export interface ConnectionConfig {
   id: string;
   name: string;
-  type: "mysql" | "memcached";
+  type: "mysql" | "memcached" | "zookeeper";
   host: string;
   port: number;
   username: string;
@@ -148,6 +148,52 @@ export interface AppSettings {
     schemaCacheTtlSecs: number;
     maxPoolSize: number;
   };
+}
+
+// ── ZooKeeper ──
+
+export interface ZkNode {
+  path: string;
+  data: string;
+  dataLength: number;
+  numChildren: number;
+  czxid: number;
+  mzxid: number;
+  ctime: number;
+  mtime: number;
+  version: number;
+  childVersion: number;
+  aclVersion: number;
+  ephemeralOwner: number;
+  pzxid: number;
+}
+
+export interface ZkChildList {
+  path: string;
+  children: string[];
+  totalChildren: number;
+  truncated: boolean;
+}
+
+export interface ZkTreeNode {
+  name: string;
+  path: string;
+  numChildren: number;
+  isEphemeral: boolean;
+  children?: ZkTreeNode[];
+}
+
+export interface ZkServerInfo {
+  mode: string;
+  version: string;
+  znodeCount: number;
+  connections: number;
+  outstanding: number;
+  latencyAvg: number;
+  latencyMin: number;
+  latencyMax: number;
+  received: number;
+  sent: number;
 }
 
 // ── Memcached ──

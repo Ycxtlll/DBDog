@@ -17,17 +17,12 @@
   "deleteItem": "Delete",
   "confirmDelete": "Delete key \"{{key}}\"?",
   "confirmFlushAll": "Flush ALL keys from this Memcached instance? This cannot be undone.",
-  "deleteSuccess": "Deleted",
-  "flushSuccess": "All keys flushed",
-  "key": "Key",
   "flags": "Flags",
   "size": "Size",
   "expiration": "Expiration",
   "value": "Value",
   "valueTruncated": "showing first 2KB of {{size}}",
   "empty": "(empty)",
-  "notFound": "Key not found",
   "loading": "Loading...",
-  "dismiss": "Dismiss",
   "never": "never"
 }

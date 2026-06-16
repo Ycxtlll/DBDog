@@ -257,8 +257,19 @@ export function SchemaTreePanel() {
             if (data.type === "table") {
               return (
                 <span className="text-sm truncate flex items-center gap-1 flex-1">
-                  <Table size={12} className="text-muted-foreground" />
-                  <span className="flex-1 truncate">{data.name}</span>
+                  <Table size={14} className="text-primary shrink-0" />
+                  <span className="font-medium truncate">{data.name}</span>
+                  <button
+                    className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (data.database && data.name)
+                        handleTableClick(data.database, data.name);
+                    }}
+                    title={t("viewData")}
+                  >
+                    <Eye size={12} />
+                  </button>
                   <button
                     className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
                     onClick={(e) => {
@@ -273,17 +284,6 @@ export function SchemaTreePanel() {
                       }
                     }}
                     title={t("viewStructure")}
-                  >
-                    <Eye size={12} />
-                  </button>
-                  <button
-                    className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (data.database && data.name)
-                        handleTableClick(data.database, data.name);
-                    }}
-                    title="SELECT *"
                   >
                     <Columns3 size={12} />
                   </button>

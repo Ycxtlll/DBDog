@@ -19,6 +19,10 @@ pub enum AppError {
     KeyNotFound(String),
     #[error("Memcached 协议错误: {0}")]
     MemcachedProtocolError(String),
+    #[error("ZooKeeper 操作失败: {0}")]
+    ZookeeperError(String),
+    #[error("需要密码")]
+    PasswordRequired,
 }
 
 impl From<sqlx::Error> for AppError {

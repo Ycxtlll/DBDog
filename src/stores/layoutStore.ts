@@ -4,8 +4,8 @@ import { persist } from "zustand/middleware";
 interface LayoutState {
   sidebarVisible: boolean;
   sidebarWidth: number;
-  sidebarView: "connection" | "schema" | "memcached";
-  setSidebarView: (view: "connection" | "schema" | "memcached") => void;
+  sidebarView: "connection" | "schema" | "memcached" | "zookeeper";
+  setSidebarView: (view: "connection" | "schema" | "memcached" | "zookeeper") => void;
   drawer: { type: string | null; params?: Record<string, unknown> };
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;

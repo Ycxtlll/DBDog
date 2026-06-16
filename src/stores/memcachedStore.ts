@@ -59,7 +59,7 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
     } catch (err) {
       set({
         isLoadingKeys: false,
-        error: parseTauriError(err as string),
+        error: parseTauriError(err),
       });
     }
   },
@@ -76,7 +76,7 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
     } catch (err) {
       set({
         isLoadingItem: false,
-        error: parseTauriError(err as string),
+        error: parseTauriError(err),
       });
     }
   },
@@ -94,7 +94,7 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
         selectedItem: state.selectedKey === key ? null : state.selectedItem,
       });
     } catch (err) {
-      set({ error: parseTauriError(err as string) });
+      set({ error: parseTauriError(err) });
     }
   },
 
@@ -113,7 +113,7 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
     } catch (err) {
       set({
         isFlushing: false,
-        error: parseTauriError(err as string),
+        error: parseTauriError(err),
       });
     }
   },
@@ -124,7 +124,7 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
       const info = await memcachedService.getStats(connectionId);
       set({ serverInfo: info });
     } catch (err) {
-      set({ error: parseTauriError(err as string) });
+      set({ error: parseTauriError(err) });
     }
   },
 

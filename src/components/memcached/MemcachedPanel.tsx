@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ChevronLeft,
@@ -13,8 +13,6 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useMemcachedStore } from "../../stores/memcachedStore";
 import { VirtualList } from "../virtual/VirtualList";
-import { MemcachedItemModal } from "./MemcachedItemModal";
-
 export function MemcachedPanel() {
   const { t } = useTranslation("memcached");
   const activeId = useConnectionStore((s) => s.activeId);
@@ -38,9 +36,6 @@ export function MemcachedPanel() {
     setSelectedKey,
   } = useMemcachedStore();
 
-  const [selectedKey, setLocalSelectedKey] = useState<string | null>(null);
-  const [showItemModal, setShowItemModal] = useState(false);
-
   useEffect(() => {
     if (activeId) {
       loadKeys(activeId);
@@ -61,9 +56,7 @@ export function MemcachedPanel() {
   );
 
   const handleViewItem = (key: string) => {
-    setLocalSelectedKey(key);
     setSelectedKey(key);
-    setShowItemModal(true);
   };
 
   const handleDeleteItem = async (key: string) => {
@@ -223,13 +216,6 @@ export function MemcachedPanel() {
         )}
       </div>
 
-      {showItemModal && selectedKey && activeId && (
-        <MemcachedItemModal
-          connectionId={activeId}
-          keyName={selectedKey}
-          onClose={() => setShowItemModal(false)}
-        />
-      )}
     </div>
   );
 }

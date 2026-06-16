@@ -1,0 +1,13 @@
+{
+  "title": "ZooKeeper",
+  "refresh": "Refresh",
+  "backToConnections": "Back to connections",
+  "loadingNodes": "Loading tree...",
+  "noNodes": "No nodes",
+  "znodes": "Znodes",
+  "connections": "Conns",
+  "nodeStats": "Node Stats",
+  "nodeData": "Data",
+  "emptyValue": "(empty)",
+  "valueTruncated": "showing first 2KB of {{size}}"
+}

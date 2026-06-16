@@ -7,8 +7,8 @@
   "foreignKeys": "外键",
   "triggers": "触发器",
   "sql": "建表 SQL",
+  "viewData": "查询数据",
   "viewStructure": "查看结构",
-  "loadingTables": "正在加载 {{dbName}} 的表...",
   "loadDatabasesFailed": "加载数据库失败：{{msg}}",
   "loadTablesFailed": "加载表 [{{dbName}}] 失败：{{msg}}",
   "loadColumnsFailed": "加载字段 [{{colKey}}] 失败：{{msg}}"

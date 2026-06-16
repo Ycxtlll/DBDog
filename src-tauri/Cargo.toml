@@ -1,6 +1,6 @@
 [package]
 name = "dbdog"
-version = "0.2.0"
+version = "0.3.0"
 description = "DBDog - Cross-platform database GUI tool"
 authors = ["DBDog Team"]
 edition = "2021"
@@ -15,10 +15,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-os = "2"
-tauri-plugin-shell = "2"
 
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
@@ -28,14 +24,14 @@ keyring = { version = "3", features = ["sync-secret-service", "vendored"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-anyhow = "1"
 tracing = "0.1"
-tracing-subscriber = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 bigdecimal = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }
 async-trait = "0.1"
 base64 = "0.22"
+zookeeper = "0.8"
+
 
 [features]
 default = ["custom-protocol"]

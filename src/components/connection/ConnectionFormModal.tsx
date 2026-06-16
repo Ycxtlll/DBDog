@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X, CheckCircle2, XCircle } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import * as connectionService from "../../services/connectionService";
-import { parseTauriError } from "../../lib/error";
+import { translateTauriError } from "../../lib/error";
 import type { ConnectionConfig } from "../../types";
 
 interface ConnectionFormModalProps {
@@ -61,7 +61,7 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
     } catch (err) {
       setTestMsg({
         type: "error",
-        text: `${t("testFailed")}: ${parseTauriError(err)}`,
+        text: `${t("testFailed")}: ${translateTauriError(err, t)}`,
       });
     }
   };
@@ -98,7 +98,7 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
               {t("type") ?? "Type"}
             </label>
             <div className="flex gap-2">
-              {(["mysql", "memcached"] as const).map((dt) => (
+              {(["mysql", "memcached", "zookeeper"] as const).map((dt) => (
                 <button
                   key={dt}
                   className={`px-4 py-2 text-sm rounded-md border transition-colors ${
@@ -110,11 +110,14 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
                     setForm({
                       ...form,
                       type: dt,
-                      port: dt === "memcached" ? 11211 : 3306,
+                      port:
+                        dt === "memcached" ? 11211
+                        : dt === "zookeeper" ? 2181
+                        : 3306,
                     })
                   }
                 >
-                  {dt === "memcached" ? "Memcached" : "MySQL"}
+                  {dt === "memcached" ? "Memcached" : dt === "zookeeper" ? "ZooKeeper" : "MySQL"}
                 </button>
               ))}
             </div>
