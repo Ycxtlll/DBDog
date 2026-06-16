@@ -4,11 +4,11 @@ import { persist } from "zustand/middleware";
 interface LayoutState {
   sidebarVisible: boolean;
   sidebarWidth: number;
-  sidebarView: "connection" | "schema";
+  sidebarView: "connection" | "schema" | "memcached";
+  setSidebarView: (view: "connection" | "schema" | "memcached") => void;
   drawer: { type: string | null; params?: Record<string, unknown> };
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
-  setSidebarView: (view: "connection" | "schema") => void;
   openDrawer: (type: string, params?: Record<string, unknown>) => void;
   closeDrawer: () => void;
 }
@@ -17,7 +17,7 @@ export const useLayoutStore = create<LayoutState>()(
   persist(
     (set) => ({
       sidebarVisible: true,
-      sidebarWidth: 280,
+      sidebarWidth: 340,
       sidebarView: "connection",
       drawer: { type: null },
       toggleSidebar: () =>

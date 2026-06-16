@@ -1,6 +1,7 @@
 import { useLayoutStore } from "../stores/layoutStore";
 import { ConnectionPanel } from "../components/sidebar/ConnectionPanel";
 import { SchemaTreePanel } from "../components/sidebar/SchemaTreePanel";
+import { MemcachedPanel } from "../components/memcached/MemcachedPanel";
 
 export function Sidebar() {
   const { sidebarVisible, sidebarWidth } = useLayoutStore();
@@ -24,6 +25,9 @@ function SidebarContent() {
 
   if (sidebarView === "schema") {
     return <SchemaTreePanel />;
+  }
+  if (sidebarView === "memcached") {
+    return <MemcachedPanel />;
   }
   return <ConnectionPanel />;
 }

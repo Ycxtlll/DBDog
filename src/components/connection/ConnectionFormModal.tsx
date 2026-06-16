@@ -89,8 +89,37 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
           </button>
         </div>
 
+
         {/* Body */}
         <div className="flex-1 min-h-0 overflow-auto p-5 space-y-4">
+          {/* Type selector */}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              {t("type") ?? "Type"}
+            </label>
+            <div className="flex gap-2">
+              {(["mysql", "memcached"] as const).map((dt) => (
+                <button
+                  key={dt}
+                  className={`px-4 py-2 text-sm rounded-md border transition-colors ${
+                    form.type === dt
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border hover:bg-accent text-muted-foreground"
+                  }`}
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      type: dt,
+                      port: dt === "memcached" ? 11211 : 3306,
+                    })
+                  }
+                >
+                  {dt === "memcached" ? "Memcached" : "MySQL"}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-3">
               <FormField
@@ -120,30 +149,34 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
                 type="number"
               />
             </div>
-            <div className="col-span-3 sm:col-span-1.5">
-              <FormField
-                label={t("username")}
-                value={form.username}
-                onChange={(v) => setForm({ ...form, username: v })}
-                placeholder="root"
-              />
-            </div>
-            <div className="col-span-3 sm:col-span-1.5">
-              <FormField
-                label={t("password")}
-                value={form.password ?? ""}
-                onChange={(v) => setForm({ ...form, password: v })}
-                type="password"
-              />
-            </div>
-            <div className="col-span-3">
-              <FormField
-                label={t("database")}
-                value={form.database ?? ""}
-                onChange={(v) => setForm({ ...form, database: v })}
-                placeholder={t("databasePlaceholder")}
-              />
-            </div>
+            {form.type === "mysql" && (
+              <>
+                <div className="col-span-3 sm:col-span-1.5">
+                  <FormField
+                    label={t("username")}
+                    value={form.username}
+                    onChange={(v) => setForm({ ...form, username: v })}
+                    placeholder="root"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-1.5">
+                  <FormField
+                    label={t("password")}
+                    value={form.password ?? ""}
+                    onChange={(v) => setForm({ ...form, password: v })}
+                    type="password"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <FormField
+                    label={t("database")}
+                    value={form.database ?? ""}
+                    onChange={(v) => setForm({ ...form, database: v })}
+                    placeholder={t("databasePlaceholder")}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {testMsg && (

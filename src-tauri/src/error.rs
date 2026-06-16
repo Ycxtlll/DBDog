@@ -14,6 +14,11 @@ pub enum AppError {
     ConnectionNotFound(String),
     #[error("驱动不支持: {0}")]
     DriverNotSupported(String),
+
+    #[error("键未找到: {0}")]
+    KeyNotFound(String),
+    #[error("Memcached 协议错误: {0}")]
+    MemcachedProtocolError(String),
 }
 
 impl From<sqlx::Error> for AppError {

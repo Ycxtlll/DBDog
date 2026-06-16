@@ -14,7 +14,8 @@ import enSchema from "../locales/en/schema.json";
 import zhSchema from "../locales/zh/schema.json";
 import enSettings from "../locales/en/settings.json";
 import zhSettings from "../locales/zh/settings.json";
-
+import enMemcached from "../locales/en/memcached.json";
+import zhMemcached from "../locales/zh/memcached.json";
 const resources = {
   en: {
     common: enCommon,
@@ -23,6 +24,7 @@ const resources = {
     query: enQuery,
     schema: enSchema,
     settings: enSettings,
+    memcached: enMemcached,
   },
   zh: {
     common: zhCommon,
@@ -31,6 +33,7 @@ const resources = {
     query: zhQuery,
     schema: zhSchema,
     settings: zhSettings,
+    memcached: zhMemcached,
   },
 };
 

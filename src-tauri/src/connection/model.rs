@@ -17,12 +17,15 @@ pub struct ConnectionConfig {
     pub max_connections: Option<u32>,
     pub ssl_mode: Option<SslMode>,
     pub ssl_cert_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DatabaseType {
     Mysql,
+    Memcached,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

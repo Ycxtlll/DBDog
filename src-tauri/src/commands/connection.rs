@@ -1,4 +1,5 @@
-use crate::connection::model::{ConnectionConfig, ServerInfo};
+use crate::connection::model::{ConnectionConfig, DatabaseType, ServerInfo};
+use crate::drivers::memcached::MemcachedDriver;
 use crate::drivers::mysql::metadata::MySqlDriver;
 use crate::drivers::{DatabaseDriver, DatabaseMetadata};
 use crate::error::AppError;
@@ -36,22 +37,45 @@ pub async fn test_connection(
     _state: tauri::State<'_, AppState>,
     config: ConnectionConfig,
 ) -> Result<String, AppError> {
-    let driver = MySqlDriver::new();
-    driver.test(&config).await
+    match config.db_type {
+        DatabaseType::Mysql => {
+            let driver = MySqlDriver::new();
+            driver.test(&config).await
+        }
+        DatabaseType::Memcached => MemcachedDriver::test(&config).await,
+    }
 }
-
 #[tauri::command]
 pub async fn connect(
     state: tauri::State<'_, AppState>,
     id: Uuid,
     password: Option<String>,
 ) -> Result<ServerInfo, AppError> {
+    let configs = state.storage.load_all().await?;
+    let config = configs
+        .into_iter()
+        .find(|c| c.id == id)
+        .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
+
+    match config.db_type {
+        DatabaseType::Memcached => {
+            let version = MemcachedDriver::test(&config).await?;
+            Ok(ServerInfo {
+                version,
+                connection_id: format!("{}:{}", config.host, config.port),
+            })
+        }
+        DatabaseType::Mysql => connect_mysql(state, id, password, config).await,
+    }
+}
+
+async fn connect_mysql(
+    state: tauri::State<'_, AppState>,
+    id: Uuid,
+    password: Option<String>,
+    mut config: ConnectionConfig,
+) -> Result<ServerInfo, AppError> {
     if state.pool_manager.is_connected(&id) {
-        let configs = state.storage.load_all().await?;
-        let _config = configs
-            .into_iter()
-            .find(|c| c.id == id)
-            .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
         let pool = state
             .pool_manager
             .get(&id)
@@ -66,18 +90,10 @@ pub async fn connect(
         });
     }
 
-    let configs = state.storage.load_all().await?;
-    let mut config = configs
-        .into_iter()
-        .find(|c| c.id == id)
-        .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
-
-    // Normalize empty password to None
     if config.password.as_deref().is_some_and(|s| s.is_empty()) {
         config.password = None;
     }
 
-    // Fallback: use password from frontend if keyring is empty
     if config.password.is_none() {
         if let Some(pwd) = password {
             if !pwd.is_empty() {
@@ -88,7 +104,8 @@ pub async fn connect(
 
     if config.password.is_none() {
         return Err(AppError::ConnectionFailed(
-            "Password not found. Please edit the connection and re-enter the password.".to_string(),
+            "Password not found. Please edit the connection and re-enter the password."
+                .to_string(),
         ));
     }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Plug, Unplug, Trash2, Edit2, Database } from "lucide-react";
+import { Plus, Plug, Unplug, Trash2, Edit2, Database, Cpu } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { parseTauriError } from "../../lib/error";
@@ -23,15 +23,16 @@ export function ConnectionPanel() {
   const [showForm, setShowForm] = useState(false);
 
   const handleConnect = async (id: string) => {
+    const cfg = configs.find((c) => c.id === id);
+    const targetView = cfg?.type === "memcached" ? "memcached" : "schema";
     if (statusMap[id] === "connected") {
       setActiveId(id);
-      setSidebarView("schema");
+      setSidebarView(targetView);
     } else {
-      const cfg = configs.find((c) => c.id === id);
       try {
         await connect(id, cfg?.password);
         setActiveId(id);
-        setSidebarView("schema");
+        setSidebarView(targetView);
       } catch (err) {
         const msg = parseTauriError(err);
         showError(msg);
@@ -42,6 +43,7 @@ export function ConnectionPanel() {
 
   const handleDisconnect = async (id: string) => {
     await disconnect(id);
+    setSidebarView("connection");
   };
 
   const handleDelete = async (id: string) => {
@@ -76,10 +78,11 @@ export function ConnectionPanel() {
               onClick={() => handleConnect(config.id)}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <Database
-                  size={14}
-                  className="shrink-0 text-muted-foreground"
-                />
+                {config.type === "memcached" ? (
+                  <Cpu size={14} className="shrink-0 text-muted-foreground" />
+                ) : (
+                  <Database size={14} className="shrink-0 text-muted-foreground" />
+                )}
                 <div className="min-w-0">
                   <div className="text-sm truncate">{config.name}</div>
                   <div className="text-xs text-muted-foreground truncate">

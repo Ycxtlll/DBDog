@@ -38,6 +38,11 @@ fn main() {
             commands::schema::get_table_details,
             commands::schema::refresh_schema,
             commands::schema::search_schema,
+            commands::memcached::memcached_list_keys,
+            commands::memcached::memcached_get_item,
+            commands::memcached::memcached_delete_item,
+            commands::memcached::memcached_flush_all,
+            commands::memcached::memcached_get_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

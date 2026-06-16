@@ -3,6 +3,7 @@ use crate::error::AppError;
 
 use crate::schema::model::*;
 pub mod mysql;
+pub mod memcached;
 
 use async_trait::async_trait;
 use sqlx::mysql::MySqlPool;

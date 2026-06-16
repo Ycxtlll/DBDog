@@ -1,7 +1,7 @@
 export interface ConnectionConfig {
   id: string;
   name: string;
-  type: "mysql";
+  type: "mysql" | "memcached";
   host: string;
   port: number;
   username: string;
@@ -148,4 +148,31 @@ export interface AppSettings {
     schemaCacheTtlSecs: number;
     maxPoolSize: number;
   };
+}
+
+// ── Memcached ──
+
+export interface MemcachedEntry {
+  key: string;
+  flags: number;
+  sizeBytes: number;
+  expiration: number | null;
+  value: string | null;
+}
+
+export interface MemcachedKeyList {
+  keys: string[];
+  totalKeys: number;
+  truncated: boolean;
+}
+
+export interface MemcachedServerInfo {
+  version: string;
+  uptimeSeconds: number;
+  currItems: number;
+  totalItems: number;
+  bytesUsed: number;
+  limitMaxbytes: number;
+  currConnections: number;
+  totalConnections: number;
 }
