@@ -10,7 +10,7 @@ interface ConnectionState {
   loadConfigs: () => Promise<void>;
   saveConfig: (config: ConnectionConfig) => Promise<void>;
   deleteConfig: (id: string) => Promise<void>;
-  connect: (id: string, password?: string) => Promise<void>;
+  connect: (id: string) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
   setActiveId: (id: string | null) => void;
 }
@@ -47,12 +47,12 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
     }));
   },
 
-  connect: async (id, password) => {
+  connect: async (id) => {
     set((state) => ({
       statusMap: { ...state.statusMap, [id]: "connecting" },
     }));
     try {
-      const info = await connectionService.connect(id, password);
+      const info = await connectionService.connect(id);
       set((state) => ({
         statusMap: { ...state.statusMap, [id]: "connected" },
         serverInfoMap: { ...state.serverInfoMap, [id]: info },

@@ -33,7 +33,7 @@ export function ConnectionPanel() {
       setSidebarView(targetView);
     } else {
       try {
-        await connect(id, cfg?.password);
+        await connect(id);
         setActiveId(id);
         setSidebarView(targetView);
       } catch (err) {

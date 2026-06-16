@@ -51,7 +51,6 @@ pub async fn test_connection(
 pub async fn connect(
     state: tauri::State<'_, AppState>,
     id: Uuid,
-    password: Option<String>,
 ) -> Result<ServerInfo, AppError> {
     let configs = state.storage.load_all().await?;
     let config = configs
@@ -74,14 +73,14 @@ pub async fn connect(
                 connection_id: format!("{}:{}", config.host, config.port),
             })
         }
-        DatabaseType::Mysql => connect_mysql(state, id, password, config).await,
+        DatabaseType::Mysql => connect_mysql(state, id, config).await,
     }
 }
+
 
 async fn connect_mysql(
     state: tauri::State<'_, AppState>,
     id: Uuid,
-    password: Option<String>,
     mut config: ConnectionConfig,
 ) -> Result<ServerInfo, AppError> {
     if state.pool_manager.is_connected(&id) {
@@ -104,17 +103,8 @@ async fn connect_mysql(
     }
 
     if config.password.is_none() {
-        if let Some(pwd) = password {
-            if !pwd.is_empty() {
-                config.password = Some(pwd);
-            }
-        }
-    }
-
-    if config.password.is_none() {
         return Err(AppError::PasswordRequired);
     }
-
     let driver = MySqlDriver::new();
     let pool = driver.connect(&config).await?;
 

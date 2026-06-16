@@ -21,8 +21,8 @@ export async function testConnection(
   return invoke("test_connection", { config });
 }
 
-export async function connect(id: string, password?: string): Promise<ServerInfo> {
-  return invoke("connect", { id, password });
+export async function connect(id: string): Promise<ServerInfo> {
+  return invoke("connect", { id });
 }
 
 export async function disconnect(id: string): Promise<void> {

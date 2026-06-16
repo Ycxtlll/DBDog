@@ -602,7 +602,7 @@ dependencies = [
 
 [[package]]
 name = "dbdog"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -620,6 +620,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "windows-sys 0.61.2",
  "zookeeper",
 ]
 
