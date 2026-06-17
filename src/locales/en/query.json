@@ -12,6 +12,11 @@
   "copy": "Copy",
   "copied": "Copied",
   "clickToViewFullContent": "Click to view full content",
+  "clickEdit": "Click Edit to modify this value",
+  "edit": "Edit",
+  "editing": "Editing",
+  "save": "Save",
+  "cancel": "Cancel",
   "timeAgo": "{{time}} ago",
   "error": "Error"
 }

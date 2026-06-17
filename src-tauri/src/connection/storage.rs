@@ -115,3 +115,42 @@ impl ConnectionStorage {
         Ok(())
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn crypto_roundtrip_through_password_hash() {
+        // Simulate the save → load flow
+        let id = Uuid::new_v4();
+        let password = "my_db_password";
+
+        // Save step: encrypt
+        let encrypted = crypto::encrypt_secret("dbdog", &id.to_string(), password)
+            .expect("encrypt should work on this platform");
+        assert!(!encrypted.is_empty());
+
+        // Load step: decrypt
+        let decrypted = crypto::decrypt_secret("dbdog", &id.to_string(), &encrypted)
+            .expect("decrypt should work");
+        assert_eq!(decrypted, password);
+    }
+
+    #[test]
+    fn different_ids_produce_independent_encryption() {
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+
+        let enc_a = crypto::encrypt_secret("dbdog", &id_a.to_string(), "pwd").unwrap();
+        let enc_b = crypto::encrypt_secret("dbdog", &id_b.to_string(), "pwd").unwrap();
+
+        // Both should decrypt correctly with their own keys
+        let dec_a = crypto::decrypt_secret("dbdog", &id_a.to_string(), &enc_a).unwrap();
+        let dec_b = crypto::decrypt_secret("dbdog", &id_b.to_string(), &enc_b).unwrap();
+        assert_eq!(dec_a, "pwd");
+        assert_eq!(dec_b, "pwd");
+    }
+}

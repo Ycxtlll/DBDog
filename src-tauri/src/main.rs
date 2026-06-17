@@ -81,9 +81,6 @@ fn main() {
             commands::memcached::memcached_get_stats,
             commands::zookeeper::zookeeper_list_children,
             commands::zookeeper::zookeeper_get_node,
-            commands::zookeeper::zookeeper_create_node,
-            commands::zookeeper::zookeeper_delete_node,
-            commands::zookeeper::zookeeper_set_data,
             commands::zookeeper::zookeeper_get_tree,
             commands::zookeeper::zookeeper_get_server_info,
         ])

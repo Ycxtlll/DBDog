@@ -32,6 +32,10 @@ interface QueryState {
   setTabCancelled: (id: string, cancelled: boolean) => void;
   addHistory: (item: Omit<QueryHistoryItem, "timestamp">) => void;
   toggleHistory: () => void;
+  setTabEditableTable: (
+    id: string,
+    info: { database: string; table: string },
+  ) => void;
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
@@ -227,8 +231,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       ),
     }));
   },
+  toggleHistory: () =>
+    set((state) => ({ historyExpanded: !state.historyExpanded })),
 
-  toggleHistory: () => {
-    set((state) => ({ historyExpanded: !state.historyExpanded }));
-  },
+  setTabEditableTable: (id, info) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, editableTable: info } : t,
+      ),
+    })),
 }));

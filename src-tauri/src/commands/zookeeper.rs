@@ -16,7 +16,7 @@ pub async fn zookeeper_list_children(
             "此操作仅支持 ZooKeeper 连接".into(),
         ));
     }
-    ZkDriver::list_children(&config, path.unwrap_or_else(|| "/".into()).as_str()).await
+    ZkDriver::list_children(&config, &path.unwrap_or_else(|| "/".into())).await
 }
 
 #[tauri::command]
@@ -32,55 +32,6 @@ pub async fn zookeeper_get_node(
         ));
     }
     ZkDriver::get_node(&config, &path).await
-}
-
-#[tauri::command]
-pub async fn zookeeper_create_node(
-    state: tauri::State<'_, AppState>,
-    connection_id: Uuid,
-    path: String,
-    data: String,
-    ephemeral: bool,
-    sequential: bool,
-) -> Result<String, AppError> {
-    let config = state.get_config(&connection_id).await?;
-    if config.db_type != DatabaseType::Zookeeper {
-        return Err(AppError::DriverNotSupported(
-            "此操作仅支持 ZooKeeper 连接".into(),
-        ));
-    }
-    ZkDriver::create_node(&config, &path, &data, ephemeral, sequential).await
-}
-
-#[tauri::command]
-pub async fn zookeeper_delete_node(
-    state: tauri::State<'_, AppState>,
-    connection_id: Uuid,
-    path: String,
-) -> Result<(), AppError> {
-    let config = state.get_config(&connection_id).await?;
-    if config.db_type != DatabaseType::Zookeeper {
-        return Err(AppError::DriverNotSupported(
-            "此操作仅支持 ZooKeeper 连接".into(),
-        ));
-    }
-    ZkDriver::delete_node(&config, &path).await
-}
-
-#[tauri::command]
-pub async fn zookeeper_set_data(
-    state: tauri::State<'_, AppState>,
-    connection_id: Uuid,
-    path: String,
-    data: String,
-) -> Result<ZkNode, AppError> {
-    let config = state.get_config(&connection_id).await?;
-    if config.db_type != DatabaseType::Zookeeper {
-        return Err(AppError::DriverNotSupported(
-            "此操作仅支持 ZooKeeper 连接".into(),
-        ));
-    }
-    ZkDriver::set_data(&config, &path, &data).await
 }
 
 #[tauri::command]

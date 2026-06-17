@@ -118,6 +118,8 @@ export interface QueryTab {
   error?: string;
   selectedDatabase?: string;
   isQueryResult?: boolean;
+  /** When set, the result grid enables inline editing for this table */
+  editableTable?: { database: string; table: string };
 }
 
 export interface QueryHistoryItem {

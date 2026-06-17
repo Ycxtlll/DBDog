@@ -1,10 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
-import type { ICellRendererParams, ITooltipParams } from "ag-grid-community";
+import type { ColDef, ICellRendererParams, ITooltipParams } from "ag-grid-community";
 import { useUiStore } from "../../stores/uiStore";
+import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, UpdateResult } from "../../types";
 import { CellDetailModal } from "./CellDetailModal";
+import * as queryService from "../../services/queryService";
+import { useQueryStore } from "../../stores/queryStore";
+import { showSuccess, showError } from "../../stores/toastStore";
 
 const agGridLocaleText = {
   pageSizeSelectorLabel: "每页条数：",
@@ -35,6 +39,12 @@ function resolveEffectiveTheme(
   return theme;
 }
 
+interface DetailCellInfo {
+  columnName: string;
+  value: unknown;
+  rowData: Record<string, unknown>;
+}
+
 interface ResultGridProps {
   tab: QueryTab;
 }
@@ -42,11 +52,9 @@ interface ResultGridProps {
 export function ResultGrid({ tab }: ResultGridProps) {
   const { t } = useTranslation("query");
   const { theme } = useUiStore();
+  const activeConnectionId = useConnectionStore((s) => s.activeId);
 
-  const [detailCell, setDetailCell] = useState<{
-    columnName: string;
-    value: unknown;
-  } | null>(null);
+  const [detailCell, setDetailCell] = useState<DetailCellInfo | null>(null);
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
@@ -72,61 +80,62 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const queryResult = result as QueryResult;
 
-  const columnDefs = useMemo(
+  const columnDefs: ColDef[] = useMemo(
     () =>
-      queryResult.columns.map((col) => ({
-        field: col.name,
-        headerName: col.name,
-        headerTooltip: `${col.name} (${col.dataType})`,
-        cellDataType: false,
-        flex: 1,
-        minWidth: Math.max(100, col.name.length * 9 + 24),
-        wrapHeaderText: true,
-        filter: getFilterType(col.dataType),
-        sortable: true,
-        valueFormatter: (params: { value: unknown }) => {
-          if (params.value === null || params.value === undefined) return "NULL";
-          if (typeof params.value === "boolean") return params.value ? "true" : "false";
-          return String(params.value);
-        },
-        tooltipValueGetter: (params: ITooltipParams) => {
-          const formatted = formatCellValue(params.value);
-          if (formatted.length <= 200) return formatted;
-          return formatted.slice(0, 200) + "...";
-        },
-        cellRenderer: (params: ICellRendererParams) => {
-          const formatted = formatCellValue(params.value);
-          const displayText =
-            formatted.length > 50
-              ? formatted.slice(0, 50) + "..."
-              : formatted;
-          return (
-            <span
-              className="inline-flex items-center gap-1 w-full cursor-pointer hover:underline"
-              title={t("clickToViewFullContent")}
-            >
-              <span>{displayText}</span>
-              {formatted.length > 50 && (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="shrink-0 text-muted-foreground"
-                >
-                  <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
-                  <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
-                </svg>
-              )}
-            </span>
-          );
-        },
-      })),
+      queryResult.columns.map(
+        (col): ColDef => ({
+          field: col.name,
+          headerName: col.name,
+          headerTooltip: `${col.name} (${col.dataType})`,
+          flex: 1,
+          minWidth: Math.max(100, col.name.length * 9 + 24),
+          wrapHeaderText: true,
+          filter: getFilterType(col.dataType),
+          sortable: true,
+          valueFormatter: (params) => {
+            if (params.value === null || params.value === undefined) return "NULL";
+            if (typeof params.value === "boolean") return params.value ? "true" : "false";
+            return String(params.value);
+          },
+          tooltipValueGetter: (params: ITooltipParams) => {
+            const formatted = formatCellValue(params.value);
+            if (formatted.length <= 200) return formatted;
+            return formatted.slice(0, 200) + "...";
+          },
+          cellRenderer: (params: ICellRendererParams) => {
+            const formatted = formatCellValue(params.value);
+            const displayText =
+              formatted.length > 50
+                ? formatted.slice(0, 50) + "..."
+                : formatted;
+            return (
+              <span
+                className="inline-flex items-center gap-1 w-full cursor-pointer hover:underline"
+                title={t("clickToViewFullContent")}
+              >
+                <span>{displayText}</span>
+                {formatted.length > 50 && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="shrink-0 text-muted-foreground"
+                  >
+                    <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
+                    <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
+                  </svg>
+                )}
+              </span>
+            );
+          },
+        }),
+      ),
     [queryResult.columns, t],
   );
 
@@ -143,6 +152,67 @@ export function ResultGrid({ tab }: ResultGridProps) {
       return obj;
     });
   }, [queryResult.rows, queryResult.columns]);
+
+  const handleCellClick = useCallback(
+    (event: { colDef: { field?: string; headerName?: string }; value: unknown; data: unknown }) => {
+      setDetailCell({
+        columnName: String(event.colDef.headerName ?? event.colDef.field ?? ""),
+        value: event.value,
+        rowData: (event.data as Record<string, unknown>) ?? {},
+      });
+    },
+    [],
+  );
+  const handleSave = useCallback(
+    async (newValue: string) => {
+      if (!detailCell || !tab.editableTable || !activeConnectionId) return;
+
+      const colName = detailCell.columnName;
+      const { database, table } = tab.editableTable;
+
+      const wheres: string[] = [];
+      for (const col of queryResult.columns) {
+        if (col.name === colName) continue;
+        const val = detailCell.rowData[col.name];
+        wheres.push(
+          val === null || val === undefined
+            ? `\`${col.name}\` IS NULL`
+            : `\`${col.name}\` = ${formatSqlValue(val)}`,
+        );
+      }
+
+      const setClause =
+        newValue === ""
+          ? `\`${colName}\` = NULL`
+          : `\`${colName}\` = ${formatSqlValue(newValue)}`;
+
+      const sql = `UPDATE \`${database}\`.\`${table}\` SET ${setClause} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
+
+      const startTime = performance.now();
+      try {
+        await queryService.executeUpdate(activeConnectionId, sql, database);
+        const elapsedMs = Math.round(performance.now() - startTime);
+        useQueryStore.getState().addHistory({
+          sql,
+          status: "success",
+          elapsedMs,
+        });
+        showSuccess(`Updated \`${table}\`.\`${colName}\``);
+      } catch (err) {
+        const elapsedMs = Math.round(performance.now() - startTime);
+        const msg = err instanceof Error ? err.message : String(err);
+        useQueryStore.getState().addHistory({
+          sql,
+          status: "error",
+          error: msg,
+          elapsedMs,
+        });
+        showError(msg);
+        throw err;
+      }
+    },
+    [detailCell, tab.editableTable, activeConnectionId, queryResult.columns],
+  );
 
   return (
     <div className="h-full flex flex-col">
@@ -163,12 +233,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           localeText={agGridLocaleText}
           suppressRowClickSelection
           enableCellTextSelection
-          onCellClicked={(event) => {
-            setDetailCell({
-              columnName: String(event.colDef.headerName ?? event.colDef.field ?? ""),
-              value: event.value,
-            });
-          }}
+          onCellClicked={handleCellClick}
         />
       </div>
 
@@ -176,6 +241,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         <CellDetailModal
           columnName={detailCell.columnName}
           value={detailCell.value}
+          onSave={tab.editableTable ? handleSave : undefined}
           onClose={() => setDetailCell(null)}
         />
       )}
@@ -208,4 +274,13 @@ function getFilterType(dataType: string): string {
     return "agDateColumnFilter";
   }
   return "agTextColumnFilter";
+}
+
+function formatSqlValue(val: unknown): string {
+  if (val === null || val === undefined) return "NULL";
+  if (typeof val === "number") return String(val);
+  if (typeof val === "bigint") return String(val);
+  if (typeof val === "boolean") return val ? "1" : "0";
+  const s = String(val);
+  return `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 }

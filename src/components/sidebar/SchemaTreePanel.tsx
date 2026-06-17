@@ -114,6 +114,7 @@ export function SchemaTreePanel() {
     const tabId = queryStore.activeTabId ?? queryStore.newTab();
     const sql = `SELECT * FROM \`${db}\`.\`${table}\` LIMIT 1000;`;
     queryStore.setTabSql(tabId, sql);
+    queryStore.setTabEditableTable(tabId, { database: db, table });
     await queryStore.execute(activeId, tabId);
   };
 

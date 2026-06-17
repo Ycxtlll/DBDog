@@ -2,9 +2,8 @@ use crate::connection::model::ConnectionConfig;
 use crate::error::AppError;
 use serde::Serialize;
 use std::time::Duration;
-use zookeeper::CreateMode;
 
-use super::raw_client::{self, ZkRawClient};
+use super::raw_client::ZkRawClient;
 
 /// A single ZooKeeper node (znode).
 #[derive(Debug, Clone, Serialize)]
@@ -25,7 +24,7 @@ pub struct ZkNode {
     pub pzxid: i64,
 }
 
-/// A flat list of child nodes at a given path (for the sidebar tree).
+/// A flat list of child nodes at a given path.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZkChildList {
@@ -62,12 +61,11 @@ pub struct ZkServerInfo {
     pub sent: u64,
 }
 
-/// Stateless driver — every method opens a fresh ZK connection, operates,
-/// and cleanly closes it inside a single `spawn_blocking`.
+/// Stateless driver — every method opens a fresh ZK connection,
+/// operates, and cleanly closes it inside a single `spawn_blocking`.
 pub struct ZkDriver;
 
 impl ZkDriver {
-    /// Create a ZK connection, probe "/", run `f`, then close.
     async fn with_zk<T, F>(config: &ConnectionConfig, f: F) -> Result<T, AppError>
     where
         F: FnOnce(&mut ZkRawClient) -> Result<T, AppError> + Send + 'static,
@@ -86,7 +84,6 @@ impl ZkDriver {
 
             let result = f(&mut client);
 
-            // Close MUST happen inside spawn_blocking — clean TCP shutdown
             if let Err(e) = client.close() {
                 if result.is_err() {
                     return Err(AppError::ZookeeperError(format!("ZK close failed: {e}")));
@@ -102,9 +99,10 @@ impl ZkDriver {
     /// Test connection — probe "/".
     pub async fn test(config: &ConnectionConfig) -> Result<String, AppError> {
         Self::with_zk(config, |zk| {
-            let count = zk.get_children("/").map(|c| c.len()).map_err(|e| {
-                AppError::ConnectionFailed(format!("ZK 测试失败: {e}"))
-            })?;
+            let count = zk
+                .get_children("/")
+                .map(|c| c.len())
+                .map_err(|e| AppError::ConnectionFailed(format!("ZK 测试失败: {e}")))?;
             Ok(format!("ZooKeeper ({} children at /)", count))
         })
         .await
@@ -121,8 +119,7 @@ impl ZkDriver {
         };
 
         Self::with_zk(config, move |zk| {
-            let children = zk
-                .get_children(&p)?;
+            let children = zk.get_children(&p)?;
 
             let total = children.len();
             let truncated = total > 10000;
@@ -171,75 +168,6 @@ impl ZkDriver {
         .await
     }
 
-    pub async fn create_node(
-        config: &ConnectionConfig,
-        path: &str,
-        data: &str,
-        ephemeral: bool,
-        sequential: bool,
-    ) -> Result<String, AppError> {
-        let p = path.to_string();
-        let d = data.to_string();
-
-        Self::with_zk(config, move |zk| {
-            let mode = match (ephemeral, sequential) {
-                (false, false) => CreateMode::Persistent,
-                (false, true) => CreateMode::PersistentSequential,
-                (true, false) => CreateMode::Ephemeral,
-                (true, true) => CreateMode::EphemeralSequential,
-            };
-
-            let (acls, flags) = raw_client::create_mode_flags(mode, ephemeral, sequential);
-            zk.create(&p, d.as_bytes(), &acls, flags)
-        })
-        .await
-    }
-
-    pub async fn delete_node(
-        config: &ConnectionConfig,
-        path: &str,
-    ) -> Result<(), AppError> {
-        let p = path.to_string();
-
-        Self::with_zk(config, move |zk| {
-            // Get current version for conditional delete
-            let (_, stat) = zk.get_data(&p)?;
-            zk.delete(&p, stat.version)
-        })
-        .await
-    }
-
-    pub async fn set_data(
-        config: &ConnectionConfig,
-        path: &str,
-        data: &str,
-    ) -> Result<ZkNode, AppError> {
-        let p = path.to_string();
-        let d = data.to_string();
-        Self::with_zk(config, move |zk| {
-            let (_, stat) = zk.get_data(&p)?;
-            let new_stat = zk
-                .set_data(&p, d.as_bytes(), stat.version)?;
-
-            Ok(ZkNode {
-                path: p.clone(),
-                data: d,
-                data_length: new_stat.data_length as u32,
-                num_children: new_stat.num_children as u32,
-                czxid: new_stat.czxid,
-                mzxid: new_stat.mzxid,
-                ctime: new_stat.ctime,
-                mtime: new_stat.mtime,
-                version: new_stat.version,
-                child_version: new_stat.cversion,
-                acl_version: new_stat.aversion,
-                ephemeral_owner: new_stat.ephemeral_owner,
-                pzxid: new_stat.pzxid,
-            })
-        })
-        .await
-    }
-
     pub async fn get_tree(
         config: &ConnectionConfig,
         path: &str,
@@ -254,7 +182,7 @@ impl ZkDriver {
         Self::with_zk(config, move |zk| build_tree(zk, &p, "", 0, max_depth)).await
     }
 
-    /// Get server info via `mntr` four-letter word over raw TCP (no ZK session needed).
+    /// Get server info via `mntr` four-letter word over raw TCP.
     pub async fn get_server_info(
         config: &ConnectionConfig,
     ) -> Result<ZkServerInfo, AppError> {
@@ -290,8 +218,7 @@ fn build_tree(
     depth: u32,
     max_depth: u32,
 ) -> Result<ZkTreeNode, AppError> {
-    let children = zk
-        .get_children(root)?;
+    let children = zk.get_children(root)?;
 
     let (is_ephemeral, num_children) = match zk.get_data(root) {
         Ok((_, stat)) => (stat.ephemeral_owner != 0, stat.num_children as u32),
@@ -387,4 +314,61 @@ fn parse_mntr(response: &str) -> Result<ZkServerInfo, AppError> {
         received,
         sent,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_mntr_full_output() {
+        let input = "zk_version\t3.8.4-6ad6d364c7e0e1a2b3c4d5e6f7a8b9c0d1e2f3a4\n\
+                      zk_avg_latency\t12\n\
+                      zk_max_latency\t150\n\
+                      zk_min_latency\t5\n\
+                      zk_packets_received\t12345\n\
+                      zk_packets_sent\t67890\n\
+                      zk_num_alive_connections\t2\n\
+                      zk_outstanding_requests\t0\n\
+                      zk_server_state\tstandalone\n\
+                      zk_znode_count\t42\n\
+                      zk_watch_count\t10\n";
+
+        let info = parse_mntr(input).expect("should parse valid mntr output");
+        assert_eq!(info.mode, "standalone");
+        assert_eq!(info.version, "3.8.4-6ad6d364c7e0e1a2b3c4d5e6f7a8b9c0d1e2f3a4");
+        assert_eq!(info.znode_count, 42);
+        assert_eq!(info.connections, 2);
+        assert_eq!(info.outstanding, 0);
+        assert_eq!(info.latency_avg, 12.0);
+        assert_eq!(info.latency_min, 5.0);
+        assert_eq!(info.latency_max, 150.0);
+        assert_eq!(info.received, 12345);
+        assert_eq!(info.sent, 67890);
+    }
+
+    #[test]
+    fn parse_mntr_empty() {
+        let info = parse_mntr("").expect("should handle empty input");
+        assert_eq!(info.mode, "unknown");
+        assert_eq!(info.version, "unknown");
+        assert_eq!(info.znode_count, 0);
+    }
+
+    #[test]
+    fn parse_mntr_partial() {
+        let input = "zk_server_state\tleader\nzk_znode_count\t100\n";
+        let info = parse_mntr(input).expect("should parse partial output");
+        assert_eq!(info.mode, "leader");
+        assert_eq!(info.znode_count, 100);
+        assert_eq!(info.version, "unknown");
+    }
+
+    #[test]
+    fn parse_mntr_numeric_overflow() {
+        let input = "zk_znode_count\tnot_a_number\nzk_avg_latency\tinvalid\n";
+        let info = parse_mntr(input).expect("should handle bad numbers");
+        assert_eq!(info.znode_count, 0);
+        assert_eq!(info.latency_avg, 0.0);
+    }
 }

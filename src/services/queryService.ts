@@ -24,3 +24,4 @@ export async function cancelQuery(
 ): Promise<void> {
   return invoke("cancel_query", { connectionId, threadId });
 }
+

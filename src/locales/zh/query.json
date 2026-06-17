@@ -12,6 +12,11 @@
   "copy": "复制",
   "copied": "已复制",
   "clickToViewFullContent": "点击查看完整内容",
+  "clickEdit": "点击编辑按钮修改此值",
+  "edit": "编辑",
+  "editing": "编辑中",
+  "save": "保存",
+  "cancel": "取消",
   "timeAgo": "{{time}}前",
   "error": "错误"
 }

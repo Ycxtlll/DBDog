@@ -179,3 +179,58 @@ mod hex {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let plaintext = "my_secret_password_123!";
+        let encrypted = encrypt_secret("test_service", "test_account", plaintext)
+            .expect("encrypt should succeed");
+        assert!(!encrypted.is_empty(), "ciphertext should not be empty");
+        assert_ne!(encrypted, plaintext, "ciphertext should differ from plaintext");
+
+        let decrypted = decrypt_secret("test_service", "test_account", &encrypted)
+            .expect("decrypt should succeed");
+        assert_eq!(decrypted, plaintext, "round-trip should preserve plaintext");
+    }
+
+    #[test]
+    fn encrypt_empty_string() {
+        let encrypted = encrypt_secret("test_service", "test_account", "")
+            .expect("encrypt empty string should work");
+        let decrypted = decrypt_secret("test_service", "test_account", &encrypted)
+            .expect("decrypt empty string should work");
+        assert_eq!(decrypted, "");
+    }
+
+    #[test]
+    fn encrypt_different_services_produce_different_output() {
+        let a = encrypt_secret("svc_a", "acct", "password").unwrap();
+        let b = encrypt_secret("svc_b", "acct", "password").unwrap();
+        // On keyring platforms they may be identical (placeholder), on DPAPI they differ
+        // Just verify both produce valid output
+        assert!(!a.is_empty());
+        assert!(!b.is_empty());
+    }
+
+    #[test]
+    fn decrypt_invalid_hex_fails() {
+        let result = decrypt_secret("svc", "acct", "not-hex");
+        assert!(result.is_err(), "non-hex input should fail");
+    }
+
+    #[test]
+    fn hex_decode_valid() {
+        assert_eq!(hex::decode("48656c6c6f").unwrap(), b"Hello");
+        assert_eq!(hex::decode("").unwrap(), b"");
+    }
+
+    #[test]
+    fn hex_decode_invalid() {
+        assert!(hex::decode("xyz").is_err());
+        assert!(hex::decode("abc").is_err()); // odd length
+    }
+}

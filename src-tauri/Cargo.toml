@@ -1,6 +1,6 @@
 [package]
 name = "dbdog"
-version = "0.3.1"
+version = "0.3.3"
 description = "DBDog - Cross-platform database GUI tool"
 authors = ["DBDog Team"]
 edition = "2021"
@@ -30,7 +30,7 @@ bigdecimal = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }
 async-trait = "0.1"
 base64 = "0.22"
-zookeeper = "0.8"
+
 windows-sys = { version = "0.61.2", features = ["Win32_Security_Cryptography", "Win32_Foundation"] }
 
 
