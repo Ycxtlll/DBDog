@@ -16,5 +16,10 @@
   "maxConnections": "Max Connections",
   "type": "Type",
   "namePlaceholder": "My Database",
-  "databasePlaceholder": "optional"
+  "databasePlaceholder": "optional",
+  "group": "Group",
+  "groupPlaceholder": "auto (group by type)",
+  "autoGroup": "Auto-group",
+  "noConnections": "No connections yet",
+  "confirmDelete": "Delete this connection?"
 }

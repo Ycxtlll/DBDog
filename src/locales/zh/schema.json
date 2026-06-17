@@ -11,5 +11,6 @@
   "viewStructure": "查看结构",
   "loadDatabasesFailed": "加载数据库失败：{{msg}}",
   "loadTablesFailed": "加载表 [{{dbName}}] 失败：{{msg}}",
-  "loadColumnsFailed": "加载字段 [{{colKey}}] 失败：{{msg}}"
+  "loadColumnsFailed": "加载字段 [{{colKey}}] 失败：{{msg}}",
+  "loadingTables": "正在加载 {{dbName}} 的表..."
 }

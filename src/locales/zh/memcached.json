@@ -24,5 +24,6 @@
   "valueTruncated": "仅显示前 2KB（共 {{size}}）",
   "empty": "（空）",
   "loading": "加载中...",
-  "never": "永不过期"
+  "never": "永不过期",
+  "selectKeyHint": "从侧边栏选择一个 Key 查看值"
 }

@@ -9,5 +9,6 @@
   "nodeStats": "Node Stats",
   "nodeData": "Data",
   "emptyValue": "(empty)",
-  "valueTruncated": "showing first 2KB of {{size}}"
+  "valueTruncated": "showing first 2KB of {{size}}",
+  "selectNodeHint": "Select a znode from the sidebar to view details"
 }

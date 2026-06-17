@@ -21,5 +21,6 @@
   "connect": "Connect",
   "disconnect": "Disconnect",
   "searchCommand": "Search command...",
-  "confirmDelete": "Are you sure you want to delete?"
+  "confirmDelete": "Are you sure you want to delete?",
+  "connectToStart": "Connect to a database to get started"
 }

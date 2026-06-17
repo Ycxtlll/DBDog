@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.4] — 2026-06-17
+
+### Added
+
+- **连接分组** — 支持自动分组与手动分组：
+  - 自动分组：同类型连接（MySQL / Memcached / ZooKeeper）自动归入对应组别
+  - 手动分组：连接配置新增 `group` 字段，可自定义分组名称
+  - 侧边栏显示可折叠分组，默认全部展开，点击组头切换收起/展开
+  - 每组显示连接数量角标
+- 单元格编辑生成的 UPDATE 语句自动写入查询历史记录
+
+### Changed
+
+- **通知组件重构** — Toast 改为左下角显示，实色背景 + 左侧 3px 颜色条（绿/红/蓝），新增入场动画
+
+---
+
+## [0.3.3] — 2026-06-16
+
+### Added
+
+- **ZooKeeper 支持** — 自实现 ZK 协议客户端，支持树浏览、节点查看、Server 统计
+- 连接面板状态指示器（绿/黄/红/灰 圆点）
+
+### Changed
+
+- 侧边栏视图按连接类型自动切换（MySQL→Schema、Memcached→Key列表、ZooKeeper→树）
+
+---
+
 ## [0.2.0] — 2026-06-16
 
 ### Added

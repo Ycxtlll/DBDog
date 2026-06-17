@@ -21,5 +21,6 @@
   "connect": "连接",
   "disconnect": "断开",
   "searchCommand": "搜索命令...",
-  "confirmDelete": "确定要删除吗？"
+  "confirmDelete": "确定要删除吗？",
+  "connectToStart": "连接数据库以开始使用"
 }

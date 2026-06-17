@@ -11,5 +11,6 @@
   "viewStructure": "View Structure",
   "loadDatabasesFailed": "Load databases failed: {{msg}}",
   "loadTablesFailed": "Load tables [{{dbName}}] failed: {{msg}}",
-  "loadColumnsFailed": "Load columns [{{colKey}}] failed: {{msg}}"
+  "loadColumnsFailed": "Load columns [{{colKey}}] failed: {{msg}}",
+  "loadingTables": "Loading tables for {{dbName}}..."
 }

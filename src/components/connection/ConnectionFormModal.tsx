@@ -180,6 +180,16 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
                 </div>
               </>
             )}
+
+          {/* Group */}
+          <div className="col-span-3">
+            <FormField
+              label={t("group")}
+              value={form.group ?? ""}
+              onChange={(v) => setForm({ ...form, group: v || undefined })}
+              placeholder={t("groupPlaceholder")}
+            />
+          </div>
           </div>
 
           {testMsg && (

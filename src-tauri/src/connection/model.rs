@@ -19,6 +19,8 @@ pub struct ConnectionConfig {
     pub ssl_cert_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

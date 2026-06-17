@@ -16,5 +16,10 @@
   "maxConnections": "最大连接数",
   "type": "类型",
   "namePlaceholder": "我的数据库",
-  "databasePlaceholder": "可选"
+  "databasePlaceholder": "可选",
+  "group": "分组",
+  "groupPlaceholder": "自动（按类型分组）",
+  "autoGroup": "自动分组",
+  "noConnections": "暂无连接",
+  "confirmDelete": "确定删除此连接？"
 }

@@ -10,6 +10,7 @@ export interface ConnectionConfig {
   maxConnections?: number;
   sslMode?: "disabled" | "required" | "verify-ca" | "verify-full";
   sslCertPath?: string;
+  group?: string;
 }
 
 export type ConnectionStatus =

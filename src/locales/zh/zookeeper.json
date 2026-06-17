@@ -9,5 +9,6 @@
   "nodeStats": "节点状态",
   "nodeData": "数据",
   "emptyValue": "（空）",
-  "valueTruncated": "仅显示前 2KB（共 {{size}}）"
+  "valueTruncated": "仅显示前 2KB（共 {{size}}）",
+  "selectNodeHint": "从侧边栏选择一个节点查看详情"
 }

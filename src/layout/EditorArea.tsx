@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useQueryStore } from "../stores/queryStore";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useZookeeperStore } from "../stores/zookeeperStore";
@@ -11,6 +12,7 @@ import { ZkNodeViewer } from "../components/zookeeper/ZkNodeViewer";
 import { MemoEntryViewer } from "../components/memcached/MemoEntryViewer";
 
 export function EditorArea() {
+  const { t } = useTranslation(["common", "zookeeper", "memcached"]);
   const configs = useConnectionStore((s) => s.configs);
   const activeConnectionId = useConnectionStore((s) => s.activeId);
 
@@ -75,7 +77,7 @@ export function EditorArea() {
       )}
       {activeConfig?.type === "zookeeper" && !zkSelectedNode && (
         <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-          Select a znode from the sidebar to view details
+          {t("zookeeper:selectNodeHint")}
         </div>
       )}
 
@@ -88,14 +90,14 @@ export function EditorArea() {
       )}
       {activeConfig?.type === "memcached" && !mcSelectedKey && (
         <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-          Select a key from the sidebar to view value
+          {t("memcached:selectKeyHint")}
         </div>
       )}
 
       {/* No connection selected */}
       {!activeConfig && (
         <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-          Connect to a database to get started
+          {t("common:connectToStart")}
         </div>
       )}
 
