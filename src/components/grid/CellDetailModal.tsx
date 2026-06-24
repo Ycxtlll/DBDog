@@ -25,40 +25,38 @@ export function CellDetailModal({
   const { t } = useTranslation("query");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [copied, setCopied] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState("");
   const [saving, setSaving] = useState(false);
 
   const displayValue = formatValue(value);
   const isNull = value === null || value === undefined;
   const canEdit = !!onSave;
 
+  // Open directly in edit mode for editable cells
+  const [editing] = useState(canEdit);
+  const [editText, setEditText] = useState(
+    canEdit ? (isNull ? "" : displayValue) : "",
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (editing) {
-          setEditing(false);
-        } else {
-          onClose();
-        }
-      }
+      if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, editing]);
+  }, [onClose]);
 
-  const handleEdit = () => {
-    setEditText(isNull ? "" : displayValue);
-    setEditing(true);
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  };
+  // Auto-focus the textarea when opening in edit mode
+  useEffect(() => {
+    if (canEdit) {
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }, [canEdit]);
 
   const handleSave = async () => {
     if (!onSave || saving) return;
     setSaving(true);
     try {
       await onSave(editText);
-      setEditing(false);
       onClose();
     } catch {
       setSaving(false);
@@ -139,40 +137,32 @@ export function CellDetailModal({
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted">
           <span className="text-xs text-muted-foreground">
-            {canEdit && !editing && <>{t("clickEdit")}</>}
+            {editing && (
+              <>{editText.length} {t("chars")}</>
+            )}
           </span>
           <div className="flex items-center gap-2">
             {!editing && (
-              <>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(displayValue).then(() => {
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1500);
-                    });
-                  }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                    copied
-                      ? "border-green-500 text-green-600 bg-green-500/10"
-                      : "border-border bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                  }`}
-                >
-                  {copied ? t("copied") : t("copy")}
-                </button>
-                {canEdit && (
-                  <button
-                    onClick={handleEdit}
-                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                  >
-                    {t("edit")}
-                  </button>
-                )}
-              </>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(displayValue).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  });
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                  copied
+                    ? "border-green-500 text-green-600 bg-green-500/10"
+                    : "border-border bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {copied ? t("copied") : t("copy")}
+              </button>
             )}
             {editing && (
               <>
                 <button
-                  onClick={() => setEditing(false)}
+                  onClick={onClose}
                   className="px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
                 >
                   {t("cancel")}

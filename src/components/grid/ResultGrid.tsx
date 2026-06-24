@@ -9,6 +9,7 @@ import { CellDetailModal } from "./CellDetailModal";
 import * as queryService from "../../services/queryService";
 import { useQueryStore } from "../../stores/queryStore";
 import { showSuccess, showError } from "../../stores/toastStore";
+import { parseTauriError } from "../../lib/error";
 
 const agGridLocaleText = {
   pageSizeSelectorLabel: "每页条数：",
@@ -198,9 +199,24 @@ export function ResultGrid({ tab }: ResultGridProps) {
           elapsedMs,
         });
         showSuccess(`Updated \`${table}\`.\`${colName}\``);
+
+        // Refresh the grid by re-executing the original query
+        if (tab.sql.trim()) {
+          try {
+            const freshResult = await queryService.executeQuery(
+              activeConnectionId,
+              tab.sql,
+              undefined,
+              tab.selectedDatabase,
+            );
+            useQueryStore.getState().setTabResult(tab.id, freshResult, true);
+          } catch {
+            // Grid refresh failed silently — the UPDATE itself succeeded
+          }
+        }
       } catch (err) {
         const elapsedMs = Math.round(performance.now() - startTime);
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = parseTauriError(err);
         useQueryStore.getState().addHistory({
           sql,
           status: "error",
@@ -231,7 +247,6 @@ export function ResultGrid({ tab }: ResultGridProps) {
           paginationPageSize={100}
           paginationPageSizeSelector={[50, 100, 200, 500]}
           localeText={agGridLocaleText}
-          suppressRowClickSelection
           enableCellTextSelection
           onCellClicked={handleCellClick}
         />
