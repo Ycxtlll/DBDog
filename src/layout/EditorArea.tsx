@@ -6,6 +6,7 @@ import { useMemcachedStore } from "../stores/memcachedStore";
 import { EditorTabBar } from "../components/editor/EditorTabBar";
 import { SqlEditor } from "../components/editor/SqlEditor";
 import { ResultGrid } from "../components/grid/ResultGrid";
+import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { TableStructureDrawer } from "../components/drawer/TableStructureDrawer";
 import { QueryHistory } from "../components/QueryHistory";
 import { ZkNodeViewer } from "../components/zookeeper/ZkNodeViewer";
@@ -61,7 +62,9 @@ export function EditorArea() {
                 </div>
                 {activeTab.result && (
                   <div className="flex-[3] min-h-0 border-t border-border">
-                    <ResultGrid tab={activeTab} />
+                    <ErrorBoundary>
+                      <ResultGrid tab={activeTab} />
+                    </ErrorBoundary>
                   </div>
                 )}
               </>

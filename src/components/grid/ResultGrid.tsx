@@ -60,90 +60,69 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
 
-  if (!result) return null;
-
-  if (!isQueryResult) {
-    const updateResult = result as UpdateResult;
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-        <div className="text-lg font-medium">
-          {updateResult.rowsAffected} {t("rowsAffected")}
-        </div>
-        {updateResult.lastInsertId !== undefined && (
-          <div className="text-sm">
-            {t("lastInsertId")}: {updateResult.lastInsertId}
-          </div>
-        )}
-        <div className="text-xs">{updateResult.elapsedMs}ms</div>
-      </div>
+  // All hooks must be called before any conditional returns (React Rules of Hooks)
+  const columnDefs: ColDef[] = useMemo(() => {
+    if (!isQueryResult || !result) return [];
+    const qr = result as QueryResult;
+    return qr.columns.map(
+      (col): ColDef => ({
+        field: col.name,
+        headerName: col.name,
+        headerTooltip: `${col.name} (${col.dataType})`,
+        flex: 1,
+        minWidth: Math.max(100, col.name.length * 9 + 24),
+        wrapHeaderText: true,
+        filter: getFilterType(col.dataType),
+        sortable: true,
+        valueFormatter: (params) => {
+          if (params.value === null || params.value === undefined) return "NULL";
+          if (typeof params.value === "boolean") return params.value ? "true" : "false";
+          return String(params.value);
+        },
+        tooltipValueGetter: (params: ITooltipParams) => {
+          const formatted = formatCellValue(params.value);
+          if (formatted.length <= 200) return formatted;
+          return formatted.slice(0, 200) + "...";
+        },
+        cellRenderer: (params: ICellRendererParams) => {
+          const formatted = formatCellValue(params.value);
+          const displayText =
+            formatted.length > 50
+              ? formatted.slice(0, 50) + "..."
+              : formatted;
+          return (
+            <span className="inline-flex items-center gap-1 w-full cursor-pointer hover:underline">
+              <span>{displayText}</span>
+              {formatted.length > 50 && (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="shrink-0 text-muted-foreground"
+                >
+                  <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
+                  <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
+                </svg>
+              )}
+            </span>
+          );
+        },
+      }),
     );
-  }
-
-  const queryResult = result as QueryResult;
-
-  const columnDefs: ColDef[] = useMemo(
-    () =>
-      queryResult.columns.map(
-        (col): ColDef => ({
-          field: col.name,
-          headerName: col.name,
-          headerTooltip: `${col.name} (${col.dataType})`,
-          flex: 1,
-          minWidth: Math.max(100, col.name.length * 9 + 24),
-          wrapHeaderText: true,
-          filter: getFilterType(col.dataType),
-          sortable: true,
-          valueFormatter: (params) => {
-            if (params.value === null || params.value === undefined) return "NULL";
-            if (typeof params.value === "boolean") return params.value ? "true" : "false";
-            return String(params.value);
-          },
-          tooltipValueGetter: (params: ITooltipParams) => {
-            const formatted = formatCellValue(params.value);
-            if (formatted.length <= 200) return formatted;
-            return formatted.slice(0, 200) + "...";
-          },
-          cellRenderer: (params: ICellRendererParams) => {
-            const formatted = formatCellValue(params.value);
-            const displayText =
-              formatted.length > 50
-                ? formatted.slice(0, 50) + "..."
-                : formatted;
-            return (
-              <span
-                className="inline-flex items-center gap-1 w-full cursor-pointer hover:underline"
-                title={t("clickToViewFullContent")}
-              >
-                <span>{displayText}</span>
-                {formatted.length > 50 && (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-muted-foreground"
-                  >
-                    <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
-                    <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
-                  </svg>
-                )}
-              </span>
-            );
-          },
-        }),
-      ),
-    [queryResult.columns, t],
-  );
+  }, [isQueryResult, result, t]);
 
   const rowData = useMemo(() => {
-    return queryResult.rows.map((row) => {
+    if (!isQueryResult || !result) return [];
+    const qr = result as QueryResult;
+    return qr.rows.map((row) => {
       const obj: Record<string, unknown> = {};
-      queryResult.columns.forEach((col, i) => {
+      qr.columns.forEach((col, i) => {
         if (i < row.length) {
           obj[col.name] = row[i];
         } else {
@@ -152,7 +131,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
       });
       return obj;
     });
-  }, [queryResult.rows, queryResult.columns]);
+  }, [isQueryResult, result]);
 
   const handleCellClick = useCallback(
     (event: { colDef: { field?: string; headerName?: string }; value: unknown; data: unknown }) => {
@@ -164,15 +143,17 @@ export function ResultGrid({ tab }: ResultGridProps) {
     },
     [],
   );
+
   const handleSave = useCallback(
     async (newValue: string) => {
-      if (!detailCell || !tab.editableTable || !activeConnectionId) return;
+      if (!detailCell || !tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
 
+      const qr = result as QueryResult;
       const colName = detailCell.columnName;
       const { database, table } = tab.editableTable;
 
       const wheres: string[] = [];
-      for (const col of queryResult.columns) {
+      for (const col of qr.columns) {
         if (col.name === colName) continue;
         const val = detailCell.rowData[col.name];
         wheres.push(
@@ -227,8 +208,29 @@ export function ResultGrid({ tab }: ResultGridProps) {
         throw err;
       }
     },
-    [detailCell, tab.editableTable, activeConnectionId, queryResult.columns],
+    [detailCell, tab.editableTable, activeConnectionId, isQueryResult, result],
   );
+
+  if (!result) return null;
+
+  if (!isQueryResult) {
+    const updateResult = result as UpdateResult;
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+        <div className="text-lg font-medium">
+          {updateResult.rowsAffected} {t("rowsAffected")}
+        </div>
+        {updateResult.lastInsertId !== undefined && (
+          <div className="text-sm">
+            {t("lastInsertId")}: {updateResult.lastInsertId}
+          </div>
+        )}
+        <div className="text-xs">{updateResult.elapsedMs}ms</div>
+      </div>
+    );
+  }
+
+  const queryResult = result as QueryResult;
 
   return (
     <div className="h-full flex flex-col">
