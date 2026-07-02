@@ -269,6 +269,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
 function formatCellValue(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
