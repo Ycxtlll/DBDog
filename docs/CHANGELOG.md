@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.5] — 2026-07-03
+
+### Fixed
+
+- **MySQL 8.0 兼容性修复** — 修复 MySQL 8.0 下列和索引信息无法读取的问题。`fetch_columns` 改用 `SHOW FULL COLUMNS`，`fetch_indexes` 改用 `SHOW INDEX`，避免 sqlx 0.8 对 `information_schema` 中 `BIGINT UNSIGNED` 列的类型解码错误。
+
+### Changed
+
+- **Schema 树交互优化** — 左侧目录栏进入表级别后不再展开列子节点；点击表名直接执行 `SELECT * FROM table LIMIT 1000`，无需再点击小眼睛图标。
+- **README 重构** — README 切换为英文版作为默认，中文版移至 `docs/README.zh.md`，增加中英文跳转链接。
+
+---
+
 ## [0.3.4] — 2026-06-17
 
 ### Added
