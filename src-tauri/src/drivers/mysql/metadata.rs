@@ -167,37 +167,32 @@ impl DatabaseMetadata for MySqlDriver {
         db: &str,
         table: &str,
     ) -> Result<Vec<Column>, AppError> {
-        let rows = sqlx::query(
-            r#"
-            SELECT column_name, ordinal_position, data_type, is_nullable,
-                   column_key, extra, column_default, column_comment, character_maximum_length
-            FROM information_schema.columns
-            WHERE table_schema = ? AND table_name = ?
-            ORDER BY ordinal_position
-            "#,
-        )
-        .bind(db)
-        .bind(table)
-        .fetch_all(pool)
-        .await?;
+        let sql = format!(
+            "SHOW FULL COLUMNS FROM {}.{}",
+            escape_mysql_identifier(db),
+            escape_mysql_identifier(table)
+        );
+        let rows = sqlx::query(&sql).fetch_all(pool).await?;
 
         let mut columns = Vec::new();
-        for row in rows {
-            let col_key: String = row.try_get("column_key").unwrap_or_default();
-            let extra: String = row.try_get("extra").unwrap_or_default();
+        for (i, row) in rows.iter().enumerate() {
+            let key: String = row.try_get("Key").unwrap_or_default();
+            let extra: String = row.try_get("Extra").unwrap_or_default();
+            let data_type: String = row.try_get("Type").unwrap_or_default();
+
+            // Extract max_length from type like "varchar(255)" or "char(10)"
+            let max_length = parse_max_length(&data_type);
+
             columns.push(Column {
-                name: row.try_get("column_name").unwrap_or_default(),
-                ordinal_position: row.try_get::<i64, _>("ordinal_position").unwrap_or(0) as u32,
-                data_type: row.try_get("data_type").unwrap_or_default(),
-                nullable: row.try_get::<String, _>("is_nullable").unwrap_or_default() == "YES",
-                is_primary_key: col_key == "PRI",
+                name: row.try_get("Field").unwrap_or_default(),
+                ordinal_position: (i + 1) as u32,
+                data_type,
+                nullable: row.try_get::<String, _>("Null").unwrap_or_default() == "YES",
+                is_primary_key: key == "PRI",
                 is_auto_increment: extra.contains("auto_increment"),
-                default_value: row.try_get("column_default").ok(),
-                comment: row.try_get("column_comment").ok(),
-                max_length: row
-                    .try_get::<i64, _>("character_maximum_length")
-                    .ok()
-                    .map(|v| v as u32),
+                default_value: row.try_get("Default").ok(),
+                comment: row.try_get("Comment").ok(),
+                max_length,
             });
         }
         Ok(columns)
@@ -209,27 +204,21 @@ impl DatabaseMetadata for MySqlDriver {
         db: &str,
         table: &str,
     ) -> Result<Vec<Index>, AppError> {
-        let rows = sqlx::query(
-            r#"
-            SELECT index_name, column_name, non_unique, index_type
-            FROM information_schema.statistics
-            WHERE table_schema = ? AND table_name = ?
-            ORDER BY index_name, seq_in_index
-            "#,
-        )
-        .bind(db)
-        .bind(table)
-        .fetch_all(pool)
-        .await?;
+        let sql = format!(
+            "SHOW INDEX FROM {}.{}",
+            escape_mysql_identifier(db),
+            escape_mysql_identifier(table)
+        );
+        let rows = sqlx::query(&sql).fetch_all(pool).await?;
 
         use std::collections::HashMap;
         let mut index_map: HashMap<String, (bool, bool, String, Vec<String>)> = HashMap::new();
 
         for row in rows {
-            let name: String = row.try_get("index_name").unwrap_or_default();
-            let column: String = row.try_get("column_name").unwrap_or_default();
-            let non_unique: i64 = row.try_get("non_unique").unwrap_or(1);
-            let index_type: String = row.try_get("index_type").unwrap_or_default();
+            let name: String = row.try_get("Key_name").unwrap_or_default();
+            let column: String = row.try_get("Column_name").unwrap_or_default();
+            let non_unique: i64 = row.try_get("Non_unique").unwrap_or(1);
+            let index_type: String = row.try_get("Index_type").unwrap_or_default();
             let is_primary = name == "PRIMARY";
 
             index_map
@@ -408,5 +397,17 @@ impl DatabaseMetadata for MySqlDriver {
         }
 
         Ok(results)
+    }
+}
+
+/// Extract character maximum length from a MySQL type string like "varchar(255)" or "char(10)".
+/// Returns None for types without a length specification (e.g. "text", "int").
+fn parse_max_length(data_type: &str) -> Option<u32> {
+    let start = data_type.find('(')?;
+    let end = data_type.find(')')?;
+    if start < end {
+        data_type[start + 1..end].parse().ok()
+    } else {
+        None
     }
 }

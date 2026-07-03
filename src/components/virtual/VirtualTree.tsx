@@ -22,6 +22,7 @@ interface VirtualTreeProps<T> {
   renderNode: (node: T, depth: number, isExpanded: boolean) => React.ReactNode;
   rowHeight?: number;
   hasChildren?: (data: T) => boolean;
+  onNodeClick?: (key: string, data: T) => void;
 }
 
 export function VirtualTree<T>({
@@ -31,6 +32,7 @@ export function VirtualTree<T>({
   renderNode,
   rowHeight = 28,
   hasChildren: hasChildrenProp,
+  onNodeClick,
 }: VirtualTreeProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -83,7 +85,11 @@ export function VirtualTree<T>({
                 paddingLeft: `${node.depth * 16 + 8}px`,
               }}
               onClick={() => {
-                if (node.hasChildren) onToggle(node.id);
+                if (node.hasChildren) {
+                  onToggle(node.id);
+                } else if (onNodeClick) {
+                  onNodeClick(node.id, node.data);
+                }
               }}
             >
               {node.hasChildren && (

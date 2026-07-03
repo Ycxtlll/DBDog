@@ -13,7 +13,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useQueryStore } from "../../stores/queryStore";
 import * as schemaService from "../../services/schemaService";
-import type { Database, Table as TableType, Column } from "../../types";
+import type { Database, Table as TableType } from "../../types";
 import { VirtualTree, type TreeNode } from "../virtual/VirtualTree";
 import { parseTauriError } from "../../lib/error";
 
@@ -32,7 +32,6 @@ export function SchemaTreePanel() {
   const setSidebarView = useLayoutStore((s) => s.setSidebarView);
   const [databases, setDatabases] = useState<Database[]>([]);
   const [tablesMap, setTablesMap] = useState<Record<string, TableType[]>>({});
-  const [columnsMap, setColumnsMap] = useState<Record<string, Column[]>>({});
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
@@ -82,29 +81,6 @@ export function SchemaTreePanel() {
           setLoadingKey(null);
         }
       }
-    } else if (key.startsWith("table:") && activeId) {
-      const parts = key.split(":");
-      const dbName = parts[1];
-      const tableName = parts[2];
-      const colKey = `${dbName}.${tableName}`;
-      if (!columnsMap[colKey]) {
-        setLoadingKey(key);
-        setErrorMsg(null);
-        try {
-          const details = await schemaService.getTableDetails(
-            activeId,
-            dbName,
-            tableName,
-          );
-          setColumnsMap((prev) => ({ ...prev, [colKey]: details.columns }));
-        } catch (err) {
-          const msg = parseTauriError(err);
-          setErrorMsg(t("loadColumnsFailed", { colKey, msg }));
-          console.error("Failed to load columns:", err);
-        } finally {
-          setLoadingKey(null);
-        }
-      }
     }
   };
 
@@ -122,7 +98,6 @@ export function SchemaTreePanel() {
     if (activeId) {
       schemaService.refreshSchema(activeId);
       setTablesMap({});
-      setColumnsMap({});
       setExpandedKeys(new Set());
       loadDatabases();
     }
@@ -136,21 +111,9 @@ export function SchemaTreePanel() {
       data: { type: "database", name: db.name },
       children: tables.map((table) => {
         const tableKey = `table:${db.name}:${table.name}`;
-        const colKey = `${db.name}.${table.name}`;
-        const columns = columnsMap[colKey] ?? [];
         return {
           id: tableKey,
           data: { type: "table", name: table.name, database: db.name },
-          children: columns.map((col) => ({
-            id: `col:${db.name}:${table.name}:${col.name}`,
-            data: {
-              type: "column",
-              name: col.name,
-              database: db.name,
-              table: table.name,
-              columnType: col.dataType,
-            },
-          })),
         };
       }),
     };
@@ -161,19 +124,9 @@ export function SchemaTreePanel() {
         .map((db) => ({
           ...db,
           children: db.children
-            ?.map((table) => {
-              const colMatch = table.children?.filter((c) =>
-                c.data.name.toLowerCase().includes(search.toLowerCase()),
-              );
-              const tableMatch = table.data.name
-                .toLowerCase()
-                .includes(search.toLowerCase());
-              if (tableMatch || (colMatch && colMatch.length > 0)) {
-                return { ...table, children: colMatch ?? table.children };
-              }
-              return null;
-            })
-            .filter(Boolean) as TreeNode<SchemaNodeData>[] | undefined,
+            ?.filter((table) =>
+              table.data.name.toLowerCase().includes(search.toLowerCase()),
+            )
         }))
         .filter(
           (db) =>
@@ -237,9 +190,12 @@ export function SchemaTreePanel() {
           roots={filteredRoots}
           expandedKeys={expandedKeys}
           onToggle={handleToggle}
-          hasChildren={(data) =>
-            data.type === "database" || data.type === "table"
-          }
+          hasChildren={(data) => data.type === "database"}
+          onNodeClick={(_key, data) => {
+            if (data.type === "table" && data.database) {
+              handleTableClick(data.database, data.name);
+            }
+          }}
           renderNode={(data, _depth, _isExpanded) => {
             if (data.type === "database") {
               const isLoading = loadingKey === `db:${data.name}`;
