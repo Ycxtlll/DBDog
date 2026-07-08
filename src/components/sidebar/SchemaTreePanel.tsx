@@ -67,6 +67,11 @@ export function SchemaTreePanel() {
 
     if (key.startsWith("db:") && activeId) {
       const dbName = key.slice(3);
+      // Auto-select this database for the active query tab
+      const queryStore = useQueryStore.getState();
+      const tabId = queryStore.activeTabId ?? queryStore.newTab();
+      queryStore.setTabSelectedDatabase(tabId, dbName);
+
       if (!tablesMap[dbName]) {
         setLoadingKey(key);
         setErrorMsg(null);
@@ -90,6 +95,7 @@ export function SchemaTreePanel() {
     const tabId = queryStore.activeTabId ?? queryStore.newTab();
     const sql = `SELECT * FROM \`${db}\`.\`${table}\` LIMIT 1000;`;
     queryStore.setTabSql(tabId, sql);
+    queryStore.setTabSelectedDatabase(tabId, db);
     queryStore.setTabEditableTable(tabId, { database: db, table });
     await queryStore.execute(activeId, tabId);
   };

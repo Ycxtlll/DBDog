@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Plus, X, Play, Square, AlignLeft, Zap } from "lucide-react";
+import { Plus, X, Play, Square, AlignLeft, Zap, Database } from "lucide-react";
 import { useQueryStore } from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -59,6 +59,12 @@ export function EditorTabBar() {
         </button>
       </div>
       <div className="flex items-center gap-1 px-2 border-l border-border">
+        {activeTab?.selectedDatabase && (
+          <span className="text-xs text-muted-foreground flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent/50">
+            <Database size={11} />
+            {activeTab.selectedDatabase}
+          </span>
+        )}
         <button
           className="p-1.5 hover:bg-accent text-primary disabled:opacity-50"
           disabled={

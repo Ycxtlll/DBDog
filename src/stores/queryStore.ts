@@ -36,6 +36,7 @@ interface QueryState {
     id: string,
     info: { database: string; table: string },
   ) => void;
+  setTabSelectedDatabase: (id: string, database: string) => void;
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
@@ -238,6 +239,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === id ? { ...t, editableTable: info } : t,
+      ),
+    })),
+
+  setTabSelectedDatabase: (id, database) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, selectedDatabase: database } : t,
       ),
     })),
 }));

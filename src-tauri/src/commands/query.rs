@@ -6,6 +6,28 @@ use crate::state::AppState;
 use crate::utils::escape_mysql_identifier;
 use uuid::Uuid;
 
+/// Execute a `USE <database>` statement via the MySQL text protocol.
+///
+/// `USE` is not supported by MySQL's prepared-statement protocol, so we use
+/// `sqlx::raw_sql` instead of `sqlx::query` to send it via COM_QUERY.
+/// We use `block_in_place` + `block_on` to resolve the raw_sql future
+/// locally, avoiding HRTB lifetime issues with `#[tauri::command]` async fns.
+fn switch_database(
+    conn: &mut sqlx::pool::PoolConnection<sqlx::MySql>,
+    db: &str,
+) -> Result<(), AppError> {
+    let use_sql = format!("USE {}", escape_mysql_identifier(db));
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async {
+            let _ = sqlx::raw_sql(&use_sql)
+                .execute(&mut **conn)
+                .await
+                .map_err(|e| AppError::QueryFailed(e.to_string()))?;
+            Ok::<_, AppError>(())
+        })
+    })
+}
+
 #[tauri::command]
 pub async fn execute_query(
     state: tauri::State<'_, AppState>,
@@ -25,11 +47,7 @@ pub async fn execute_query(
         .map_err(|e| AppError::QueryFailed(e.to_string()))?;
 
     if let Some(ref db) = database {
-        let use_sql = format!("USE {}", escape_mysql_identifier(db));
-        sqlx::query(&use_sql)
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| AppError::QueryFailed(e.to_string()))?;
+        switch_database(&mut conn, db)?;
     }
 
     let result = crate::query::engine::execute_query(
@@ -66,11 +84,7 @@ pub async fn execute_update(
         .map_err(|e| AppError::QueryFailed(e.to_string()))?;
 
     if let Some(ref db) = database {
-        let use_sql = format!("USE {}", escape_mysql_identifier(db));
-        sqlx::query(&use_sql)
-            .execute(&mut *conn)
-            .await
-            .map_err(|e| AppError::QueryFailed(e.to_string()))?;
+        switch_database(&mut conn, db)?;
     }
 
     let result = crate::query::engine::execute_update(&mut conn, &sql).await;
