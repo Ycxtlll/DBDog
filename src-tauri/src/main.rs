@@ -54,6 +54,7 @@ fn main() {
     }));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(AppState::new(handle));
@@ -83,6 +84,8 @@ fn main() {
             commands::zookeeper::zookeeper_get_node,
             commands::zookeeper::zookeeper_get_tree,
             commands::zookeeper::zookeeper_get_server_info,
+            commands::export::execute_export,
+            commands::export::cancel_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

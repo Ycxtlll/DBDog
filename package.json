@@ -1,7 +1,7 @@
 {
   "name": "dbdog",
   "private": true,
-  "version": "0.3.4",
+  "version": "0.3.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,7 @@
     "@codemirror/view": "^6.36.0",
     "@tanstack/react-virtual": "^3.11.0",
     "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@uiw/codemirror-theme-vscode": "^4.23.0",
     "@uiw/react-codemirror": "^4.23.0",
     "ag-grid-community": "^32.3.0",

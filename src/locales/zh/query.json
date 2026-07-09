@@ -18,5 +18,7 @@
   "save": "保存",
   "cancel": "取消",
   "timeAgo": "{{time}}前",
-  "error": "错误"
+  "error": "错误",
+  "deleteSelected": "删除选中行",
+  "noRowsSelected": "请先选择要删除的行"
 }

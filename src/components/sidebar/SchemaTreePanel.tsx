@@ -5,7 +5,6 @@ import {
   RefreshCw,
   ChevronLeft,
   Table,
-  Eye,
   Database as DatabaseIcon,
   Columns3,
 } from "lucide-react";
@@ -16,6 +15,7 @@ import * as schemaService from "../../services/schemaService";
 import type { Database, Table as TableType } from "../../types";
 import { VirtualTree, type TreeNode } from "../virtual/VirtualTree";
 import { parseTauriError } from "../../lib/error";
+import { ExportDialog } from "../export/ExportDialog";
 
 interface SchemaNodeData {
   type: "database" | "table" | "column";
@@ -23,6 +23,13 @@ interface SchemaNodeData {
   database?: string;
   table?: string;
   columnType?: string;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  db: string;
+  table: string;
 }
 
 export function SchemaTreePanel() {
@@ -36,6 +43,16 @@ export function SchemaTreePanel() {
   const [search, setSearch] = useState("");
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [exportTable, setExportTable] = useState<{ db: string; table: string } | null>(null);
+
+  // Close context menu on any click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [contextMenu]);
 
   const loadDatabases = useCallback(async () => {
     if (!activeId || statusMap[activeId] !== "connected") return;
@@ -107,6 +124,26 @@ export function SchemaTreePanel() {
       setExpandedKeys(new Set());
       loadDatabases();
     }
+  };
+
+  const handleExportData = (db: string, table: string) => {
+    if (!activeId) return;
+    setExportTable({ db, table });
+  };
+
+  const handleNodeContextMenu = (
+    _key: string,
+    data: SchemaNodeData,
+    event: React.MouseEvent,
+  ) => {
+    if (data.type !== "table" || !data.database) return;
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      db: data.database,
+      table: data.name,
+    });
   };
 
   const roots: TreeNode<SchemaNodeData>[] = databases.map((db) => {
@@ -202,6 +239,7 @@ export function SchemaTreePanel() {
               handleTableClick(data.database, data.name);
             }
           }}
+          onNodeContextMenu={handleNodeContextMenu}
           renderNode={(data, _depth, _isExpanded) => {
             if (data.type === "database") {
               const isLoading = loadingKey === `db:${data.name}`;
@@ -222,17 +260,6 @@ export function SchemaTreePanel() {
                 <span className="text-sm truncate flex items-center gap-1 flex-1">
                   <Table size={14} className="text-primary shrink-0" />
                   <span className="font-medium truncate">{data.name}</span>
-                  <button
-                    className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (data.database && data.name)
-                        handleTableClick(data.database, data.name);
-                    }}
-                    title={t("viewData")}
-                  >
-                    <Eye size={12} />
-                  </button>
                   <button
                     className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
                     onClick={(e) => {
@@ -262,6 +289,63 @@ export function SchemaTreePanel() {
           }}
         />
       </div>
+
+      {/* Export dialog */}
+      {exportTable && activeId && (
+        <ExportDialog
+          connectionId={activeId}
+          database={exportTable.db}
+          table={exportTable.table}
+          onClose={() => setExportTable(null)}
+        />
+      )}
+
+      {/* Right-click context menu for tables */}
+      {contextMenu && (
+        <div
+          className="fixed z-[60] min-w-[140px] py-1 bg-card border border-border rounded-lg shadow-xl"
+          style={{
+            left: Math.min(contextMenu.x, window.innerWidth - 160),
+            top: Math.min(contextMenu.y, window.innerHeight - 100),
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              handleTableClick(contextMenu.db, contextMenu.table);
+              setContextMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
+          >
+            查看数据
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleExportData(contextMenu.db, contextMenu.table);
+              setContextMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
+          >
+            导出数据
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              useLayoutStore
+                .getState()
+                .openDrawer("tableStructure", {
+                  database: contextMenu.db,
+                  table: contextMenu.table,
+                });
+              setContextMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
+          >
+            查看结构
+          </button>
+        </div>
+      )}
     </div>
   );
 }

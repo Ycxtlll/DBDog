@@ -1,7 +1,7 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, ICellRendererParams, ITooltipParams } from "ag-grid-community";
+import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent } from "ag-grid-community";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, UpdateResult } from "../../types";
@@ -46,6 +46,12 @@ interface DetailCellInfo {
   rowData: Record<string, unknown>;
 }
 
+interface ContextMenuState {
+  x: number;
+  y: number;
+  rowData: Record<string, unknown>;
+}
+
 interface ResultGridProps {
   tab: QueryTab;
 }
@@ -56,9 +62,18 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const activeConnectionId = useConnectionStore((s) => s.activeId);
 
   const [detailCell, setDetailCell] = useState<DetailCellInfo | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
+
+  // Close context menu on any click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [contextMenu]);
 
   // All hooks must be called before any conditional returns (React Rules of Hooks)
   const columnDefs: ColDef[] = useMemo(() => {
@@ -133,23 +148,52 @@ export function ResultGrid({ tab }: ResultGridProps) {
     });
   }, [isQueryResult, result]);
 
-  const handleCellClick = useCallback(
-    (event: { colDef: { field?: string; headerName?: string }; value: unknown; data: unknown }) => {
+  const openRowDetail = useCallback(
+    (row: Record<string, unknown>, focusColumn?: string) => {
+      const firstCol = Object.keys(row)[0] ?? "";
+      const col = focusColumn ?? firstCol;
       setDetailCell({
-        columnName: String(event.colDef.headerName ?? event.colDef.field ?? ""),
-        value: event.value,
-        rowData: (event.data as Record<string, unknown>) ?? {},
+        columnName: col,
+        value: row[col] ?? null,
+        rowData: row,
       });
     },
     [],
   );
 
+  const handleCellClick = useCallback(
+    (event: { colDef: { field?: string; headerName?: string }; value: unknown; data: unknown }) => {
+      const row = (event.data as Record<string, unknown>) ?? {};
+      const col = String(event.colDef.field ?? event.colDef.headerName ?? "");
+      setDetailCell({
+        columnName: col,
+        value: event.value,
+        rowData: row,
+      });
+    },
+    [],
+  );
+
+  const handleCellContextMenu = useCallback(
+    (event: CellContextMenuEvent) => {
+      if (!tab.editableTable) return;
+      const row = (event.data as Record<string, unknown>) ?? {};
+      const mouseEvent = event.event as MouseEvent | null;
+      if (!mouseEvent) return;
+      setContextMenu({
+        x: mouseEvent.clientX,
+        y: mouseEvent.clientY,
+        rowData: row,
+      });
+    },
+    [tab.editableTable],
+  );
+
   const handleSave = useCallback(
-    async (newValue: string) => {
+    async (colName: string, newValue: string) => {
       if (!detailCell || !tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
 
       const qr = result as QueryResult;
-      const colName = detailCell.columnName;
       const { database, table } = tab.editableTable;
 
       const wheres: string[] = [];
@@ -181,7 +225,15 @@ export function ResultGrid({ tab }: ResultGridProps) {
         });
         showSuccess(`Updated \`${table}\`.\`${colName}\``);
 
-        // Refresh the grid by re-executing the original query
+        // Refresh row data in local state
+        setDetailCell((prev) => {
+          if (!prev) return null;
+          const updatedRow = { ...prev.rowData };
+          updatedRow[colName] = newValue === "" ? null : tryParseValue(newValue);
+          return { ...prev, rowData: updatedRow, value: updatedRow[prev.columnName] ?? null };
+        });
+
+        // Refresh the grid
         if (tab.sql.trim()) {
           try {
             const freshResult = await queryService.executeQuery(
@@ -192,7 +244,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
             );
             useQueryStore.getState().setTabResult(tab.id, freshResult, true);
           } catch {
-            // Grid refresh failed silently — the UPDATE itself succeeded
+            // Grid refresh failed silently
           }
         }
       } catch (err) {
@@ -208,7 +260,77 @@ export function ResultGrid({ tab }: ResultGridProps) {
         throw err;
       }
     },
-    [detailCell, tab.editableTable, activeConnectionId, isQueryResult, result],
+    [detailCell, tab.editableTable, tab.sql, tab.selectedDatabase, tab.id, activeConnectionId, isQueryResult, result],
+  );
+
+  // Delete a row (called from context menu or modal)
+  const handleDeleteRow = useCallback(
+    async (row: Record<string, unknown>) => {
+      if (!tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
+
+      const qr = result as QueryResult;
+      const { database, table } = tab.editableTable;
+
+      const wheres: string[] = [];
+      for (const col of qr.columns) {
+        const val = row[col.name];
+        wheres.push(
+          val === null || val === undefined
+            ? `\`${col.name}\` IS NULL`
+            : `\`${col.name}\` = ${formatSqlValue(val)}`,
+        );
+      }
+
+      const sql = `DELETE FROM \`${database}\`.\`${table}\` WHERE ${wheres.join(" AND ")} LIMIT 1;`;
+
+      const startTime = performance.now();
+      try {
+        await queryService.executeUpdate(activeConnectionId, sql, database);
+        const elapsedMs = Math.round(performance.now() - startTime);
+        useQueryStore.getState().addHistory({
+          sql,
+          status: "success",
+          elapsedMs,
+        });
+        showSuccess(`已删除 \`${table}\` 中的 1 行`);
+      } catch (err) {
+        const elapsedMs = Math.round(performance.now() - startTime);
+        const msg = parseTauriError(err);
+        useQueryStore.getState().addHistory({
+          sql,
+          status: "error",
+          error: msg,
+          elapsedMs,
+        });
+        showError(msg);
+        throw err;
+      }
+
+      // Refresh the grid
+      if (tab.sql.trim()) {
+        try {
+          const freshResult = await queryService.executeQuery(
+            activeConnectionId,
+            tab.sql,
+            undefined,
+            tab.selectedDatabase,
+          );
+          useQueryStore.getState().setTabResult(tab.id, freshResult, true);
+        } catch {
+          // Grid refresh failed silently
+        }
+      }
+    },
+    [tab.editableTable, tab.sql, tab.selectedDatabase, tab.id, activeConnectionId, isQueryResult, result],
+  );
+
+  const handleDeleteModalRow = useCallback(
+    async () => {
+      if (!detailCell) return;
+      await handleDeleteRow(detailCell.rowData);
+      setDetailCell(null);
+    },
+    [detailCell, handleDeleteRow],
   );
 
   if (!result) return null;
@@ -250,15 +372,54 @@ export function ResultGrid({ tab }: ResultGridProps) {
           paginationPageSizeSelector={[50, 100, 200, 500]}
           localeText={agGridLocaleText}
           enableCellTextSelection
+          preventDefaultOnContextMenu={true}
           onCellClicked={handleCellClick}
+          onCellContextMenu={handleCellContextMenu}
         />
       </div>
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-[60] min-w-[160px] py-1 bg-card border border-border rounded-lg shadow-xl"
+          style={{
+            left: Math.min(contextMenu.x, window.innerWidth - 180),
+            top: Math.min(contextMenu.y, window.innerHeight - 120),
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              openRowDetail(contextMenu.rowData);
+              setContextMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
+          >
+            查看行数据
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const confirmed = window.confirm("确定要删除这一行吗？\n此操作不可撤销。");
+              if (confirmed) {
+                handleDeleteRow(contextMenu.rowData);
+              }
+              setContextMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors text-left"
+          >
+            删除行
+          </button>
+        </div>
+      )}
 
       {detailCell && (
         <CellDetailModal
           columnName={detailCell.columnName}
           value={detailCell.value}
+          rowData={detailCell.rowData}
           onSave={tab.editableTable ? handleSave : undefined}
+          onDeleteRow={tab.editableTable ? handleDeleteModalRow : undefined}
           onClose={() => setDetailCell(null)}
         />
       )}
@@ -301,4 +462,15 @@ function formatSqlValue(val: unknown): string {
   if (typeof val === "boolean") return val ? "1" : "0";
   const s = String(val);
   return `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+/** Try to parse a value back to its natural JS type for local state updates. */
+function tryParseValue(s: string): unknown {
+  if (s === "") return null;
+  if (s === "null" || s === "NULL") return null;
+  if (s === "true") return true;
+  if (s === "false") return false;
+  const n = Number(s);
+  if (!isNaN(n) && s.trim() !== "") return n;
+  return s;
 }

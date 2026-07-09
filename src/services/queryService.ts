@@ -18,6 +18,20 @@ export async function executeUpdate(
   return invoke("execute_update", { connectionId, sql, database });
 }
 
+export async function executeExport(
+  connectionId: string,
+  database: string,
+  table: string,
+  filePath: string,
+  exportId: string,
+): Promise<{ totalRows: number; elapsedMs: number; filePath: string }> {
+  return invoke("execute_export", { connectionId, database, table, filePath, exportId });
+}
+
+export async function cancelExport(exportId: string): Promise<void> {
+  return invoke("cancel_export", { exportId });
+}
+
 export async function cancelQuery(
   connectionId: string,
   threadId: number,

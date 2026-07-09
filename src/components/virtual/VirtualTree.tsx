@@ -23,6 +23,7 @@ interface VirtualTreeProps<T> {
   rowHeight?: number;
   hasChildren?: (data: T) => boolean;
   onNodeClick?: (key: string, data: T) => void;
+  onNodeContextMenu?: (key: string, data: T, event: React.MouseEvent) => void;
 }
 
 export function VirtualTree<T>({
@@ -33,6 +34,7 @@ export function VirtualTree<T>({
   rowHeight = 28,
   hasChildren: hasChildrenProp,
   onNodeClick,
+  onNodeContextMenu,
 }: VirtualTreeProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -89,6 +91,11 @@ export function VirtualTree<T>({
                   onToggle(node.id);
                 } else if (onNodeClick) {
                   onNodeClick(node.id, node.data);
+                }
+              }}
+              onContextMenu={(e) => {
+                if (onNodeContextMenu) {
+                  onNodeContextMenu(node.id, node.data, e);
                 }
               }}
             >

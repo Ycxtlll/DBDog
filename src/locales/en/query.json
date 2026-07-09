@@ -18,5 +18,7 @@
   "save": "Save",
   "cancel": "Cancel",
   "timeAgo": "{{time}} ago",
-  "error": "Error"
+  "error": "Error",
+  "deleteSelected": "Delete Selected",
+  "noRowsSelected": "Please select rows to delete first"
 }

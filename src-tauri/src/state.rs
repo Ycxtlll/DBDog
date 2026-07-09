@@ -1,12 +1,16 @@
 use crate::connection::manager::PoolManager;
 use crate::connection::storage::ConnectionStorage;
 use crate::schema::cache::SchemaCache;
+use dashmap::DashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub struct AppState {
     pub pool_manager: PoolManager,
     pub storage: ConnectionStorage,
     pub schema_cache: Arc<SchemaCache>,
+    /// Cancellation tokens for in-progress exports (export_id → cancel flag).
+    pub export_cancels: Arc<DashMap<uuid::Uuid, Arc<AtomicBool>>>,
 }
 
 impl AppState {
@@ -15,11 +19,11 @@ impl AppState {
             pool_manager: PoolManager::new(),
             storage: ConnectionStorage::new(app_handle),
             schema_cache: Arc::new(SchemaCache::new()),
+            export_cancels: Arc::new(DashMap::new()),
         }
     }
 
     /// Look up a connection config by ID from storage.
-    /// This is a convenience for commands that need the config directly (e.g. Memcached).
     pub async fn get_config(&self, id: &uuid::Uuid) -> Result<crate::connection::model::ConnectionConfig, crate::error::AppError> {
         let configs = self.storage.load_all().await?;
         configs
