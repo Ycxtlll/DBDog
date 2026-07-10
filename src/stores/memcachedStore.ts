@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { MemcachedEntry, MemcachedServerInfo } from "../types";
 import * as memcachedService from "../services/memcachedService";
 import { parseTauriError } from "../lib/error";
+import { showError } from "./toastStore";
 
 interface MemcachedState {
   /** Currently loaded keys */
@@ -57,10 +58,9 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
         isLoadingKeys: false,
       });
     } catch (err) {
-      set({
-        isLoadingKeys: false,
-        error: parseTauriError(err),
-      });
+      const msg = parseTauriError(err);
+      console.error("[memcached] loadKeys failed:", err);
+      set({ isLoadingKeys: false, error: msg });
     }
   },
 
@@ -74,10 +74,10 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
         isLoadingItem: false,
       });
     } catch (err) {
-      set({
-        isLoadingItem: false,
-        error: parseTauriError(err),
-      });
+      const msg = parseTauriError(err);
+      console.error("[memcached] loadItem failed:", err);
+      showError(msg);
+      set({ isLoadingItem: false, error: msg });
     }
   },
 
@@ -94,7 +94,10 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
         selectedItem: state.selectedKey === key ? null : state.selectedItem,
       });
     } catch (err) {
-      set({ error: parseTauriError(err) });
+      const msg = parseTauriError(err);
+      console.error("[memcached] deleteItem failed:", err);
+      showError(msg);
+      set({ error: msg });
     }
   },
 
@@ -111,10 +114,10 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
         isFlushing: false,
       });
     } catch (err) {
-      set({
-        isFlushing: false,
-        error: parseTauriError(err),
-      });
+      const msg = parseTauriError(err);
+      console.error("[memcached] flushAll failed:", err);
+      showError(msg);
+      set({ isFlushing: false, error: msg });
     }
   },
 
@@ -124,7 +127,9 @@ export const useMemcachedStore = create<MemcachedState>((set, get) => ({
       const info = await memcachedService.getStats(connectionId);
       set({ serverInfo: info });
     } catch (err) {
-      set({ error: parseTauriError(err) });
+      const msg = parseTauriError(err);
+      console.error("[memcached] loadServerInfo failed:", err);
+      set({ error: msg });
     }
   },
 

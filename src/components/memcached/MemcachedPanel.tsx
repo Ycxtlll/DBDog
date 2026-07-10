@@ -152,9 +152,9 @@ export function MemcachedPanel() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-destructive bg-destructive/5 border-b border-destructive/10">
-          <AlertTriangle size={12} />
-          <span className="truncate">{error}</span>
+        <div className="flex items-start gap-1.5 px-2 py-2 text-xs text-destructive bg-destructive/5 border-b border-destructive/10">
+          <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+          <span className="break-all">{error}</span>
         </div>
       )}
 

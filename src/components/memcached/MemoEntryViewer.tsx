@@ -25,6 +25,20 @@ export function MemoEntryViewer({ connectionId, keyName }: MemoEntryViewerProps)
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-2 px-4">
+        <div className="flex items-start gap-2 text-sm text-destructive">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <span className="break-all">{error}</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {t("errorHint", "请检查 Key 是否存在或刷新 Key 列表")}
+        </p>
+      </div>
+    );
+  }
+
   if (!selectedItem) {
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
@@ -65,14 +79,6 @@ export function MemoEntryViewer({ connectionId, keyName }: MemoEntryViewerProps)
             value={formatBytes(selectedItem.sizeBytes ?? valueDisplay.length)}
           />
         </div>
-
-        {/* Error */}
-        {error && (
-          <div className="flex items-start gap-2 text-sm text-destructive">
-            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-            <span className="break-all">{error}</span>
-          </div>
-        )}
 
         {/* Value */}
         <div>

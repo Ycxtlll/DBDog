@@ -89,7 +89,8 @@ impl MemcachedDriver {
         let stream = connect_tcp(config).await?;
         let (mut reader, mut writer) = split_stream(stream);
 
-        let cmd = format!("get {key}\r\n");
+        let encoded_key = percent_encode(key);
+        let cmd = format!("get {encoded_key}\r\n");
         writer.write_all(cmd.as_bytes()).await?;
         writer.flush().await?;
 
@@ -141,7 +142,8 @@ impl MemcachedDriver {
         let stream = connect_tcp(config).await?;
         let (mut reader, mut writer) = split_stream(stream);
 
-        let cmd = format!("delete {key}\r\n");
+        let encoded_key = percent_encode(key);
+        let cmd = format!("delete {encoded_key}\r\n");
         writer.write_all(cmd.as_bytes()).await?;
         writer.flush().await?;
 
@@ -373,9 +375,14 @@ async fn cachedump_fallback(
 }
 
 /// Decode percent-encoded keys from memcached metadump output.
-/// `lru_crawler metadump all` double-encodes keys (e.g. `%253A` instead of `%3A`).
-/// We decode exactly one pass to recover the actual stored key.
+/// `lru_crawler metadump all` double-encodes keys (e.g. `%253A` for `:`),
+/// so we decode two passes to recover the human-readable original key.
 fn percent_decode(input: &str) -> String {
+    let once = percent_decode_once(input);
+    percent_decode_once(&once)
+}
+
+fn percent_decode_once(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -391,6 +398,23 @@ fn percent_decode(input: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Encode a key for the memcached wire protocol.
+/// Memcached stores keys in URL-encoded form, so we encode once before querying.
+fn percent_encode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for b in input.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                out.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    out
 }
 
 fn hex_val(b: u8) -> Option<u8> {
