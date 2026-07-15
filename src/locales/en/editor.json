@@ -1,5 +1,11 @@
 {
   "execute": "Execute",
+  "executeSelection": "Execute Selected",
+  "executeSelectionTooltip": "Execute selected SQL (Ctrl+Enter)",
+  "cut": "Cut",
+  "copy": "Copy",
+  "paste": "Paste",
+  "selectAll": "Select All",
   "format": "Format",
   "explain": "Explain"
 }

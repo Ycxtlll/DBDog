@@ -4,7 +4,13 @@ import { useQueryStore } from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useUiStore } from "../../stores/uiStore";
 
-export function EditorTabBar() {
+export function EditorTabBar({
+  getSqlSelection,
+  hasSelection = false,
+}: {
+  getSqlSelection?: () => { hasSelection: boolean; selectedSql: string };
+  hasSelection?: boolean;
+}) {
   const { t } = useTranslation("editor");
   const { tabs, activeTabId, newTab, closeTab, setActiveTab, execute, cancel } =
     useQueryStore();
@@ -14,7 +20,12 @@ export function EditorTabBar() {
 
   const handleExecute = () => {
     if (!activeTabId || !activeConnectionId) return;
-    execute(activeConnectionId, activeTabId, query.defaultLimit);
+    const sel = getSqlSelection?.();
+    if (sel?.hasSelection) {
+      execute(activeConnectionId, activeTabId, query.defaultLimit, sel.selectedSql);
+    } else {
+      execute(activeConnectionId, activeTabId, query.defaultLimit);
+    }
   };
 
   const handleCancel = () => {
@@ -66,12 +77,16 @@ export function EditorTabBar() {
           </span>
         )}
         <button
-          className="p-1.5 hover:bg-accent text-primary disabled:opacity-50"
+          className={`p-1.5 rounded transition-colors disabled:opacity-50 ${
+            hasSelection
+              ? "bg-primary/15 hover:bg-primary/25 text-primary"
+              : "hover:bg-accent text-primary"
+          }`}
           disabled={
             !activeConnectionId || !activeTabId || activeTab?.isExecuting
           }
           onClick={handleExecute}
-          title={t("execute")}
+          title={hasSelection ? t("executeSelectionTooltip") : t("execute")}
         >
           <Play size={14} />
         </button>

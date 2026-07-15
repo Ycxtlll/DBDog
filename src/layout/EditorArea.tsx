@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryStore } from "../stores/queryStore";
 import { useConnectionStore } from "../stores/connectionStore";
@@ -5,6 +6,7 @@ import { useZookeeperStore } from "../stores/zookeeperStore";
 import { useMemcachedStore } from "../stores/memcachedStore";
 import { EditorTabBar } from "../components/editor/EditorTabBar";
 import { SqlEditor } from "../components/editor/SqlEditor";
+import type { SqlEditorHandle } from "../components/editor/SqlEditor";
 import { ResultGrid } from "../components/grid/ResultGrid";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { TableStructureDrawer } from "../components/drawer/TableStructureDrawer";
@@ -27,30 +29,34 @@ export function EditorArea() {
 
   const zkSelectedNode = useZookeeperStore((s) => s.selectedNode);
   const mcSelectedKey = useMemcachedStore((s) => s.selectedKey);
+  const sqlEditorRef = useRef<SqlEditorHandle>(null);
+  const [hasSelection, setHasSelection] = useState(false);
+
+  const getSqlSelection = () => {
+    return sqlEditorRef.current?.getSelection() ?? { hasSelection: false, selectedSql: "" };
+  };
+
+  const handleSelectionChange = useCallback((sel: boolean) => {
+    setHasSelection(sel);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-background">
       {/* MySQL: tabs + editor + grid */}
       {activeConfig?.type === "mysql" && (
         <>
-          <EditorTabBar />
+          <EditorTabBar getSqlSelection={getSqlSelection} hasSelection={hasSelection} />
           <div className="flex-1 flex flex-col min-h-0">
             {activeTab && (
               <>
                 <div className="flex-1 min-h-0">
                   <SqlEditor
+                    ref={sqlEditorRef}
                     tabId={activeTab.id}
                     sql={activeTab.sql}
                     onChange={(sql) =>
                       useQueryStore.getState().setTabSql(activeTab.id, sql)
                     }
-                    onExecute={() => {
-                      if (activeConnectionId) {
-                        useQueryStore
-                          .getState()
-                          .execute(activeConnectionId, activeTab.id);
-                      }
-                    }}
                     onExecuteSelection={(selectedSql) => {
                       if (activeConnectionId) {
                         useQueryStore
@@ -58,6 +64,7 @@ export function EditorArea() {
                           .execute(activeConnectionId, activeTab.id, undefined, selectedSql);
                       }
                     }}
+                    onSelectionChange={handleSelectionChange}
                   />
                 </div>
                 {activeTab.result && (

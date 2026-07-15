@@ -1,5 +1,11 @@
 {
   "execute": "执行",
+  "executeSelection": "执行选中",
+  "executeSelectionTooltip": "执行选中的SQL (Ctrl+Enter)",
+  "cut": "剪切",
+  "copy": "复制",
+  "paste": "粘贴",
+  "selectAll": "全选",
   "format": "格式化",
   "explain": "分析"
 }
