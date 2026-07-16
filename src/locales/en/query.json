@@ -20,5 +20,6 @@
   "timeAgo": "{{time}} ago",
   "error": "Error",
   "deleteSelected": "Delete Selected",
-  "noRowsSelected": "Please select rows to delete first"
+  "noRowsSelected": "Please select rows to delete first",
+  "noPrimaryKey": "Table has no primary key, cannot generate WHERE clause"
 }

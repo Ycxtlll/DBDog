@@ -120,7 +120,7 @@ export interface QueryTab {
   selectedDatabase?: string;
   isQueryResult?: boolean;
   /** When set, the result grid enables inline editing for this table */
-  editableTable?: { database: string; table: string };
+  editableTable?: { database: string; table: string; primaryKeyColumns: string[] };
 }
 
 export interface QueryHistoryItem {

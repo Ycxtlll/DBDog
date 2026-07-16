@@ -12,6 +12,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useQueryStore } from "../../stores/queryStore";
 import * as schemaService from "../../services/schemaService";
+import * as queryService from "../../services/queryService";
 import type { Database, Table as TableType } from "../../types";
 import { VirtualTree, type TreeNode } from "../virtual/VirtualTree";
 import { parseTauriError } from "../../lib/error";
@@ -113,7 +114,24 @@ export function SchemaTreePanel() {
     const sql = `SELECT * FROM \`${db}\`.\`${table}\` LIMIT 1000;`;
     queryStore.setTabSql(tabId, sql);
     queryStore.setTabSelectedDatabase(tabId, db);
-    queryStore.setTabEditableTable(tabId, { database: db, table });
+
+    try {
+      const keysResult = await queryService.executeQuery(
+        activeId,
+        `SHOW KEYS FROM \`${db}\`.\`${table}\` WHERE Key_name = 'PRIMARY'`,
+        undefined,
+        db,
+      );
+      const colIdx = keysResult.columns.findIndex((c) => c.name === "Column_name");
+      const primaryKeyColumns = colIdx >= 0
+        ? keysResult.rows.map((r) => String(r[colIdx] ?? ""))
+        : [];
+      queryStore.setTabEditableTable(tabId, { database: db, table, primaryKeyColumns });
+    } catch (err) {
+      console.error("Failed to fetch primary key columns:", err);
+      queryStore.setTabEditableTable(tabId, { database: db, table, primaryKeyColumns: [] });
+    }
+
     await queryStore.execute(activeId, tabId);
   };
 

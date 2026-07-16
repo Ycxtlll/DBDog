@@ -20,5 +20,6 @@
   "timeAgo": "{{time}}前",
   "error": "错误",
   "deleteSelected": "删除选中行",
-  "noRowsSelected": "请先选择要删除的行"
+  "noRowsSelected": "请先选择要删除的行",
+  "noPrimaryKey": "该表没有主键，无法生成 WHERE 条件"
 }

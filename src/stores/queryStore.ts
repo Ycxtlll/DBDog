@@ -34,7 +34,7 @@ interface QueryState {
   toggleHistory: () => void;
   setTabEditableTable: (
     id: string,
-    info: { database: string; table: string },
+    info: { database: string; table: string; primaryKeyColumns: string[] },
   ) => void;
   setTabSelectedDatabase: (id: string, database: string) => void;
 }

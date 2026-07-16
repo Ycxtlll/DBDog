@@ -193,18 +193,41 @@ export function ResultGrid({ tab }: ResultGridProps) {
     async (colName: string, newValue: string) => {
       if (!detailCell || !tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
 
-      const qr = result as QueryResult;
-      const { database, table } = tab.editableTable;
+      const { database, table, primaryKeyColumns } = tab.editableTable;
+
+      let pkCols = primaryKeyColumns;
+      if (pkCols.length === 0) {
+        try {
+          const keysResult = await queryService.executeQuery(
+            activeConnectionId,
+            `SHOW KEYS FROM \`${database}\`.\`${table}\` WHERE Key_name = 'PRIMARY'`,
+            undefined,
+            database,
+          );
+          const colIdx = keysResult.columns.findIndex((c) => c.name === "Column_name");
+          if (colIdx >= 0) {
+            pkCols = keysResult.rows.map((r) => String(r[colIdx] ?? ""));
+          }
+          useQueryStore.getState().setTabEditableTable(tab.id, { database, table, primaryKeyColumns: pkCols });
+        } catch {
+          showError(t("noPrimaryKey"));
+          return;
+        }
+      }
 
       const wheres: string[] = [];
-      for (const col of qr.columns) {
-        if (col.name === colName) continue;
-        const val = detailCell.rowData[col.name];
+      for (const pkCol of pkCols) {
+        const val = detailCell.rowData[pkCol];
         wheres.push(
           val === null || val === undefined
-            ? `\`${col.name}\` IS NULL`
-            : `\`${col.name}\` = ${formatSqlValue(val)}`,
+            ? `\`${pkCol}\` IS NULL`
+            : `\`${pkCol}\` = ${formatSqlValue(val)}`,
         );
+      }
+
+      if (wheres.length === 0) {
+        showError(t("noPrimaryKey"));
+        return;
       }
 
       const setClause =
@@ -268,17 +291,41 @@ export function ResultGrid({ tab }: ResultGridProps) {
     async (row: Record<string, unknown>) => {
       if (!tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
 
-      const qr = result as QueryResult;
-      const { database, table } = tab.editableTable;
+      const { database, table, primaryKeyColumns } = tab.editableTable;
+
+      let pkCols = primaryKeyColumns;
+      if (pkCols.length === 0) {
+        try {
+          const keysResult = await queryService.executeQuery(
+            activeConnectionId,
+            `SHOW KEYS FROM \`${database}\`.\`${table}\` WHERE Key_name = 'PRIMARY'`,
+            undefined,
+            database,
+          );
+          const colIdx = keysResult.columns.findIndex((c) => c.name === "Column_name");
+          if (colIdx >= 0) {
+            pkCols = keysResult.rows.map((r) => String(r[colIdx] ?? ""));
+          }
+          useQueryStore.getState().setTabEditableTable(tab.id, { database, table, primaryKeyColumns: pkCols });
+        } catch {
+          showError(t("noPrimaryKey"));
+          return;
+        }
+      }
 
       const wheres: string[] = [];
-      for (const col of qr.columns) {
-        const val = row[col.name];
+      for (const pkCol of pkCols) {
+        const val = row[pkCol];
         wheres.push(
           val === null || val === undefined
-            ? `\`${col.name}\` IS NULL`
-            : `\`${col.name}\` = ${formatSqlValue(val)}`,
+            ? `\`${pkCol}\` IS NULL`
+            : `\`${pkCol}\` = ${formatSqlValue(val)}`,
         );
+      }
+
+      if (wheres.length === 0) {
+        showError(t("noPrimaryKey"));
+        return;
       }
 
       const sql = `DELETE FROM \`${database}\`.\`${table}\` WHERE ${wheres.join(" AND ")} LIMIT 1;`;
