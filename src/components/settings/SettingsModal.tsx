@@ -27,11 +27,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
     >
       <div
         className="w-[360px] max-w-[90vw] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted">
@@ -39,7 +37,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {t("settings:settings")}
           </h3>
           <button
-            onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
             className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             aria-label={t("common:cancel")}
           >

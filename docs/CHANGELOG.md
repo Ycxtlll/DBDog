@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.8] — 2026-07-24
+
+### Fixed
+
+- **窗口关闭 bug** — 修复从右往左选中文字拖到任意窗口边缘（或拖到头）导致窗口关闭的问题。根因是 WebView2 将文字选中误解为拖拽操作。通过全局 CSS `-webkit-user-drag: none` 和 `dragstart` 事件拦截双重修复。
+
+### Changed
+
+- **新建连接表单优化** — host 和 username 不再预填值，`localhost` / `root` 仅作为 placeholder 提示，避免意外使用默认值覆盖用户意图。
+
+---
+
 ## [0.3.7] — 2026-07-15
 
 ### Added

@@ -20,9 +20,9 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
       id: crypto.randomUUID(),
       name: "",
       type: "mysql",
-      host: "localhost",
+      host: "",
       port: 3306,
-      username: "root",
+      username: "",
       password: "",
       database: "",
       maxConnections: 10,
@@ -69,11 +69,9 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
     >
       <div
         className="w-[480px] max-w-[90vw] max-h-[85vh] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted">
