@@ -18,6 +18,8 @@ import enMemcached from "../locales/en/memcached.json";
 import zhMemcached from "../locales/zh/memcached.json";
 import enZookeeper from "../locales/en/zookeeper.json";
 import zhZookeeper from "../locales/zh/zookeeper.json";
+import enExport from "../locales/en/export.json";
+import zhExport from "../locales/zh/export.json";
 const resources = {
   en: {
     common: enCommon,
@@ -28,6 +30,7 @@ const resources = {
     settings: enSettings,
     memcached: enMemcached,
     zookeeper: enZookeeper,
+    export: enExport,
   },
   zh: {
     common: zhCommon,
@@ -38,6 +41,7 @@ const resources = {
     settings: zhSettings,
     memcached: zhMemcached,
     zookeeper: zhZookeeper,
+    export: zhExport,
   },
 };
 

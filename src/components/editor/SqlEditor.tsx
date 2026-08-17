@@ -17,12 +17,6 @@ import {
 } from "react";
 import { useUiStore } from "../../stores/uiStore";
 
-function getSystemTheme(): "dark" | "light" {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
 export interface SqlEditorHandle {
   getSelection(): { hasSelection: boolean; selectedSql: string };
 }
@@ -38,16 +32,18 @@ interface SqlEditorProps {
   sql: string;
   onChange: (sql: string) => void;
   onExecuteSelection?: (selectedSql: string) => void;
+  onExecuteAll?: () => void;
   onSelectionChange?: (hasSelection: boolean) => void;
 }
 
 export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(
   function SqlEditor(
-    { sql, onChange, onExecuteSelection, onSelectionChange },
+    { sql, onChange, onExecuteSelection, onExecuteAll, onSelectionChange },
     ref,
   ) {
     const { t } = useTranslation("editor");
     const { theme, editor: editorSettings } = useUiStore();
+    const resolvedTheme = useUiStore((s) => s.resolvedTheme);
     const cmRef = useRef<ReactCodeMirrorRef>(null);
     const prevHasSelRef = useRef(false);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(
@@ -116,7 +112,9 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(
       if (!view) return;
       const { from, to } = view.state.selection.main;
       if (from !== to) {
-        await navigator.clipboard.writeText(view.state.sliceDoc(from, to));
+        navigator.clipboard
+          .writeText(view.state.sliceDoc(from, to))
+          .catch(() => {});
       }
       closeContextMenu();
     }, [closeContextMenu]);
@@ -126,7 +124,9 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(
       if (!view) return;
       const { from, to } = view.state.selection.main;
       if (from !== to) {
-        await navigator.clipboard.writeText(view.state.sliceDoc(from, to));
+        navigator.clipboard
+          .writeText(view.state.sliceDoc(from, to))
+          .catch(() => {});
         view.dispatch({ changes: { from, to } });
       }
       closeContextMenu();
@@ -173,24 +173,47 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(
     const editorTheme = useMemo(() => {
       if (theme === "dark") return vscodeDark;
       if (theme === "light") return vscodeLight;
-      return getSystemTheme() === "dark" ? vscodeDark : vscodeLight;
-    }, [theme]);
+      return resolvedTheme === "dark" ? vscodeDark : vscodeLight;
+    }, [theme, resolvedTheme]);
 
     const extensions = useMemo(() => {
       const base: import("@codemirror/state").Extension[] = [
         sqlExtension({ dialect: MySQL }),
       ];
-      if (onExecuteSelection) {
+      if (onExecuteSelection || onExecuteAll) {
         base.push(
           Prec.highest(
             keymap.of([
               {
-                key: "Ctrl-Enter",
+                // Mod-Enter: execute selection if present, otherwise the
+                // whole editor (documented in docs/features.md).
+                key: "Mod-Enter",
                 run: (view) => {
                   const { from, to } = view.state.selection.main;
-                  if (from !== to) {
+                  if (from !== to && onExecuteSelection) {
                     onExecuteSelection(view.state.sliceDoc(from, to));
+                  } else {
+                    onExecuteAll?.();
                   }
+                  return true;
+                },
+              },
+              {
+                key: "Mod-Shift-Enter",
+                run: (view) => {
+                  const { from, to } = view.state.selection.main;
+                  if (from !== to && onExecuteSelection) {
+                    onExecuteSelection(view.state.sliceDoc(from, to));
+                    return true;
+                  }
+                  return false;
+                },
+              },
+              {
+                key: "Mod-Shift-f",
+                preventDefault: true,
+                run: () => {
+                  handleFormat();
                   return true;
                 },
               },
@@ -199,7 +222,7 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(
         );
       }
       return base;
-    }, [onExecuteSelection]);
+    }, [onExecuteSelection, onExecuteAll, handleFormat]);
 
     const hasSelection = contextMenu?.hasSelection ?? false;
 

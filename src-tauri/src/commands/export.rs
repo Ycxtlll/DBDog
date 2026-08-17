@@ -2,6 +2,7 @@ use crate::drivers::mysql::metadata::MySqlDriver;
 use crate::drivers::DatabaseMetadata;
 use crate::error::AppError;
 use crate::state::AppState;
+use crate::utils::escape_mysql_identifier;
 use futures_util::stream::TryStreamExt;
 use serde::Serialize;
 use sqlx::Column;
@@ -72,6 +73,19 @@ fn decode_cell_string(row: &sqlx::mysql::MySqlRow, i: usize, type_name: &str) ->
                 for b in bytes { val = (val << 8) | u64::from(b); }
                 val.to_string()
             }).unwrap_or_default()
+    } else if type_name.starts_with("BINARY")
+        || type_name.starts_with("VARBINARY")
+        || type_name.contains("BLOB")
+    {
+        // Binary columns must not go through the String fallback (UTF-8
+        // validation fails and silently yields ""); base64-encode instead,
+        // matching the query engine's rendering of binary values.
+        row.try_get_unchecked::<Vec<u8>, _>(i)
+            .map(|bytes| {
+                use base64::Engine;
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            })
+            .unwrap_or_default()
     } else if type_name == "DATE" {
         row.try_get_unchecked::<chrono::NaiveDate, _>(i).map(|v| v.to_string()).unwrap_or_default()
     } else if type_name == "DATETIME" || type_name == "TIMESTAMP" {
@@ -93,19 +107,37 @@ fn csv_escape(field: &str) -> String {
     }
 }
 
+fn write_err(e: std::io::Error) -> AppError {
+    AppError::QueryFailed(format!("写入文件失败: {e}"))
+}
+
 fn sql_quote(val: &str) -> String {
-    if val.is_empty() {
-        "NULL".to_string()
-    } else {
-        format!("'{}'", val.replace('\\', "\\\\").replace('\'', "\\'"))
+    format!("'{}'", val.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
+/// Decode a keyset pagination value. Returns None when the cell is SQL NULL —
+/// `col > NULL` matches no rows, so the caller must abort with an error
+/// instead of silently truncating the export.
+fn keyset_value(row: &sqlx::mysql::MySqlRow, i: usize) -> Option<String> {
+    if row.try_get_raw(i).map_or(true, |v| v.is_null()) {
+        return None;
     }
+    let type_name = row.column(i).type_info().name().to_uppercase();
+    Some(decode_cell_string(row, i, &type_name))
 }
 
 fn build_keyset_where(order_cols: &[String], last_vals: &[String]) -> String {
     if order_cols.len() == 1 {
-        format!("`{}` > {}", order_cols[0], sql_quote(&last_vals[0]))
+        format!(
+            "{} > {}",
+            escape_mysql_identifier(&order_cols[0]),
+            sql_quote(&last_vals[0])
+        )
     } else {
-        let cols: Vec<String> = order_cols.iter().map(|c| format!("`{}`", c)).collect();
+        let cols: Vec<String> = order_cols
+            .iter()
+            .map(|c| escape_mysql_identifier(c))
+            .collect();
         let vals: Vec<String> = last_vals.iter().map(|v| sql_quote(v)).collect();
         format!("({}) > ({})", cols.join(", "), vals.join(", "))
     }
@@ -177,16 +209,33 @@ pub async fn execute_export(
 
         let all_columns = &details.columns;
 
-        let order_col_names: Vec<String> = {
-            let pks: Vec<_> = all_columns.iter().filter(|c| c.is_primary_key).map(|c| c.name.clone()).collect();
-            if pks.is_empty() { all_columns.iter().map(|c| c.name.clone()).collect() } else { pks }
+        let pk_cols: Vec<String> = all_columns
+            .iter()
+            .filter(|c| c.is_primary_key)
+            .map(|c| c.name.clone())
+            .collect();
+        let has_pk = !pk_cols.is_empty();
+
+        let order_col_names: Vec<String> = if has_pk {
+            pk_cols
+        } else {
+            all_columns.iter().map(|c| c.name.clone()).collect()
         };
 
         let order_indices: Vec<usize> = order_col_names.iter()
             .map(|name| all_columns.iter().position(|c| &c.name == name).unwrap_or(0))
             .collect();
 
-        let order_clause = order_col_names.iter().map(|c| format!("`{}`", c)).collect::<Vec<_>>().join(", ");
+        let order_clause = order_col_names
+            .iter()
+            .map(|c| escape_mysql_identifier(c))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        // database/table come from the frontend — always escape them so a
+        // backtick in either cannot break out of the identifier.
+        let esc_db = escape_mysql_identifier(&database);
+        let esc_table = escape_mysql_identifier(&table);
 
         let batch_size: u32 = 5000;
 
@@ -195,12 +244,18 @@ pub async fn execute_export(
             .map_err(|e| AppError::QueryFailed(format!("无法创建文件: {}", e)))?;
 
         let header: Vec<String> = all_columns.iter().map(|c| csv_escape(&c.name)).collect();
-        file.write_all(header.join(",").as_bytes()).await.unwrap();
-        file.write_all(b"\n").await.unwrap();
+        file.write_all(header.join(",").as_bytes())
+            .await
+            .map_err(write_err)?;
+        file.write_all(b"\n").await.map_err(write_err)?;
 
         let mut conn = pool.acquire().await.map_err(|e| AppError::QueryFailed(e.to_string()))?;
         let mut total_rows: u64 = 0;
         let mut last_pk_values: Option<Vec<String>> = None;
+        // No primary key: keyset pagination over all columns drops rows when
+        // keys contain NULLs or duplicate rows exist on a batch boundary, so
+        // fall back to OFFSET paging (slower, but complete).
+        let mut offset: u64 = 0;
 
         loop {
             // Check cancellation
@@ -209,22 +264,28 @@ pub async fn execute_export(
                 return Err(AppError::QueryFailed("导出已取消".to_string()));
             }
 
-            let sql = if let Some(ref last_vals) = last_pk_values {
+            let sql = if !has_pk {
+                format!(
+                    "SELECT * FROM {}.{} ORDER BY {} LIMIT {} OFFSET {}",
+                    esc_db, esc_table, order_clause, batch_size, offset
+                )
+            } else if let Some(ref last_vals) = last_pk_values {
                 let where_clause = build_keyset_where(&order_col_names, last_vals);
                 format!(
-                    "SELECT * FROM `{}`.`{}` WHERE {} ORDER BY {} LIMIT {}",
-                    database, table, where_clause, order_clause, batch_size
+                    "SELECT * FROM {}.{} WHERE {} ORDER BY {} LIMIT {}",
+                    esc_db, esc_table, where_clause, order_clause, batch_size
                 )
             } else {
                 format!(
-                    "SELECT * FROM `{}`.`{}` ORDER BY {} LIMIT {}",
-                    database, table, order_clause, batch_size
+                    "SELECT * FROM {}.{} ORDER BY {} LIMIT {}",
+                    esc_db, esc_table, order_clause, batch_size
                 )
             };
 
             let mut stream = sqlx::query(&sql).fetch(&mut *conn);
             let mut batch_rows: u64 = 0;
             let mut batch_csv = String::new();
+            let mut keyset_has_null = false;
 
             while let Some(row) = stream.try_next().await.map_err(|e| AppError::QueryFailed(e.to_string()))? {
                 let col_count = row.columns().len();
@@ -236,29 +297,51 @@ pub async fn execute_export(
                 batch_csv.push('\n');
                 batch_rows += 1;
 
-                last_pk_values = Some(
-                    order_indices.iter().map(|&idx| cell_to_string(&row, idx)).collect(),
-                );
+                if has_pk {
+                    let row_vals: Option<Vec<String>> = order_indices
+                        .iter()
+                        .map(|&idx| keyset_value(&row, idx))
+                        .collect();
+                    match row_vals {
+                        Some(v) => last_pk_values = Some(v),
+                        None => keyset_has_null = true,
+                    }
+                }
             }
 
             if batch_rows == 0 { break; }
 
-            file.write_all(batch_csv.as_bytes()).await.unwrap();
+            if keyset_has_null {
+                return Err(AppError::QueryFailed(
+                    "导出中止：排序键（主键）包含 NULL 值，无法继续分页导出".to_string(),
+                ));
+            }
+
+            if !has_pk {
+                offset += batch_rows;
+            }
+
+            file.write_all(batch_csv.as_bytes()).await.map_err(write_err)?;
             total_rows += batch_rows;
             emit_progress(total_rows, "running", None);
 
             if batch_rows < batch_size as u64 { break; }
         }
 
-        file.flush().await.unwrap();
+        file.flush().await.map_err(write_err)?;
         Ok(ExportResult { total_rows, elapsed_ms: start.elapsed().as_millis() as u64, file_path: file_path.to_string_lossy().to_string() })
     }.await;
 
     cancels.remove(&eid);
 
-    match &result {
-        Ok(r) => emit_progress(r.total_rows, "done", None),
-        Err(e) => emit_progress(0, "error", Some(e.to_string())),
+    if cancel_flag.load(Ordering::Relaxed) {
+        // The in-loop check already emitted the terminal "cancelled" event;
+        // don't overwrite it with a contradictory "error" event.
+    } else {
+        match &result {
+            Ok(r) => emit_progress(r.total_rows, "done", None),
+            Err(e) => emit_progress(0, "error", Some(e.to_string())),
+        }
     }
 
     result

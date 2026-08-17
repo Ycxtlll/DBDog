@@ -21,5 +21,7 @@
   "groupPlaceholder": "auto (group by type)",
   "autoGroup": "Auto-group",
   "noConnections": "No connections yet",
-  "confirmDelete": "Delete this connection?"
+  "confirmDelete": "Delete this connection?",
+  "clearSavedPassword": "Clear saved password",
+  "passwordKeepHint": "Leave blank to keep the saved password"
 }

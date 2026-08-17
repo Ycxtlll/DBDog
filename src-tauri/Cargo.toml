@@ -1,6 +1,6 @@
 [package]
 name = "dbdog"
-version = "0.3.8"
+version = "0.3.9"
 description = "DBDog - Cross-platform database GUI tool"
 authors = ["DBDog Team"]
 edition = "2021"

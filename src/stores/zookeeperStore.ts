@@ -12,11 +12,35 @@ interface ZookeeperState {
   error: string | null;
 
   loadTree: (connectionId: string, path?: string, maxDepth?: number) => Promise<void>;
+  /** Lazily fetch the children of a frontier node and merge them into the tree. */
+  expandNode: (connectionId: string, path: string) => Promise<void>;
   loadNode: (connectionId: string, path: string) => Promise<void>;
   loadServerInfo: (connectionId: string) => Promise<void>;
   setCurrentPath: (path: string) => void;
   clearError: () => void;
   refresh: (connectionId: string) => Promise<void>;
+}
+
+/** Find a node by absolute path in the tree (undefined children = frontier). */
+function findZkNode(node: ZkTreeNode, path: string): ZkTreeNode | null {
+  if (node.path === path) return node;
+  const children = node.children ?? [];
+  for (const child of children) {
+    const found = findZkNode(child, path);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Replace the subtree at `path` with `branch`'s children (recursive merge). */
+function mergeBranch(node: ZkTreeNode, path: string, branch: ZkTreeNode): ZkTreeNode {
+  if (node.path === path) {
+    return { ...node, numChildren: branch.numChildren, children: branch.children };
+  }
+  if (!node.children) return node;
+  const children = node.children.map((child) => mergeBranch(child, path, branch));
+  const changed = children.some((c, i) => c !== node.children![i]);
+  return changed ? { ...node, children } : node;
 }
 
 export const useZookeeperStore = create<ZookeeperState>((set, get) => ({
@@ -37,6 +61,19 @@ export const useZookeeperStore = create<ZookeeperState>((set, get) => ({
         isLoadingTree: false,
         error: parseTauriError(err),
       });
+    }
+  },
+
+  expandNode: async (connectionId, path) => {
+    const { rootNode } = get();
+    if (!rootNode) return;
+    const target = findZkNode(rootNode, path);
+    if (!target || target.children !== undefined) return; // already loaded
+    try {
+      const branch = await zookeeperService.getTree(connectionId, path, 1);
+      set({ rootNode: mergeBranch(rootNode, path, branch) });
+    } catch (err) {
+      set({ error: parseTauriError(err) });
     }
   },
 

@@ -21,5 +21,7 @@
   "groupPlaceholder": "自动（按类型分组）",
   "autoGroup": "自动分组",
   "noConnections": "暂无连接",
-  "confirmDelete": "确定删除此连接？"
+  "confirmDelete": "确定删除此连接？",
+  "clearSavedPassword": "清除已保存的密码",
+  "passwordKeepHint": "留空保持已保存的密码不变"
 }

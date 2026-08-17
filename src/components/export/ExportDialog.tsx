@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -29,6 +30,7 @@ export function ExportDialog({
   table,
   onClose,
 }: ExportDialogProps) {
+  const { t } = useTranslation("export");
   type Phase = ExportProgress["phase"] | "idle";
 
   const [totalRows, setTotalRows] = useState(0);
@@ -86,11 +88,6 @@ export function ExportDialog({
     try {
       await queryService.cancelExport(exportIdRef.current);
     } catch { /* ignore */ }
-    onClose();
-  };
-
-  const handleClose = () => {
-    onClose();
   };
 
   const pct = totalRows > 0
@@ -98,6 +95,7 @@ export function ExportDialog({
     : 0;
 
   const idle = phase === "idle";
+  const running = phase === "running";
 
   return (
     <div
@@ -110,20 +108,22 @@ export function ExportDialog({
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
             <h3 className="text-sm font-semibold">
-              导出 {database}.{table}
+              {t("title")} {database}.{table}
             </h3>
-            {phase !== "idle" && (
+            {!idle && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                {phase === "running" && `正在导出... 已读取 ${totalRows.toLocaleString()} 行`}
-                {phase === "done" && `完成 — 共 ${totalRows.toLocaleString()} 行`}
-                {phase === "cancelled" && "已取消"}
-                {phase === "error" && "导出失败"}
+                {running && t("runningStatus", { rows: totalRows.toLocaleString() })}
+                {phase === "done" && t("doneStatus", { rows: totalRows.toLocaleString() })}
+                {phase === "cancelled" && t("cancelled")}
+                {phase === "error" && t("failed")}
               </p>
             )}
           </div>
           <button
-            onClick={idle ? onClose : handleClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={onClose}
+            disabled={running}
+            title={running ? t("cannotCloseWhileRunning") : undefined}
+            className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
@@ -134,7 +134,7 @@ export function ExportDialog({
           {/* Idle: show save path + start button */}
           {idle && (
             <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">保存位置</p>
+              <p className="text-xs text-muted-foreground">{t("saveLocation")}</p>
               <div className="flex items-center gap-2">
                 <span className="flex-1 text-sm font-mono bg-muted px-3 py-2 rounded-md truncate border border-border">
                   {savePath}
@@ -144,14 +144,14 @@ export function ExportDialog({
                   onClick={handleChoosePath}
                   className="shrink-0 px-3 py-2 text-xs font-medium rounded-md border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
                 >
-                  选择
+                  {t("choose")}
                 </button>
               </div>
             </div>
           )}
 
           {/* Running: progress */}
-          {phase === "running" && (
+          {running && (
             <div className="space-y-3">
               <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                 <div
@@ -160,11 +160,11 @@ export function ExportDialog({
                 />
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{totalRows.toLocaleString()} 行</span>
-                <span>正在导出...</span>
+                <span>{t("rowsCount", { rows: totalRows.toLocaleString() })}</span>
+                <span>{t("exporting")}</span>
               </div>
               <p className="text-xs text-muted-foreground truncate">
-                保存至：{savePath}
+                {t("savingTo", { path: savePath })}
               </p>
             </div>
           )}
@@ -173,7 +173,7 @@ export function ExportDialog({
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-green-600">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6 9 17l-5-5"/></svg>
-                导出成功
+                {t("success")}
               </div>
               <p className="text-xs text-muted-foreground truncate">
                 {savePath}
@@ -182,13 +182,13 @@ export function ExportDialog({
           )}
 
           {phase === "error" && (
-            <p className="text-sm text-destructive py-2">{errorMsg || "未知错误"}</p>
+            <p className="text-sm text-destructive py-2">{errorMsg || t("unknownError")}</p>
           )}
 
           {phase === "cancelled" && (
             <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
-              导出已取消
+              {t("exportCancelled")}
             </div>
           )}
         </div>
@@ -201,30 +201,30 @@ export function ExportDialog({
                 onClick={onClose}
                 className="px-4 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
               >
-                取消
+                {t("cancel", { ns: "common" })}
               </button>
               <button
                 onClick={handleStart}
                 className="px-4 py-1.5 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
               >
-                开始导出
+                {t("start")}
               </button>
             </>
           )}
-          {phase === "running" && (
+          {running && (
             <button
               onClick={handleCancel}
               className="px-4 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
             >
-              取消导出
+              {t("cancelExport")}
             </button>
           )}
           {(phase === "done" || phase === "error" || phase === "cancelled") && (
             <button
-              onClick={handleClose}
+              onClick={onClose}
               className="px-4 py-1.5 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
             >
-              关闭
+              {t("close", { ns: "common" })}
             </button>
           )}
         </div>

@@ -54,7 +54,7 @@ export function ToastContainer() {
             <Icon size={16} className={`shrink-0 mt-px ${config.iconColor}`} />
             <div className="flex-1 min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-                {config.label}
+                {toast.title || config.label}
               </div>
               <div className="text-sm text-foreground leading-snug break-words">
                 {toast.message}

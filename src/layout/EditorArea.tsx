@@ -4,6 +4,7 @@ import { useQueryStore } from "../stores/queryStore";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useZookeeperStore } from "../stores/zookeeperStore";
 import { useMemcachedStore } from "../stores/memcachedStore";
+import { useUiStore } from "../stores/uiStore";
 import { EditorTabBar } from "../components/editor/EditorTabBar";
 import { SqlEditor } from "../components/editor/SqlEditor";
 import type { SqlEditorHandle } from "../components/editor/SqlEditor";
@@ -15,7 +16,7 @@ import { ZkNodeViewer } from "../components/zookeeper/ZkNodeViewer";
 import { MemoEntryViewer } from "../components/memcached/MemoEntryViewer";
 
 export function EditorArea() {
-  const { t } = useTranslation(["common", "zookeeper", "memcached"]);
+  const { t } = useTranslation(["common", "query", "zookeeper", "memcached"]);
   const configs = useConnectionStore((s) => s.configs);
   const activeConnectionId = useConnectionStore((s) => s.activeId);
 
@@ -64,6 +65,17 @@ export function EditorArea() {
                           .execute(activeConnectionId, activeTab.id, undefined, selectedSql);
                       }
                     }}
+                    onExecuteAll={() => {
+                      if (activeConnectionId) {
+                        useQueryStore
+                          .getState()
+                          .execute(
+                            activeConnectionId,
+                            activeTab.id,
+                            useUiStore.getState().query.defaultLimit,
+                          );
+                      }
+                    }}
                     onSelectionChange={handleSelectionChange}
                   />
                 </div>
@@ -72,6 +84,16 @@ export function EditorArea() {
                     <ErrorBoundary>
                       <ResultGrid tab={activeTab} />
                     </ErrorBoundary>
+                  </div>
+                )}
+                {!activeTab.result && activeTab.error && (
+                  <div className="flex-[3] min-h-0 border-t border-border overflow-auto p-4">
+                    <div className="text-sm text-destructive font-medium mb-1">
+                      {t("query:error")}
+                    </div>
+                    <pre className="text-xs text-destructive/90 whitespace-pre-wrap break-words font-mono">
+                      {activeTab.error}
+                    </pre>
                   </div>
                 )}
               </>

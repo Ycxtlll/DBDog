@@ -84,12 +84,13 @@ impl ZkDriver {
 
             let result = f(&mut client);
 
-            if let Err(e) = client.close() {
-                if result.is_err() {
-                    return Err(AppError::ZookeeperError(format!("ZK close failed: {e}")));
-                }
+            // Keep the operation's result primary; only surface a close
+            // failure when the operation itself succeeded.
+            if result.is_err() {
+                let _ = client.close();
+                return result;
             }
-
+            client.close()?;
             result
         })
         .await
@@ -203,6 +204,15 @@ impl ZkDriver {
 
         let mut response = Vec::new();
         reader.read_to_end(&mut response).await?;
+
+        if response.is_empty() {
+            // The server accepted the connection but returned nothing —
+            // almost always "4lw commands are not enabled" (it closes at
+            // once). Report that instead of fabricating "unknown" stats.
+            return Err(AppError::ConnectionFailed(
+                "mntr 无输出（ZooKeeper 4lw 命令可能未加入白名单 4lw.commands.whitelist）".into(),
+            ));
+        }
 
         let text = String::from_utf8_lossy(&response);
         parse_mntr(&text)

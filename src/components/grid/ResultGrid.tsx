@@ -10,35 +10,8 @@ import * as queryService from "../../services/queryService";
 import { useQueryStore } from "../../stores/queryStore";
 import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
-
-const agGridLocaleText = {
-  pageSizeSelectorLabel: "每页条数：",
-  ariaPageSizeSelectorLabel: "每页条数",
-  page: "第",
-  of: "页，共",
-  to: "-",
-  firstPage: "首页",
-  previousPage: "上一页",
-  nextPage: "下一页",
-  lastPage: "末页",
-  noRowsToShow: "暂无数据",
-  loadingOoo: "加载中...",
-  ariaSkeletonCellLoading: "数据加载中",
-  ariaSkeletonCellLoadingFailed: "数据加载失败",
-};
-
-function getSystemTheme(): "dark" | "light" {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
-function resolveEffectiveTheme(
-  theme: "light" | "dark" | "system",
-): "light" | "dark" {
-  if (theme === "system") return getSystemTheme();
-  return theme;
-}
+import { confirmDialog } from "../../lib/confirm";
+import { escapeMysqlIdentifier } from "../../lib/sql";
 
 interface DetailCellInfo {
   columnName: string;
@@ -58,7 +31,7 @@ interface ResultGridProps {
 
 export function ResultGrid({ tab }: ResultGridProps) {
   const { t } = useTranslation("query");
-  const { theme } = useUiStore();
+  const resolvedTheme = useUiStore((s) => s.resolvedTheme);
   const activeConnectionId = useConnectionStore((s) => s.activeId);
 
   const [detailCell, setDetailCell] = useState<DetailCellInfo | null>(null);
@@ -66,6 +39,25 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
+
+  const agGridLocaleText = useMemo(
+    () => ({
+      pageSizeSelectorLabel: t("agPageSize"),
+      ariaPageSizeSelectorLabel: t("agPageSize"),
+      page: t("agPage"),
+      of: t("agOf"),
+      to: "-",
+      firstPage: t("agFirstPage"),
+      previousPage: t("agPrevPage"),
+      nextPage: t("agNextPage"),
+      lastPage: t("agLastPage"),
+      noRowsToShow: t("agNoRows"),
+      loadingOoo: t("agLoading"),
+      ariaSkeletonCellLoading: t("agLoading"),
+      ariaSkeletonCellLoadingFailed: t("agLoadFailed"),
+    }),
+    [t],
+  );
 
   // Close context menu on any click outside
   useEffect(() => {
@@ -189,18 +181,37 @@ export function ResultGrid({ tab }: ResultGridProps) {
     [tab.editableTable],
   );
 
-  const handleSave = useCallback(
-    async (colName: string, newValue: string) => {
-      if (!detailCell || !tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
+  /**
+   * Re-run the exact query that produced the current grid — NOT whatever the
+   * user has typed into the editor since (which may be a different or
+   * multi-statement script).
+   */
+  const refreshGrid = useCallback(async () => {
+    const current = useQueryStore.getState().tabs.find((t) => t.id === tab.id);
+    const sql = current?.executedSql?.trim();
+    if (!activeConnectionId || !sql) return;
+    try {
+      const freshResult = await queryService.executeQuery(
+        activeConnectionId,
+        sql,
+        current?.executedLimit,
+        current?.selectedDatabase,
+      );
+      useQueryStore.getState().setTabResult(tab.id, freshResult, true);
+    } catch {
+      // Grid refresh failed — the edit itself already succeeded.
+    }
+  }, [activeConnectionId, tab.id]);
 
-      const { database, table, primaryKeyColumns } = tab.editableTable;
-
-      let pkCols = primaryKeyColumns;
+  /** Fetch/verify the primary-key columns usable for WHERE clauses. */
+  const resolvePkColumns = useCallback(
+    async (database: string, table: string, stored: string[]): Promise<string[]> => {
+      let pkCols = stored;
       if (pkCols.length === 0) {
         try {
           const keysResult = await queryService.executeQuery(
-            activeConnectionId,
-            `SHOW KEYS FROM \`${database}\`.\`${table}\` WHERE Key_name = 'PRIMARY'`,
+            activeConnectionId!,
+            `SHOW KEYS FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} WHERE Key_name = 'PRIMARY'`,
             undefined,
             database,
           );
@@ -210,9 +221,34 @@ export function ResultGrid({ tab }: ResultGridProps) {
           }
           useQueryStore.getState().setTabEditableTable(tab.id, { database, table, primaryKeyColumns: pkCols });
         } catch {
-          showError(t("noPrimaryKey"));
-          return;
+          return [];
         }
+      }
+      // The current result must actually contain every PK column — the user
+      // may have run arbitrary SQL since the grid was produced, and matching
+      // rows by columns that aren't in the result would UPDATE/DELETE wrong
+      // rows (missing values degrade to `pk IS NULL`).
+      if (isQueryResult && result) {
+        const colNames = new Set((result as QueryResult).columns.map((c) => c.name));
+        if (!pkCols.every((c) => colNames.has(c))) {
+          return [];
+        }
+      }
+      return pkCols;
+    },
+    [activeConnectionId, tab.id, isQueryResult, result],
+  );
+
+  const handleSave = useCallback(
+    async (colName: string, newValue: string) => {
+      if (!detailCell || !tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
+
+      const { database, table } = tab.editableTable;
+
+      const pkCols = await resolvePkColumns(database, table, tab.editableTable.primaryKeyColumns);
+      if (pkCols.length === 0) {
+        showError(t("noPrimaryKey"));
+        return;
       }
 
       const wheres: string[] = [];
@@ -220,22 +256,17 @@ export function ResultGrid({ tab }: ResultGridProps) {
         const val = detailCell.rowData[pkCol];
         wheres.push(
           val === null || val === undefined
-            ? `\`${pkCol}\` IS NULL`
-            : `\`${pkCol}\` = ${formatSqlValue(val)}`,
+            ? `${escapeMysqlIdentifier(pkCol)} IS NULL`
+            : `${escapeMysqlIdentifier(pkCol)} = ${formatSqlValue(val)}`,
         );
-      }
-
-      if (wheres.length === 0) {
-        showError(t("noPrimaryKey"));
-        return;
       }
 
       const setClause =
         newValue === ""
-          ? `\`${colName}\` = NULL`
-          : `\`${colName}\` = ${formatSqlValue(newValue)}`;
+          ? `${escapeMysqlIdentifier(colName)} = NULL`
+          : `${escapeMysqlIdentifier(colName)} = ${formatSqlValue(newValue)}`;
 
-      const sql = `UPDATE \`${database}\`.\`${table}\` SET ${setClause} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
+      const sql = `UPDATE ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} SET ${setClause} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
 
       const startTime = performance.now();
       try {
@@ -246,7 +277,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           status: "success",
           elapsedMs,
         });
-        showSuccess(`Updated \`${table}\`.\`${colName}\``);
+        showSuccess(t("cellUpdated", { table, column: colName }));
 
         // Refresh row data in local state
         setDetailCell((prev) => {
@@ -256,20 +287,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           return { ...prev, rowData: updatedRow, value: updatedRow[prev.columnName] ?? null };
         });
 
-        // Refresh the grid
-        if (tab.sql.trim()) {
-          try {
-            const freshResult = await queryService.executeQuery(
-              activeConnectionId,
-              tab.sql,
-              undefined,
-              tab.selectedDatabase,
-            );
-            useQueryStore.getState().setTabResult(tab.id, freshResult, true);
-          } catch {
-            // Grid refresh failed silently
-          }
-        }
+        await refreshGrid();
       } catch (err) {
         const elapsedMs = Math.round(performance.now() - startTime);
         const msg = parseTauriError(err);
@@ -283,7 +301,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
         throw err;
       }
     },
-    [detailCell, tab.editableTable, tab.sql, tab.selectedDatabase, tab.id, activeConnectionId, isQueryResult, result],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detailCell, tab.editableTable, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
   );
 
   // Delete a row (called from context menu or modal)
@@ -291,26 +310,12 @@ export function ResultGrid({ tab }: ResultGridProps) {
     async (row: Record<string, unknown>) => {
       if (!tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
 
-      const { database, table, primaryKeyColumns } = tab.editableTable;
+      const { database, table } = tab.editableTable;
 
-      let pkCols = primaryKeyColumns;
+      const pkCols = await resolvePkColumns(database, table, tab.editableTable.primaryKeyColumns);
       if (pkCols.length === 0) {
-        try {
-          const keysResult = await queryService.executeQuery(
-            activeConnectionId,
-            `SHOW KEYS FROM \`${database}\`.\`${table}\` WHERE Key_name = 'PRIMARY'`,
-            undefined,
-            database,
-          );
-          const colIdx = keysResult.columns.findIndex((c) => c.name === "Column_name");
-          if (colIdx >= 0) {
-            pkCols = keysResult.rows.map((r) => String(r[colIdx] ?? ""));
-          }
-          useQueryStore.getState().setTabEditableTable(tab.id, { database, table, primaryKeyColumns: pkCols });
-        } catch {
-          showError(t("noPrimaryKey"));
-          return;
-        }
+        showError(t("noPrimaryKey"));
+        return;
       }
 
       const wheres: string[] = [];
@@ -318,17 +323,12 @@ export function ResultGrid({ tab }: ResultGridProps) {
         const val = row[pkCol];
         wheres.push(
           val === null || val === undefined
-            ? `\`${pkCol}\` IS NULL`
-            : `\`${pkCol}\` = ${formatSqlValue(val)}`,
+            ? `${escapeMysqlIdentifier(pkCol)} IS NULL`
+            : `${escapeMysqlIdentifier(pkCol)} = ${formatSqlValue(val)}`,
         );
       }
 
-      if (wheres.length === 0) {
-        showError(t("noPrimaryKey"));
-        return;
-      }
-
-      const sql = `DELETE FROM \`${database}\`.\`${table}\` WHERE ${wheres.join(" AND ")} LIMIT 1;`;
+      const sql = `DELETE FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
 
       const startTime = performance.now();
       try {
@@ -339,7 +339,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           status: "success",
           elapsedMs,
         });
-        showSuccess(`已删除 \`${table}\` 中的 1 行`);
+        showSuccess(t("rowDeleted", { table }));
       } catch (err) {
         const elapsedMs = Math.round(performance.now() - startTime);
         const msg = parseTauriError(err);
@@ -353,22 +353,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
         throw err;
       }
 
-      // Refresh the grid
-      if (tab.sql.trim()) {
-        try {
-          const freshResult = await queryService.executeQuery(
-            activeConnectionId,
-            tab.sql,
-            undefined,
-            tab.selectedDatabase,
-          );
-          useQueryStore.getState().setTabResult(tab.id, freshResult, true);
-        } catch {
-          // Grid refresh failed silently
-        }
-      }
+      await refreshGrid();
     },
-    [tab.editableTable, tab.sql, tab.selectedDatabase, tab.id, activeConnectionId, isQueryResult, result],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab.editableTable, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
   );
 
   const handleDeleteModalRow = useCallback(
@@ -410,7 +398,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </span>
         <span>{queryResult.elapsedMs}ms</span>
       </div>
-      <div className={`flex-1 min-h-0 ${resolveEffectiveTheme(theme) === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
+      <div className={`flex-1 min-h-0 ${resolvedTheme === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
         <AgGridReact
           columnDefs={columnDefs}
           rowData={rowData}
@@ -442,20 +430,23 @@ export function ResultGrid({ tab }: ResultGridProps) {
             }}
             className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
           >
-            查看行数据
+            {t("viewRowData")}
           </button>
           <button
             type="button"
-            onClick={() => {
-              const confirmed = window.confirm("确定要删除这一行吗？\n此操作不可撤销。");
-              if (confirmed) {
-                handleDeleteRow(contextMenu.rowData);
-              }
+            onClick={async () => {
               setContextMenu(null);
+              const confirmed = await confirmDialog(
+                t("confirmDeleteRow"),
+                t("deleteRow"),
+              );
+              if (confirmed) {
+                handleDeleteRow(contextMenu.rowData).catch(() => {});
+              }
             }}
             className="w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors text-left"
           >
-            删除行
+            {t("deleteRow")}
           </button>
         </div>
       )}

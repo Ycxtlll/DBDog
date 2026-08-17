@@ -75,7 +75,7 @@ impl MemcachedDriver {
         let keys: Vec<String> = filtered.into_iter().take(5000).collect();
 
         Ok(MemcachedKeyList {
-            total_keys: keys.len(),
+            total_keys: total,
             keys,
             truncated,
         })
@@ -89,8 +89,10 @@ impl MemcachedDriver {
         let stream = connect_tcp(config).await?;
         let (mut reader, mut writer) = split_stream(stream);
 
-        let encoded_key = percent_encode(key);
-        let cmd = format!("get {encoded_key}\r\n");
+        // The ASCII protocol addresses keys verbatim (verified against a real
+        // server: `get c%3Ad` misses a key stored as `c:d`), so send the raw
+        // key. Keys containing whitespace are unaddressable over ASCII.
+        let cmd = format!("get {}\r\n", sanitize_wire_key(key)?);
         writer.write_all(cmd.as_bytes()).await?;
         writer.flush().await?;
 
@@ -142,8 +144,7 @@ impl MemcachedDriver {
         let stream = connect_tcp(config).await?;
         let (mut reader, mut writer) = split_stream(stream);
 
-        let encoded_key = percent_encode(key);
-        let cmd = format!("delete {encoded_key}\r\n");
+        let cmd = format!("delete {}\r\n", sanitize_wire_key(key)?);
         writer.write_all(cmd.as_bytes()).await?;
         writer.flush().await?;
 
@@ -234,7 +235,9 @@ async fn stats(
         let mut line = String::new();
         reader.read_line(&mut line).await?;
 
-        if line == "END\r\n" {
+        // read_line returns an empty string on EOF — without this check a
+        // server that closes mid-response spins this loop forever.
+        if line.is_empty() || line == "END\r\n" {
             break;
         }
 
@@ -281,8 +284,14 @@ async fn metadump_all(
     let mut line = String::new();
     reader.read_line(&mut line).await?;
 
-    if line.starts_with("ERROR") || line.starts_with("CLIENT_ERROR") {
-        // Fallback to stats cachedump
+    if matches!(
+        line.trim_end_matches("\r\n"),
+        "ERROR" | "CLIENT_ERROR" | "SERVER_ERROR" | "BUSY" | "FAILED"
+    ) || line.starts_with("CLIENT_ERROR")
+        || line.starts_with("SERVER_ERROR")
+    {
+        // lru_crawler unsupported/disabled (ERROR), busy (BUSY) or failed —
+        // fall back to stats cachedump.
         return cachedump_fallback(reader, writer).await;
     }
 
@@ -292,7 +301,7 @@ async fn metadump_all(
     loop {
         let mut next = String::new();
         reader.read_line(&mut next).await?;
-        if next == "END\r\n" {
+        if next.is_empty() || next == "END\r\n" {
             break;
         }
         parse_metadump_line(&next, &mut keys);
@@ -325,7 +334,7 @@ async fn cachedump_fallback(
     loop {
         let mut line = String::new();
         reader.read_line(&mut line).await?;
-        if line == "END\r\n" {
+        if line.is_empty() || line == "END\r\n" {
             break;
         }
         let trimmed = line.trim_end_matches("\r\n");
@@ -353,7 +362,7 @@ async fn cachedump_fallback(
         loop {
             let mut line = String::new();
             reader.read_line(&mut line).await?;
-            if line == "END\r\n" {
+            if line.is_empty() || line == "END\r\n" {
                 break;
             }
             let trimmed = line.trim_end_matches("\r\n");
@@ -374,15 +383,12 @@ async fn cachedump_fallback(
     Ok(keys)
 }
 
-/// Decode percent-encoded keys from memcached metadump output.
-/// `lru_crawler metadump all` double-encodes keys (e.g. `%253A` for `:`),
-/// so we decode two passes to recover the human-readable original key.
+/// Decode a percent-encoded key from memcached metadump output.
+/// `lru_crawler metadump all` percent-encodes keys exactly once (verified
+/// against a real server: key `a%20b` is reported as `a%2520b`, `c:d` as
+/// `c%3Ad`), so we decode exactly once — decoding twice would corrupt any
+/// key that legitimately contains `%HH`-looking text.
 fn percent_decode(input: &str) -> String {
-    let once = percent_decode_once(input);
-    percent_decode_once(&once)
-}
-
-fn percent_decode_once(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -400,21 +406,43 @@ fn percent_decode_once(input: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Encode a key for the memcached wire protocol.
-/// Memcached stores keys in URL-encoded form, so we encode once before querying.
-fn percent_encode(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for b in input.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char);
-            }
-            _ => {
-                out.push_str(&format!("%{:02X}", b));
-            }
-        }
+/// Validate a key before placing it verbatim on the command line. Keys with
+/// whitespace/control characters cannot be expressed in the ASCII protocol —
+/// refuse them instead of silently issuing a malformed (multi-get) command.
+fn sanitize_wire_key(key: &str) -> Result<&str, AppError> {
+    if key.is_empty()
+        || key.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err(AppError::MemcachedProtocolError(format!(
+            "Key 无法通过 ASCII 协议访问（包含空白或控制字符）: {key:?}"
+        )));
     }
-    out
+    Ok(key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percent_decode_single_pass() {
+        // metadump reports the percent-escaped form of the raw key
+        assert_eq!(percent_decode("c%3Ad"), "c:d");
+        assert_eq!(percent_decode("a%2520b"), "a%20b"); // raw key literally contains %20
+        assert_eq!(percent_decode("plain_key-1.2"), "plain_key-1.2");
+        assert_eq!(percent_decode("%E4%B8%AD"), "中");
+        // Unterminated escape is kept verbatim
+        assert_eq!(percent_decode("100%"), "100%");
+        assert_eq!(percent_decode("bad%2"), "bad%2");
+    }
+
+    #[test]
+    fn sanitize_wire_key_rules() {
+        assert!(sanitize_wire_key("user:42").is_ok());
+        assert!(sanitize_wire_key("").is_err());
+        assert!(sanitize_wire_key("has space").is_err());
+        assert!(sanitize_wire_key("tab\tkey").is_err());
+    }
 }
 
 fn hex_val(b: u8) -> Option<u8> {

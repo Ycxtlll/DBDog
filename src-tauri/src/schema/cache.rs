@@ -66,15 +66,25 @@ impl SchemaCache {
         }
     }
 
+    /// Fetch a cached value, evicting it if expired. Expired entries were
+    /// previously left in the map forever (slow memory leak across many
+    /// databases/tables until the connection was invalidated).
+    fn get_cached(&self, key: &CacheKey) -> Option<Value> {
+        if let Some(v) = self.l1.get(key) {
+            if v.is_expired_l1() {
+                drop(v);
+                self.l1.remove(key);
+                return None;
+            }
+            return Some(v.data.clone());
+        }
+        None
+    }
+
     pub fn get_databases(&self, conn_id: Uuid) -> Option<Vec<Database>> {
         let key = Self::key(conn_id, "_global", ObjectType::Database, "_all");
-        self.l1.get(&key).and_then(|v| {
-            if v.is_expired_l1() {
-                None
-            } else {
-                serde_json::from_value(v.data.clone()).ok()
-            }
-        })
+        self.get_cached(&key)
+            .and_then(|d| serde_json::from_value(d).ok())
     }
 
     pub fn set_databases(&self, conn_id: Uuid, databases: &[Database]) {
@@ -92,13 +102,8 @@ impl SchemaCache {
 
     pub fn get_tables(&self, conn_id: Uuid, db: &str) -> Option<Vec<Table>> {
         let key = Self::key(conn_id, db, ObjectType::Table, "_all");
-        self.l1.get(&key).and_then(|v| {
-            if v.is_expired_l1() {
-                None
-            } else {
-                serde_json::from_value(v.data.clone()).ok()
-            }
-        })
+        self.get_cached(&key)
+            .and_then(|d| serde_json::from_value(d).ok())
     }
 
     pub fn set_tables(&self, conn_id: Uuid, db: &str, tables: &[Table]) {
@@ -116,13 +121,8 @@ impl SchemaCache {
 
     pub fn get_table_details(&self, conn_id: Uuid, db: &str, table: &str) -> Option<TableDetails> {
         let key = Self::key(conn_id, db, ObjectType::TableDetails, table);
-        self.l1.get(&key).and_then(|v| {
-            if v.is_expired_l1() {
-                None
-            } else {
-                serde_json::from_value(v.data.clone()).ok()
-            }
-        })
+        self.get_cached(&key)
+            .and_then(|d| serde_json::from_value(d).ok())
     }
 
     pub fn set_table_details(&self, conn_id: Uuid, db: &str, table: &str, details: &TableDetails) {
@@ -161,13 +161,13 @@ impl SchemaCache {
 }
 
 /// Extracts the first SQL token (keyword/identifier) from a statement,
-/// skipping leading whitespace and simple `--` and `/* */` comments.
+/// skipping leading whitespace and `--`, `#` and `/* */` comments.
 /// This is a lightweight lexical scan, not a full parser.
 fn first_sql_token(sql: &str) -> Option<String> {
     let mut s = sql;
     loop {
         s = s.trim_start();
-        if s.starts_with("--") {
+        if s.starts_with("--") || s.starts_with('#') {
             if let Some(idx) = s.find('\n') {
                 s = &s[idx + 1..];
                 continue;
@@ -188,5 +188,20 @@ fn first_sql_token(sql: &str) -> Option<String> {
             return None;
         }
         return Some(s[..end].to_ascii_uppercase());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_token_skips_all_comment_styles() {
+        assert_eq!(first_sql_token("SELECT 1").as_deref(), Some("SELECT"));
+        assert_eq!(first_sql_token("-- lead comment\nDROP TABLE t").as_deref(), Some("DROP"));
+        assert_eq!(first_sql_token("# hash comment\nALTER TABLE t ADD c INT").as_deref(), Some("ALTER"));
+        assert_eq!(first_sql_token("/* block */ create table t (id INT)").as_deref(), Some("CREATE"));
+        assert_eq!(first_sql_token("-- only a comment").is_none(), true);
+        assert_eq!(first_sql_token("   ").is_none(), true);
     }
 }

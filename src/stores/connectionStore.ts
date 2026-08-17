@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { ConnectionConfig, ConnectionStatus, ServerInfo } from "../types";
 import * as connectionService from "../services/connectionService";
+import { parseTauriError } from "../lib/error";
+import { showError } from "./toastStore";
 
 interface ConnectionState {
   configs: ConnectionConfig[];
@@ -22,8 +24,14 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
   serverInfoMap: {},
 
   loadConfigs: async () => {
-    const configs = await connectionService.listConnections();
-    set({ configs });
+    try {
+      const configs = await connectionService.listConnections();
+      set({ configs });
+    } catch (err) {
+      // Startup backend failure would otherwise be invisible.
+      showError(parseTauriError(err));
+      console.error("Failed to load connections:", err);
+    }
   },
 
   saveConfig: async (config) => {
@@ -68,10 +76,17 @@ export const useConnectionStore = create<ConnectionState>((set) => ({
 
   disconnect: async (id) => {
     await connectionService.disconnect(id);
-    set((state) => ({
-      statusMap: { ...state.statusMap, [id]: "disconnected" },
-      serverInfoMap: { ...state.serverInfoMap },
-    }));
+    set((state) => {
+      // Drop the stale server info and stop pointing the editor at a dead
+      // connection — otherwise Execute stays enabled and fires into a closed
+      // backend while the status bar reads "disconnected".
+      const { [id]: _removed, ...serverInfoMap } = state.serverInfoMap;
+      return {
+        statusMap: { ...state.statusMap, [id]: "disconnected" },
+        serverInfoMap,
+        activeId: state.activeId === id ? null : state.activeId,
+      };
+    });
   },
 
   setActiveId: (id) => set({ activeId: id }),

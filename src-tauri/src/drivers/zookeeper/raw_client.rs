@@ -5,7 +5,7 @@
 //! serialization for the subset of the protocol we need.
 
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use crate::error::AppError;
@@ -244,7 +244,7 @@ impl ReplyHeader {
 
 const OP_GET_DATA: i32 = 4;
 const OP_GET_CHILDREN: i32 = 8;
-const OP_PING: i32 = 11;
+const OP_CLOSE_SESSION: i32 = -11;
 
 // ── Raw client ───────────────────────────────────────────────────────
 
@@ -257,13 +257,29 @@ impl ZkRawClient {
     /// Connect to a ZK server and perform the handshake.
     pub fn connect(host: &str, port: u16, timeout: Duration) -> Result<Self, AppError> {
         let addr = format!("{host}:{port}");
-        let stream = TcpStream::connect_timeout(
-            &addr
-                .parse()
-                .map_err(|e| AppError::ConnectionFailed(format!("无效地址: {e}")))?,
-            timeout,
-        )
-        .map_err(|e| AppError::ConnectionFailed(format!("ZK 连接失败 ({}): {e}", addr)))?;
+        // Resolve via DNS so hostnames (and multi-A-record hosts) work;
+        // `SocketAddr::from_str` would only accept literal IP:port strings.
+        let candidates = addr
+            .to_socket_addrs()
+            .map_err(|e| AppError::ConnectionFailed(format!("无法解析地址 {addr}: {e}")))?;
+        let mut last_err = None;
+        let mut stream = None;
+        for sockaddr in candidates {
+            match TcpStream::connect_timeout(&sockaddr, timeout) {
+                Ok(s) => {
+                    stream = Some(s);
+                    break;
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+        let stream = stream.ok_or_else(|| {
+            AppError::ConnectionFailed(format!(
+                "ZK 连接失败 ({}): {}",
+                addr,
+                last_err.map(|e| e.to_string()).unwrap_or_else(|| "no address".into())
+            ))
+        })?;
 
         stream
             .set_read_timeout(Some(Duration::from_secs(15)))
@@ -371,9 +387,11 @@ impl ZkRawClient {
         Ok((data, stat))
     }
 
-    /// Graceful close — flush pending with a ping, then shutdown.
+    /// Graceful close — send the close-session opcode so the server drops
+    /// the session immediately instead of waiting for the session timeout,
+    /// then shut the socket down. Best effort: errors are swallowed.
     pub fn close(mut self) -> Result<(), AppError> {
-        let _ = self.request(OP_PING, &[]);
+        let _ = self.request(OP_CLOSE_SESSION, &[]);
         let _ = self.stream.shutdown(std::net::Shutdown::Both);
         Ok(())
     }

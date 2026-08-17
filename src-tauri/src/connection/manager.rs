@@ -20,7 +20,12 @@ impl PoolManager {
     }
 
     pub async fn connect(&self, id: Uuid, pool: MySqlPool) {
-        self.pools.entry(id).or_insert(pool);
+        // Replace any existing pool: keeping the old one via or_insert would
+        // pin a dead pool forever (server restart, network drop) and the
+        // freshly created pool's connections would never be used.
+        if let Some(old) = self.pools.insert(id, pool) {
+            old.close().await;
+        }
     }
 
     pub fn get(&self, id: &Uuid) -> Option<MySqlPool> {

@@ -91,21 +91,33 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     get().setTabExecuting(id, true);
     get().setTabError(id, "");
     get().setTabCancelled(id, false);
-    const tab = get().tabs.find((t) => t.id === id);
-    if (!tab) return;
-    const rawSql = (selectedSql ?? tab.sql).trim();
-    if (!rawSql) return;
 
-    const statements = splitSqlStatements(rawSql);
-    if (statements.length === 0) return;
-
-    const startTime = performance.now();
-    let currentDatabase = tab.selectedDatabase;
-    let finalResult: QueryResult | UpdateResult | undefined;
-    let finalIsQuery = false;
-    let totalRowsCount = 0;
-
+    // All early returns must stay inside try/finally — leaving isExecuting
+    // stuck true permanently disables the Execute button for the tab.
     try {
+      const tab = get().tabs.find((t) => t.id === id);
+      if (!tab) return;
+      const rawSql = (selectedSql ?? tab.sql).trim();
+      if (!rawSql) return;
+
+      const statements = splitSqlStatements(rawSql);
+      if (statements.length === 0) return;
+
+      // Remember the exact query (and limit) that produced the next result,
+      // so the grid can refresh without re-running whatever the user has
+      // typed into the editor since.
+      set((state) => ({
+        tabs: state.tabs.map((t) =>
+          t.id === id ? { ...t, executedSql: rawSql, executedLimit: limit } : t,
+        ),
+      }));
+
+      const startTime = performance.now();
+      let currentDatabase = tab.selectedDatabase;
+      let finalResult: QueryResult | UpdateResult | undefined;
+      let finalIsQuery = false;
+      let totalRowsCount = 0;
+
       for (let i = 0; i < statements.length; i++) {
         const stmt = statements[i];
         const isLast = i === statements.length - 1;
@@ -168,15 +180,14 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         rowsCount: totalRowsCount,
       });
     } catch (err) {
-      const elapsedMs = Math.round(performance.now() - startTime);
       const msg = parseTauriError(err);
       get().setTabError(id, msg);
       showError(msg);
       get().addHistory({
-        sql: rawSql,
+        sql: (selectedSql ?? get().tabs.find((t) => t.id === id)?.sql ?? "").trim(),
         status: "error",
         error: msg,
-        elapsedMs,
+        elapsedMs: 0,
       });
     } finally {
       get().setTabExecuting(id, false);

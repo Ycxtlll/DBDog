@@ -25,5 +25,6 @@
   "empty": "（空）",
   "loading": "加载中...",
   "never": "永不过期",
-  "selectKeyHint": "从侧边栏选择一个 Key 查看值"
+  "selectKeyHint": "从侧边栏选择一个 Key 查看值",
+  "errorHint": "请检查 Key 是否存在或刷新 Key 列表"
 }

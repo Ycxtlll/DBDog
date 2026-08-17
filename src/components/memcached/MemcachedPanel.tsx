@@ -13,6 +13,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useMemcachedStore } from "../../stores/memcachedStore";
 import { VirtualList } from "../virtual/VirtualList";
+import { confirmDialog } from "../../lib/confirm";
 export function MemcachedPanel() {
   const { t } = useTranslation("memcached");
   const activeId = useConnectionStore((s) => s.activeId);
@@ -61,13 +62,13 @@ export function MemcachedPanel() {
 
   const handleDeleteItem = async (key: string) => {
     if (!activeId) return;
-    if (!confirm(t("confirmDelete", { key }))) return;
+    if (!(await confirmDialog(t("confirmDelete", { key })))) return;
     await deleteItem(activeId, key);
   };
 
   const handleFlushAll = async () => {
     if (!activeId) return;
-    if (!confirm(t("confirmFlushAll"))) return;
+    if (!(await confirmDialog(t("confirmFlushAll")))) return;
     await flushAll(activeId);
   };
 

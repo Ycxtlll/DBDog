@@ -51,23 +51,47 @@ impl ConnectionStorage {
 
     pub async fn save(&self, config: &ConnectionConfig) -> Result<(), AppError> {
         let mut configs = self.load_all().await?;
+        let existing_hash = configs
+            .iter()
+            .find(|c| c.id == config.id)
+            .and_then(|c| c.password_hash.clone());
         let pos = configs.iter().position(|c| c.id == config.id);
         if let Some(idx) = pos {
-            configs[idx] = config.clone();
+            // Password semantics:
+            //   Some(non-empty) → replace the stored credential
+            //   Some("")        → explicitly clear the stored credential
+            //   None            → keep the previously stored credential
+            let mut merged = config.clone();
+            merged.password_hash = existing_hash;
+            merged.password = None;
+            match config.password.as_deref() {
+                Some(p) if !p.is_empty() => {
+                    let encrypted =
+                        crypto::encrypt_secret("dbdog", &config.id.to_string(), p)?;
+                    merged.password_hash = Some(encrypted);
+                }
+                Some(_) => {
+                    merged.password_hash = None;
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        let _ = ::keyring::Entry::new("dbdog", &config.id.to_string())
+                            .and_then(|e| e.delete_credential());
+                    }
+                }
+                None => {}
+            }
+            configs[idx] = merged;
         } else {
-            configs.push(config.clone());
-        }
-
-        // Persist password using platform-native crypto
-        if let Some(ref password) = config.password {
-            if !password.is_empty() {
-                let encrypted =
-                    crypto::encrypt_secret("dbdog", &config.id.to_string(), password)?;
-                let pos2 = configs.iter().position(|c| c.id == config.id);
-                if let Some(idx) = pos2 {
-                    configs[idx].password_hash = Some(encrypted);
+            let mut new_config = config.clone();
+            new_config.password_hash = None;
+            if let Some(p) = config.password.as_deref() {
+                if !p.is_empty() {
+                    new_config.password_hash =
+                        Some(crypto::encrypt_secret("dbdog", &config.id.to_string(), p)?);
                 }
             }
+            new_config.password = None;
+            configs.push(new_config);
         }
         let mut to_save = configs.clone();
         for c in &mut to_save {
@@ -101,8 +125,9 @@ impl ConnectionStorage {
         }
         let mut to_save = configs.clone();
         for c in &mut to_save {
+            // Only the in-memory plaintext must be stripped; password_hash is
+            // the persisted credential for surviving connections and must stay.
             c.password = None;
-            c.password_hash = None;
         }
 
         let path = self.config_path()?;

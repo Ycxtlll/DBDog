@@ -16,6 +16,7 @@ import * as queryService from "../../services/queryService";
 import type { Database, Table as TableType } from "../../types";
 import { VirtualTree, type TreeNode } from "../virtual/VirtualTree";
 import { parseTauriError } from "../../lib/error";
+import { escapeMysqlIdentifier } from "../../lib/sql";
 import { ExportDialog } from "../export/ExportDialog";
 
 interface SchemaNodeData {
@@ -111,14 +112,14 @@ export function SchemaTreePanel() {
     if (!activeId) return;
     const queryStore = useQueryStore.getState();
     const tabId = queryStore.activeTabId ?? queryStore.newTab();
-    const sql = `SELECT * FROM \`${db}\`.\`${table}\` LIMIT 1000;`;
+    const sql = `SELECT * FROM ${escapeMysqlIdentifier(db)}.${escapeMysqlIdentifier(table)} LIMIT 1000;`;
     queryStore.setTabSql(tabId, sql);
     queryStore.setTabSelectedDatabase(tabId, db);
 
     try {
       const keysResult = await queryService.executeQuery(
         activeId,
-        `SHOW KEYS FROM \`${db}\`.\`${table}\` WHERE Key_name = 'PRIMARY'`,
+        `SHOW KEYS FROM ${escapeMysqlIdentifier(db)}.${escapeMysqlIdentifier(table)} WHERE Key_name = 'PRIMARY'`,
         undefined,
         db,
       );
@@ -137,7 +138,9 @@ export function SchemaTreePanel() {
 
   const handleRefresh = () => {
     if (activeId) {
-      schemaService.refreshSchema(activeId);
+      schemaService.refreshSchema(activeId).catch((err) => {
+        console.error("Failed to refresh schema:", err);
+      });
       setTablesMap({});
       setExpandedKeys(new Set());
       loadDatabases();
@@ -335,7 +338,7 @@ export function SchemaTreePanel() {
             }}
             className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
           >
-            查看数据
+            {t("viewData")}
           </button>
           <button
             type="button"
@@ -345,7 +348,7 @@ export function SchemaTreePanel() {
             }}
             className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
           >
-            导出数据
+            {t("exportData")}
           </button>
           <button
             type="button"
@@ -360,7 +363,7 @@ export function SchemaTreePanel() {
             }}
             className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
           >
-            查看结构
+            {t("viewStructure")}
           </button>
         </div>
       )}

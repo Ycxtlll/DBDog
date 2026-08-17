@@ -25,5 +25,6 @@
   "empty": "(empty)",
   "loading": "Loading...",
   "never": "never",
-  "selectKeyHint": "Select a key from the sidebar to view value"
+  "selectKeyHint": "Select a key from the sidebar to view value",
+  "errorHint": "Check that the key still exists, or refresh the key list"
 }

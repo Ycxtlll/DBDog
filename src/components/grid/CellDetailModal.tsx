@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
+import { confirmDialog } from "../../lib/confirm";
 
 interface CellDetailModalProps {
   columnName: string;
@@ -77,6 +78,8 @@ export function CellDetailModal({
       await onSave(editingField, editText);
       setEditingField(null);
     } catch {
+      // Error already surfaced by the caller; stay in edit mode.
+    } finally {
       setSaving(false);
     }
   };
@@ -88,13 +91,18 @@ export function CellDetailModal({
       await onSave(editingField, "");
       setEditingField(null);
     } catch {
+      // Error already surfaced by the caller; stay in edit mode.
+    } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteRow = async () => {
     if (!onDeleteRow || deleting) return;
-    const confirmed = window.confirm("确定要删除这一行吗？\n此操作不可撤销。");
+    const confirmed = await confirmDialog(
+      t("confirmDeleteRow"),
+      t("deleteRow"),
+    );
     if (!confirmed) return;
     setDeleting(true);
     try {
@@ -109,10 +117,13 @@ export function CellDetailModal({
     const text = columns
       .map((col) => `${col}: ${formatValue(rowData[col])}`)
       .join("\n");
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
   };
 
   const isNull = (v: unknown) => v === null || v === undefined;
@@ -127,9 +138,9 @@ export function CellDetailModal({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-sm font-medium">行数据</span>
+            <span className="text-sm font-medium">{t("rowData")}</span>
             <span className="text-xs text-muted-foreground">
-              {columns.length} 列
+              {t("columnCount", { count: columns.length })}
             </span>
             {editingField && (
               <span className="text-xs text-amber-500 font-medium shrink-0">
@@ -196,7 +207,7 @@ export function CellDetailModal({
                   onClick={() => startEdit(col)}
                   disabled={!canEdit}
                   className="w-[180px] shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-mono font-medium text-left truncate border-r border-border/50 hover:bg-accent/20 transition-colors disabled:cursor-default"
-                  title={`${col} — 点击编辑`}
+                  title={`${col} — ${t("clickToEdit")}`}
                 >
                   {col}
                   {isFocused && !isEditing && (
@@ -231,7 +242,7 @@ export function CellDetailModal({
                         className="px-2 py-1 text-xs font-medium rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-1 shrink-0"
                       >
                         {saving && <Loader2 size={11} className="animate-spin" />}
-                        保存
+                        {t("save")}
                       </button>
                     </div>
                   ) : (
@@ -257,9 +268,9 @@ export function CellDetailModal({
         <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted shrink-0">
           <span className="text-xs text-muted-foreground">
             {editingField
-              ? `编辑 ${editingField} — Enter 保存，Esc 取消`
+              ? t("editingHint", { field: editingField })
               : canEdit
-                ? "点击列值可编辑"
+                ? t("clickValueToEdit")
                 : ""}
           </span>
           <div className="flex items-center gap-2">
@@ -276,7 +287,7 @@ export function CellDetailModal({
                 className="px-3 py-1.5 text-xs font-medium rounded-md bg-destructive/90 text-destructive-foreground hover:bg-destructive transition-colors disabled:opacity-50 flex items-center gap-1"
               >
                 {deleting && <Loader2 size={12} className="animate-spin" />}
-                删除行
+                {t("deleteRow")}
               </button>
             )}
           </div>

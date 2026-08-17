@@ -153,7 +153,10 @@ impl DatabaseMetadata for MySqlDriver {
             tables.push(Table {
                 name: row.try_get("name").unwrap_or_default(),
                 engine: row.try_get("engine").ok(),
-                rows: row.try_get::<Option<i64>, _>("row_count").ok().flatten().map(|v| v as u64),
+                // information_schema.tables.TABLE_ROWS is BIGINT UNSIGNED;
+                // decoding it as i64 fails under sqlx strict typing and the
+                // count silently drops to None.
+                rows: row.try_get::<Option<u64>, _>("row_count").ok().flatten(),
                 size_mb,
                 comment: row.try_get("comment").ok(),
             });
@@ -348,7 +351,13 @@ impl DatabaseMetadata for MySqlDriver {
         pool: &MySqlPool,
         keyword: &str,
     ) -> Result<Vec<SearchResult>, AppError> {
-        let pattern = format!("%{}%", keyword);
+        // Escape LIKE metacharacters so a user keyword containing % or _
+        // matches literally instead of acting as a wildcard.
+        let escaped_keyword = keyword
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("%{escaped_keyword}%");
         let mut results = Vec::new();
 
         let table_rows = sqlx::query(

@@ -2,9 +2,9 @@
 
 ## MySQL
 
-- **SQL 编辑器** — 多标签编辑、CodeMirror 6 语法高亮、SQL 格式化（Ctrl+Shift+F）、Vim 模式
+- **SQL 编辑器** — 多标签编辑、CodeMirror 6 语法高亮、SQL 格式化（Ctrl+Shift+F）
 - **查询执行** — Ctrl+Enter 执行全部、Ctrl+Shift+Enter 执行选中，自动区分查询/更新语句
-- **结果网格** — AG Grid 虚拟滚动，列头筛选排序，单元格内联编辑（双击修改，自动生成 UPDATE）
+- **结果网格** — AG Grid 虚拟滚动，列头筛选排序，单击单元格打开行数据弹窗编辑（自动生成 UPDATE）
 - **表结构浏览** — 侧边栏树形导航（数据库→表→列），Columns3 图标查看字段/索引/外键/触发器/DDL
 - **DDL 高亮** — CREATE TABLE 语句以 CodeMirror SQL 语法高亮展示
 - **Explain** — 编辑器 Explain 按钮，执行计划可视化

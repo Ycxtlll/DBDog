@@ -6,6 +6,9 @@ export interface ConnectionConfig {
   port: number;
   username: string;
   password?: string;
+  /** Opaque stored-credential marker echoed back by the backend (never the
+   *  plaintext password) — lets the UI know a password is saved. */
+  passwordHash?: string;
   database?: string;
   maxConnections?: number;
   sslMode?: "disabled" | "required" | "verify-ca" | "verify-full";
@@ -119,6 +122,10 @@ export interface QueryTab {
   error?: string;
   selectedDatabase?: string;
   isQueryResult?: boolean;
+  /** The exact SQL that produced the current result — used for grid refresh. */
+  executedSql?: string;
+  /** The row limit used for executedSql. */
+  executedLimit?: number;
   /** When set, the result grid enables inline editing for this table */
   editableTable?: { database: string; table: string; primaryKeyColumns: string[] };
 }

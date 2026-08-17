@@ -1,0 +1,18 @@
+{
+  "title": "导出",
+  "saveLocation": "保存位置",
+  "choose": "选择",
+  "start": "开始导出",
+  "cancelExport": "取消导出",
+  "exporting": "正在导出...",
+  "runningStatus": "正在导出... 已读取 {{rows}} 行",
+  "doneStatus": "完成 — 共 {{rows}} 行",
+  "rowsCount": "{{rows}} 行",
+  "savingTo": "保存至：{{path}}",
+  "success": "导出成功",
+  "failed": "导出失败",
+  "cancelled": "已取消",
+  "exportCancelled": "导出已取消",
+  "unknownError": "未知错误",
+  "cannotCloseWhileRunning": "请先取消导出再关闭"
+}

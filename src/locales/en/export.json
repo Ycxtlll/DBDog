@@ -1,0 +1,18 @@
+{
+  "title": "Export",
+  "saveLocation": "Save location",
+  "choose": "Choose",
+  "start": "Start export",
+  "cancelExport": "Cancel export",
+  "exporting": "Exporting...",
+  "runningStatus": "Exporting... {{rows}} rows read",
+  "doneStatus": "Done — {{rows}} rows total",
+  "rowsCount": "{{rows}} rows",
+  "savingTo": "Saving to: {{path}}",
+  "success": "Export succeeded",
+  "failed": "Export failed",
+  "cancelled": "Cancelled",
+  "exportCancelled": "Export cancelled",
+  "unknownError": "Unknown error",
+  "cannotCloseWhileRunning": "Cancel the export before closing"
+}

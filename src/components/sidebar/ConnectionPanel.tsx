@@ -16,6 +16,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { translateTauriError } from "../../lib/error";
 import { showError } from "../../stores/toastStore";
+import { confirmDialog } from "../../lib/confirm";
 import type { ConnectionConfig } from "../../types";
 import { ConnectionFormModal } from "../connection/ConnectionFormModal";
 
@@ -104,13 +105,22 @@ export function ConnectionPanel() {
   };
 
   const handleDisconnect = async (id: string) => {
-    await disconnect(id);
+    try {
+      await disconnect(id);
+    } catch (err) {
+      showError(translateTauriError(err, t));
+      console.error("Failed to disconnect:", err);
+    }
     setSidebarView("connection");
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm(t("confirmDelete"))) {
+    if (!(await confirmDialog(t("confirmDelete")))) return;
+    try {
       await deleteConfig(id);
+    } catch (err) {
+      showError(translateTauriError(err, t));
+      console.error("Failed to delete connection:", err);
     }
   };
 

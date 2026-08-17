@@ -16,6 +16,7 @@ fn test_config() -> ConnectionConfig {
         ssl_mode: None,
         ssl_cert_path: None,
         password_hash: None,
+        group: None,
     }
 }
 
@@ -44,7 +45,8 @@ async fn should_list_keys() {
         .expect("list_keys failed");
     assert!(result.total_keys > 0, "expected some keys");
     assert!(!result.keys.is_empty());
-    assert_eq!(result.keys.len(), result.total_keys);
+    // total_keys is the true count; the returned list is capped at 5000.
+    assert_eq!(result.keys.len(), result.total_keys.min(5000));
 }
 
 #[tokio::test]

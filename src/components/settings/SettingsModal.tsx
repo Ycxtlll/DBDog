@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Monitor, Sun, Moon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
@@ -10,6 +11,15 @@ interface SettingsModalProps {
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { t } = useTranslation(["settings", "common"]);
   const { theme, language, setTheme, setLanguage } = useUiStore();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -27,6 +37,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="w-[360px] max-w-[90vw] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col"
@@ -37,7 +50,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {t("settings:settings")}
           </h3>
           <button
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+            onClick={onClose}
             className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             aria-label={t("common:cancel")}
           >

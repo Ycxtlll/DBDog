@@ -30,14 +30,34 @@ pub async fn delete_connection(
 ) -> Result<(), AppError> {
     state.pool_manager.disconnect(&id).await;
     state.schema_cache.invalidate_connection(&id);
+    state.session_databases.remove(&id);
     state.storage.delete(id).await
 }
 
 #[tauri::command]
 pub async fn test_connection(
-    _state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, AppState>,
     config: ConnectionConfig,
 ) -> Result<String, AppError> {
+    // When editing a saved connection the form leaves the password blank
+    // ("keep existing"); merge the stored credential so Test actually works.
+    let config = if config.db_type == DatabaseType::Mysql && config.password.is_none() {
+        match state.storage.load_all().await {
+            Ok(configs) => configs
+                .into_iter()
+                .find(|c| c.id == config.id)
+                .map(|stored| {
+                    let mut merged = config.clone();
+                    merged.password = stored.password;
+                    merged
+                })
+                .unwrap_or(config),
+            Err(_) => config,
+        }
+    } else {
+        config
+    };
+
     match config.db_type {
         DatabaseType::Mysql => {
             let driver = MySqlDriver::new();
@@ -84,18 +104,22 @@ async fn connect_mysql(
     mut config: ConnectionConfig,
 ) -> Result<ServerInfo, AppError> {
     if state.pool_manager.is_connected(&id) {
-        let pool = state
-            .pool_manager
-            .get(&id)
-            .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
-        let row: (String, u64) = sqlx::query_as("SELECT VERSION(), CONNECTION_ID()")
+        if let Some(pool) = state.pool_manager.get(&id) {
+            if let Ok(row) = sqlx::query_as::<_, (String, u64)>(
+                "SELECT VERSION(), CONNECTION_ID()",
+            )
             .fetch_one(&pool)
             .await
-            .map_err(|e| AppError::QueryFailed(e.to_string()))?;
-        return Ok(ServerInfo {
-            version: row.0,
-            connection_id: row.1.to_string(),
-        });
+            {
+                return Ok(ServerInfo {
+                    version: row.0,
+                    connection_id: row.1.to_string(),
+                });
+            }
+        }
+        // Probe on the existing pool failed — drop the stale pool and
+        // reconnect instead of erroring out until an explicit disconnect.
+        state.pool_manager.disconnect(&id).await;
     }
 
     if config.password.as_deref().is_some_and(|s| s.is_empty()) {
@@ -114,6 +138,13 @@ async fn connect_mysql(
         .map_err(|e| AppError::QueryFailed(e.to_string()))?;
 
     state.pool_manager.connect(id, pool.clone()).await;
+
+    // Remember the configured default database so queries that don't pin a
+    // database explicitly can be reset to it (a pooled connection keeps
+    // whatever `USE` ran last on it).
+    if let Some(ref db) = config.database {
+        state.session_databases.insert(id, db.clone());
+    }
 
     let server_info = ServerInfo {
         version: row.0,
@@ -137,5 +168,6 @@ async fn connect_mysql(
 pub async fn disconnect(state: tauri::State<'_, AppState>, id: Uuid) -> Result<(), AppError> {
     state.pool_manager.disconnect(&id).await;
     state.schema_cache.invalidate_connection(&id);
+    state.session_databases.remove(&id);
     Ok(())
 }

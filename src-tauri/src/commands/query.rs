@@ -28,6 +28,20 @@ fn switch_database(
     })
 }
 
+/// Resolve which database the query should run in: the explicitly requested
+/// one, or the connection's configured default. A pooled connection keeps
+/// whatever `USE` ran last on it (e.g. from another tab), so never running
+/// with "whatever is left over" prevents wrong-database reads/writes.
+fn effective_database(
+    state: &tauri::State<'_, AppState>,
+    connection_id: &Uuid,
+    database: &Option<String>,
+) -> Option<String> {
+    database
+        .clone()
+        .or_else(|| state.session_databases.get(connection_id).map(|e| e.value().clone()))
+}
+
 #[tauri::command]
 pub async fn execute_query(
     state: tauri::State<'_, AppState>,
@@ -46,8 +60,8 @@ pub async fn execute_query(
         .await
         .map_err(|e| AppError::QueryFailed(e.to_string()))?;
 
-    if let Some(ref db) = database {
-        switch_database(&mut conn, db)?;
+    if let Some(db) = effective_database(&state, &connection_id, &database) {
+        switch_database(&mut conn, &db)?;
     }
 
     let result = crate::query::engine::execute_query(
@@ -83,8 +97,8 @@ pub async fn execute_update(
         .await
         .map_err(|e| AppError::QueryFailed(e.to_string()))?;
 
-    if let Some(ref db) = database {
-        switch_database(&mut conn, db)?;
+    if let Some(db) = effective_database(&state, &connection_id, &database) {
+        switch_database(&mut conn, &db)?;
     }
 
     let result = crate::query::engine::execute_update(&mut conn, &sql).await;

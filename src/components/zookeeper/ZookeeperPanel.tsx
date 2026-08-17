@@ -14,6 +14,16 @@ import { useZookeeperStore } from "../../stores/zookeeperStore";
 import { VirtualTree } from "../virtual/VirtualTree";
 import type { ZkTreeNode } from "../../types";
 
+/** Find a node by absolute path (mirrors the helper in zookeeperStore). */
+function findZkNode(node: ZkTreeNode, path: string): ZkTreeNode | null {
+  if (node.path === path) return node;
+  for (const child of node.children ?? []) {
+    const found = findZkNode(child, path);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function ZookeeperPanel() {
   const { t } = useTranslation("zookeeper");
   const activeId = useConnectionStore((s) => s.activeId);
@@ -27,6 +37,7 @@ export function ZookeeperPanel() {
     isLoadingTree,
     error,
     loadTree,
+    expandNode,
     loadNode,
     loadServerInfo,
     setCurrentPath,
@@ -43,13 +54,25 @@ export function ZookeeperPanel() {
     }
   }, [activeId, loadTree, loadServerInfo]);
 
-  const handleToggle = useCallback((key: string) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  }, []);
+  const handleToggle = useCallback(
+    (key: string) => {
+      const willExpand = !expandedKeys.has(key);
+      setExpandedKeys((prev) => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+      });
+      // Frontier nodes (children === undefined but hasChildren) have no data
+      // to render — fetch one level and merge it in on first expansion.
+      if (willExpand && activeId && rootNode) {
+        const target = findZkNode(rootNode, key);
+        if (target && target.children === undefined) {
+          expandNode(activeId, key);
+        }
+      }
+    },
+    [expandedKeys, activeId, rootNode, expandNode],
+  );
 
   const handleSelectNode = (path: string) => {
     if (!activeId) return;

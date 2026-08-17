@@ -4,8 +4,13 @@ import type { AppSettings } from "../types";
 
 interface UiState extends AppSettings {
   commandPaletteOpen: boolean;
+  /** The theme actually applied after resolving "system" against the OS
+   *  preference — kept in the store so components re-render when the OS
+   *  theme flips at runtime. */
+  resolvedTheme: "light" | "dark";
   setTheme: (theme: AppSettings["theme"]) => void;
   setLanguage: (language: AppSettings["language"]) => void;
+  setResolvedTheme: (resolved: "light" | "dark") => void;
   updateEditor: (editor: Partial<AppSettings["editor"]>) => void;
   updateQuery: (query: Partial<AppSettings["query"]>) => void;
   updatePerformance: (perf: Partial<AppSettings["performance"]>) => void;
@@ -37,9 +42,11 @@ export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       ...defaultSettings,
+      resolvedTheme: "light",
       commandPaletteOpen: false,
       setTheme: (theme) => set({ theme }),
       setLanguage: (language) => set({ language }),
+      setResolvedTheme: (resolvedTheme) => set({ resolvedTheme }),
       updateEditor: (editor) =>
         set((state) => ({ editor: { ...state.editor, ...editor } })),
       updateQuery: (query) =>

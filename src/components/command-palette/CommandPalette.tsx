@@ -22,10 +22,11 @@ export function CommandPalette() {
   const activeId = useConnectionStore((s) => s.activeId);
   const connect = useConnectionStore((s) => s.connect);
   const disconnect = useConnectionStore((s) => s.disconnect);
-  const queryStore = useQueryStore.getState();
   const layoutStore = useLayoutStore.getState();
   const [search, setSearch] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,6 +45,7 @@ export function CommandPalette() {
   useEffect(() => {
     if (commandPaletteOpen) {
       setSearch("");
+      setSelectedIndex(0);
     }
   }, [commandPaletteOpen]);
 
@@ -53,15 +55,20 @@ export function CommandPalette() {
         id: "query.new",
         title: t("newQuery"),
         category: "Query",
-        action: () => queryStore.newTab(),
+        action: () => useQueryStore.getState().newTab(),
       },
       {
         id: "query.execute",
         title: t("executeQuery"),
         category: "Query",
         action: () => {
-          if (activeId && queryStore.activeTabId) {
-            queryStore.execute(activeId, queryStore.activeTabId);
+          const qs = useQueryStore.getState();
+          if (activeId && qs.activeTabId) {
+            qs.execute(
+              activeId,
+              qs.activeTabId,
+              useUiStore.getState().query.defaultLimit,
+            );
           }
         },
       },
@@ -70,15 +77,11 @@ export function CommandPalette() {
         title: t("formatSql"),
         category: "Query",
         action: () => {
-          const tab = queryStore.tabs.find(
-            (t) => t.id === queryStore.activeTabId,
-          );
+          const qs = useQueryStore.getState();
+          const tab = qs.tabs.find((qt) => qt.id === qs.activeTabId);
           if (tab) {
             import("sql-formatter").then(({ format }) => {
-              queryStore.setTabSql(
-                tab.id,
-                format(tab.sql, { language: "mysql" }),
-              );
+              qs.setTabSql(tab.id, format(tab.sql, { language: "mysql" }));
             });
           }
         },
@@ -131,15 +134,11 @@ export function CommandPalette() {
     t,
     configs,
     activeId,
-    queryStore,
     layoutStore,
     setTheme,
     connect,
     disconnect,
   ]);
-  // Note: queryStore and layoutStore are stable references from getState().
-  // The actions read latest state at call time, so commands need not
-  // recompute on every store change.
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -149,6 +148,30 @@ export function CommandPalette() {
         c.category.toLowerCase().includes(q),
     );
   }, [commands, search]);
+
+  // Keep the selection valid as the filtered list shrinks/grows.
+  useEffect(() => {
+    setSelectedIndex((i) => Math.min(i, Math.max(0, filtered.length - 1)));
+  }, [filtered.length]);
+
+  const runCommand = (cmd: Command) => {
+    cmd.action();
+    setCommandPaletteOpen(false);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const cmd = filtered[selectedIndex];
+      if (cmd) runCommand(cmd);
+    }
+  };
 
   if (!commandPaletteOpen) return null;
 
@@ -168,18 +191,21 @@ export function CommandPalette() {
           placeholder={t("searchCommand")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleInputKeyDown}
         />
-        <div className="max-h-[400px] overflow-hidden">
+        <div className="max-h-[400px] overflow-hidden" ref={listRef}>
           <VirtualList
             items={filtered}
             rowHeight={40}
-            renderItem={(cmd) => (
+            renderItem={(cmd, index) => (
               <button
-                className="w-full text-left px-4 py-2 hover:bg-accent flex items-center gap-3"
-                onClick={() => {
-                  cmd.action();
-                  setCommandPaletteOpen(false);
-                }}
+                className={`w-full text-left px-4 py-2 flex items-center gap-3 ${
+                  index === selectedIndex
+                    ? "bg-accent"
+                    : "hover:bg-accent"
+                }`}
+                onClick={() => runCommand(cmd)}
+                onMouseEnter={() => setSelectedIndex(index)}
               >
                 <span className="text-xs text-muted-foreground w-24 shrink-0">
                   {cmd.category}

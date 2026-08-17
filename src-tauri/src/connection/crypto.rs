@@ -167,15 +167,24 @@ fn decrypt_keyring(
 
 mod hex {
     pub fn decode(s: &str) -> Result<Vec<u8>, String> {
-        if s.len() % 2 != 0 {
+        fn nibble(b: u8) -> Result<u8, String> {
+            match b {
+                b'0'..=b'9' => Ok(b - b'0'),
+                b'a'..=b'f' => Ok(b - b'a' + 10),
+                b'A'..=b'F' => Ok(b - b'A' + 10),
+                _ => Err(format!("invalid hex digit: {}", b as char)),
+            }
+        }
+
+        let bytes = s.as_bytes();
+        if bytes.len() % 2 != 0 {
             return Err("odd hex length".to_string());
         }
-        (0..s.len())
-            .step_by(2)
-            .map(|i| {
-                u8::from_str_radix(&s[i..i + 2], 16)
-                    .map_err(|e| format!("invalid hex at {i}: {e}"))
-            })
+        // Operate on bytes, not &str slices — slicing a corrupted (non-ASCII)
+        // string at byte offsets would panic mid-char.
+        bytes
+            .chunks_exact(2)
+            .map(|pair| Ok(nibble(pair[0])? << 4 | nibble(pair[1])?))
             .collect()
     }
 }

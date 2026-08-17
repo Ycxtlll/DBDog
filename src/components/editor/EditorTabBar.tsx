@@ -123,11 +123,15 @@ export function EditorTabBar({
           disabled={!activeConnectionId || !activeTabId}
           onClick={() => {
             if (activeTab && activeConnectionId) {
-              const sql = `EXPLAIN ${activeTab.sql}`;
-              useQueryStore.getState().setTabSql(activeTab.id, sql);
+              // Execute EXPLAIN as a transient query — never write it back
+              // into the editor (a second click used to stack
+              // "EXPLAIN EXPLAIN ..." and destroy the user's SQL).
+              const sel = getSqlSelection?.();
+              const base = sel?.hasSelection ? sel.selectedSql : activeTab.sql;
+              const sql = `EXPLAIN ${base.trim()}`;
               useQueryStore
                 .getState()
-                .execute(activeConnectionId, activeTab.id, query.defaultLimit);
+                .execute(activeConnectionId, activeTab.id, query.defaultLimit, sql);
             }
           }}
           title={t("explain")}

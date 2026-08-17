@@ -4,6 +4,7 @@ import { X, CheckCircle2, XCircle } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import * as connectionService from "../../services/connectionService";
 import { translateTauriError } from "../../lib/error";
+import { showError } from "../../stores/toastStore";
 import type { ConnectionConfig } from "../../types";
 
 interface ConnectionFormModalProps {
@@ -33,6 +34,11 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [clearPassword, setClearPassword] = useState(false);
+
+  const hasSavedPassword = !!config?.passwordHash;
+  const portValid = Number.isInteger(form.port) && form.port >= 1 && form.port <= 65535;
+  const formValid = form.name.trim() !== "" && form.host.trim() !== "" && portValid;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,19 +50,32 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const handleSave = async () => {
+  const buildPayload = (): ConnectionConfig => {
     const payload = { ...form };
-    if (!payload.password || payload.password.trim() === "") {
+    if (clearPassword) {
+      // Explicit empty password tells the backend to drop the stored
+      // credential (None means "keep the existing one").
+      payload.password = "";
+    } else if (!payload.password || payload.password.trim() === "") {
       delete payload.password;
     }
-    await saveConfig(payload);
-    onClose();
+    return payload;
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveConfig(buildPayload());
+      onClose();
+    } catch (err) {
+      showError(translateTauriError(err, t));
+      console.error("Failed to save connection:", err);
+    }
   };
 
   const handleTest = async () => {
     setTestMsg(null);
     try {
-      const version = await connectionService.testConnection(form);
+      const version = await connectionService.testConnection(buildPayload());
       setTestMsg({ type: "success", text: `${t("testSuccess")}: ${version}` });
     } catch (err) {
       setTestMsg({
@@ -164,9 +183,30 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
                   <FormField
                     label={t("password")}
                     value={form.password ?? ""}
-                    onChange={(v) => setForm({ ...form, password: v })}
+                    onChange={(v) => {
+                      setForm({ ...form, password: v });
+                      setClearPassword(false);
+                    }}
                     type="password"
                   />
+                  {hasSavedPassword && (
+                    <label className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={clearPassword}
+                        onChange={(e) => {
+                          setClearPassword(e.target.checked);
+                          if (e.target.checked) setForm({ ...form, password: "" });
+                        }}
+                      />
+                      {t("clearSavedPassword")}
+                    </label>
+                  )}
+                  {hasSavedPassword && !clearPassword && !form.password && (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t("passwordKeepHint")}
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-3">
                   <FormField
@@ -217,14 +257,16 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
             {t("cancel")}
           </button>
           <button
-            className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-accent transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleTest}
+            disabled={!formValid}
           >
             {t("test")}
           </button>
           <button
-            className="px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleSave}
+            disabled={!formValid}
           >
             {t("save")}
           </button>

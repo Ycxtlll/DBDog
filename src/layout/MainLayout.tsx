@@ -24,14 +24,18 @@ export function MainLayout() {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "system") {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)",
-      ).matches;
-      root.setAttribute("data-theme", prefersDark ? "dark" : "light");
-    } else {
-      root.setAttribute("data-theme", theme);
-    }
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    // React to OS theme flips at runtime too — with theme === "system" the
+    // app used to keep whatever was resolved at startup until relaunch.
+    const apply = () => {
+      const dark = theme === "dark" || (theme === "system" && media.matches);
+      const resolved = dark ? "dark" : "light";
+      root.setAttribute("data-theme", resolved);
+      useUiStore.getState().setResolvedTheme(resolved);
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
   }, [theme]);
 
   return (
