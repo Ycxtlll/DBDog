@@ -149,12 +149,7 @@ fn decode_by_type<'r>(row: &'r sqlx::mysql::MySqlRow, i: usize, type_name: &str)
         || type_name.starts_with("VARBINARY")
         || type_name.contains("BLOB")
     {
-        return decode_or_fallback::<Vec<u8>>(row, i, |v| {
-            Value::String(base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                v,
-            ))
-        });
+        return decode_bytes(row, i);
     }
     // VARCHAR, CHAR, TEXT, ENUM, SET, GEOMETRY, etc.
     fallback_string(row, i)
@@ -211,10 +206,32 @@ fn decode_bit(row: &sqlx::mysql::MySqlRow, i: usize) -> Value {
     })
 }
 
+/// BINARY/VARBINARY/BLOB family. These columns frequently hold text or JSON
+/// payloads, so valid UTF-8 content renders as-is; base64 is only the
+/// fallback for bytes that are not valid UTF-8.
+fn decode_bytes(row: &sqlx::mysql::MySqlRow, i: usize) -> Value {
+    decode_or_fallback::<Vec<u8>>(row, i, |bytes| {
+        match std::str::from_utf8(&bytes) {
+            Ok(text) => Value::String(text.to_owned()),
+            Err(_) => Value::String(base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                bytes,
+            )),
+        }
+    })
+}
+
 fn fallback_string(row: &sqlx::mysql::MySqlRow, i: usize) -> Value {
     row.try_get_unchecked::<String, _>(i)
         .map(Value::String)
-        .unwrap_or(Value::Null)
+        .unwrap_or_else(|_| {
+            // Non-UTF-8 text columns (e.g. latin1) fail String decoding;
+            // degrade visibly instead of silently rendering NULL.
+            match row.try_get_unchecked::<Vec<u8>, _>(i) {
+                Ok(bytes) => Value::String(String::from_utf8_lossy(&bytes).into_owned()),
+                Err(_) => Value::Null,
+            }
+        })
 }
 
 pub async fn execute_update(

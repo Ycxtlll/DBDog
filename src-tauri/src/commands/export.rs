@@ -77,13 +77,16 @@ fn decode_cell_string(row: &sqlx::mysql::MySqlRow, i: usize, type_name: &str) ->
         || type_name.starts_with("VARBINARY")
         || type_name.contains("BLOB")
     {
-        // Binary columns must not go through the String fallback (UTF-8
-        // validation fails and silently yields ""); base64-encode instead,
-        // matching the query engine's rendering of binary values.
+        // Blob columns frequently hold text/JSON payloads: valid UTF-8 is
+        // exported as-is, base64 is the fallback for non-UTF-8 bytes
+        // (matching the query engine's rendering of binary values).
         row.try_get_unchecked::<Vec<u8>, _>(i)
-            .map(|bytes| {
-                use base64::Engine;
-                base64::engine::general_purpose::STANDARD.encode(bytes)
+            .map(|bytes| match std::str::from_utf8(&bytes) {
+                Ok(text) => text.to_string(),
+                Err(_) => {
+                    use base64::Engine;
+                    base64::engine::general_purpose::STANDARD.encode(bytes)
+                }
             })
             .unwrap_or_default()
     } else if type_name == "DATE" {
