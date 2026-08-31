@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getVersion } from "@tauri-apps/api/app";
 import { X, Monitor, Sun, Moon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 
@@ -11,6 +12,7 @@ interface SettingsModalProps {
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { t } = useTranslation(["settings", "common"]);
   const { theme, language, setTheme, setLanguage } = useUiStore();
+  const [version, setVersion] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -20,6 +22,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    // Falls back to the Cargo.toml package version when tauri.conf.json has
+    // no `version` field. Rejects in browser-only dev mode — ignore that.
+    getVersion()
+      .then(setVersion)
+      .catch(() => {});
+  }, []);
 
   if (!isOpen) return null;
 
@@ -104,6 +114,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Footer: app version */}
+        <div className="px-5 py-2.5 border-t border-border bg-muted text-center text-xs text-muted-foreground">
+          DBDog{version ? ` v${version}` : ""}
         </div>
       </div>
     </div>
