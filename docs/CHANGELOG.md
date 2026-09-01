@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.10] — 2026-09-01
+
+### Added
+
+- **设置中显示版本号** — 设置弹窗底部显示当前应用版本，便于确认安装版本。
+
+### Changed
+
+- **UTF-8 二进制内容可读化** — `BINARY` / `VARBINARY` / `BLOB` 系列列中的有效 UTF-8 内容在结果网格和 CSV 导出中按原文展示；非 UTF-8 二进制继续使用 Base64，非 UTF-8 文本列改用有损 UTF-8 回退而非静默显示 `NULL`。
+
+---
+
 ## [0.3.9] — 2026-08-17
 
 ### Fixed

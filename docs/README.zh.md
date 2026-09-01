@@ -30,11 +30,22 @@
 
 无需注册账号，无需联网，数据完全保存在本地。
 
+## 快捷键
+
+| 快捷键 | 操作 |
+| --- | --- |
+| `Ctrl/Cmd+Enter` | 执行选中的 SQL；未选中时执行整个编辑器内容 |
+| `Ctrl/Cmd+Shift+Enter` | 执行选中的 SQL |
+| `Ctrl/Cmd+Shift+F` | 格式化 SQL |
+| `Ctrl/Cmd+K` | 打开命令面板 |
+
 ## 能干什么
 
 - **MySQL**：SQL 编辑器（高亮 + 格式化）、结果表格（支持双击内联编辑）、库表结构浏览
+- **二进制数据显示**：`BINARY` / `VARBINARY` / `BLOB` 列中的 UTF-8 内容在结果表格和 CSV 导出中按文本显示，非 UTF-8 字节使用 Base64 兜底
 - **Memcached**：Key 列表浏览、搜索、查看 value、删除、Flush All
 - **ZooKeeper**：节点树浏览、只读查看节点数据、服务器统计
+- **设置**：切换主题和语言，并在设置弹窗底部查看当前应用版本
 
 详见 [features.md](features.md)。
 
@@ -46,6 +57,12 @@ npm run tauri dev
 ```
 
 需要 Node.js ≥ 18、Rust ≥ 1.78。
+
+## 文档
+
+- [更新日志](CHANGELOG.md)
+- [功能说明](features.md)
+- [架构设计](archiecture.md)
 
 ## 参与
 
