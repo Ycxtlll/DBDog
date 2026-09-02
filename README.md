@@ -58,6 +58,17 @@ npm run tauri dev
 
 Requires Node.js ≥ 18 and Rust ≥ 1.78. Use `npm run build` for a type-check and frontend build, or `npm run build:portable` to create a no-bundle Tauri build.
 
+## Releases
+
+After updating the version files and changelog, push a matching `v*` tag. GitHub Actions will build and publish Windows x64, macOS Intel, macOS Apple Silicon, and Linux x64 packages to a GitHub Release.
+
+```bash
+git tag v0.3.10
+git push origin v0.3.10
+```
+
+The tag version must match the versions in `package.json` and `src-tauri/Cargo.toml`.
+
 ## Documentation
 
 - [Changelog](docs/CHANGELOG.md)
