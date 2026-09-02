@@ -2,12 +2,13 @@
 
 ## MySQL
 
-- **SQL 编辑器** — 多标签编辑、CodeMirror 6 语法高亮、SQL 格式化（Ctrl+Shift+F）
-- **查询执行** — Ctrl+Enter 执行全部、Ctrl+Shift+Enter 执行选中，自动区分查询/更新语句
+- **SQL 编辑器** — 多标签编辑、CodeMirror 6 语法高亮、SQL 格式化（Ctrl/Cmd+Shift+F）
+- **查询执行** — Ctrl/Cmd+Enter 有选区时执行选中、无选区时执行全部；Ctrl/Cmd+Shift+Enter 执行选中，自动区分查询/更新语句
 - **结果网格** — AG Grid 虚拟滚动，列头筛选排序，单击单元格打开行数据弹窗编辑（自动生成 UPDATE）
 - **表结构浏览** — 侧边栏树形导航（数据库→表→列），Columns3 图标查看字段/索引/外键/触发器/DDL
 - **DDL 高亮** — CREATE TABLE 语句以 CodeMirror SQL 语法高亮展示
 - **Explain** — 编辑器 Explain 按钮，执行计划可视化
+- **二进制数据显示** — BINARY / VARBINARY / BLOB 列中的有效 UTF-8 内容按文本显示，非 UTF-8 字节使用 Base64 兜底
 
 ## Memcached
 
@@ -32,3 +33,4 @@
 - **暗色/亮色主题** — 跟随系统或手动切换
 - **国际化** — 简体中文 / English
 - **命令面板** — Ctrl+K 快速搜索操作
+- **版本信息** — 设置弹窗底部显示当前应用版本
