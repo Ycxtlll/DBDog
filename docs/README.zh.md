@@ -58,6 +58,17 @@ npm run tauri dev
 
 需要 Node.js ≥ 18、Rust ≥ 1.78。
 
+## 发布
+
+更新版本号和更新日志后，推送匹配的 `v*` 标签。GitHub Actions 会自动编译 Windows x64、macOS Intel、macOS Apple Silicon 和 Linux x64，并将安装包发布到 GitHub Release。
+
+```bash
+git tag v0.3.10
+git push origin v0.3.10
+```
+
+标签版本必须与 `package.json` 和 `src-tauri/Cargo.toml` 中的版本一致。
+
 ## 文档
 
 - [更新日志](CHANGELOG.md)
