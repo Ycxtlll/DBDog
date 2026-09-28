@@ -7,16 +7,16 @@ import {
   Table,
   Database as DatabaseIcon,
   Columns3,
+  PencilRuler,
+  Download,
 } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useQueryStore } from "../../stores/queryStore";
 import * as schemaService from "../../services/schemaService";
-import * as queryService from "../../services/queryService";
 import type { Database, Table as TableType } from "../../types";
 import { VirtualTree, type TreeNode } from "../virtual/VirtualTree";
 import { parseTauriError } from "../../lib/error";
-import { escapeMysqlIdentifier } from "../../lib/sql";
 import { ExportDialog } from "../export/ExportDialog";
 
 interface SchemaNodeData {
@@ -73,6 +73,27 @@ export function SchemaTreePanel() {
     loadDatabases();
   }, [loadDatabases]);
 
+  // Reload the table list when the structure changes elsewhere
+  // (e.g. the visual table designer applied an ALTER statement).
+  useEffect(() => {
+    if (!activeId) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { database?: string } | undefined;
+      const dbs = detail?.database ? [detail.database] : Object.keys(tablesMap);
+      for (const dbName of dbs) {
+        schemaService
+          .getTables(activeId, dbName)
+          .then((tables) => setTablesMap((prev) => ({ ...prev, [dbName]: tables })))
+          .catch(() => {});
+      }
+      if (!detail?.database) {
+        loadDatabases();
+      }
+    };
+    window.addEventListener("dbdog-schema-changed", handler);
+    return () => window.removeEventListener("dbdog-schema-changed", handler);
+  }, [activeId, tablesMap, loadDatabases]);
+
   const handleToggle = async (key: string) => {
     const next = new Set(expandedKeys);
     if (next.has(key)) {
@@ -110,30 +131,9 @@ export function SchemaTreePanel() {
 
   const handleTableClick = async (db: string, table: string) => {
     if (!activeId) return;
-    const queryStore = useQueryStore.getState();
-    const tabId = queryStore.activeTabId ?? queryStore.newTab();
-    const sql = `SELECT * FROM ${escapeMysqlIdentifier(db)}.${escapeMysqlIdentifier(table)} LIMIT 1000;`;
-    queryStore.setTabSql(tabId, sql);
-    queryStore.setTabSelectedDatabase(tabId, db);
-
-    try {
-      const keysResult = await queryService.executeQuery(
-        activeId,
-        `SHOW KEYS FROM ${escapeMysqlIdentifier(db)}.${escapeMysqlIdentifier(table)} WHERE Key_name = 'PRIMARY'`,
-        undefined,
-        db,
-      );
-      const colIdx = keysResult.columns.findIndex((c) => c.name === "Column_name");
-      const primaryKeyColumns = colIdx >= 0
-        ? keysResult.rows.map((r) => String(r[colIdx] ?? ""))
-        : [];
-      queryStore.setTabEditableTable(tabId, { database: db, table, primaryKeyColumns });
-    } catch (err) {
-      console.error("Failed to fetch primary key columns:", err);
-      queryStore.setTabEditableTable(tabId, { database: db, table, primaryKeyColumns: [] });
-    }
-
-    await queryStore.execute(activeId, tabId);
+    // openTable reuses the active tab, sets up paged browsing (PK lookup +
+    // first page + background COUNT) and enables inline cell editing.
+    await useQueryStore.getState().openTable(activeId, db, table);
   };
 
   const handleRefresh = () => {
@@ -336,8 +336,9 @@ export function SchemaTreePanel() {
               handleTableClick(contextMenu.db, contextMenu.table);
               setContextMenu(null);
             }}
-            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left flex items-center gap-2"
           >
+            <Table size={14} className="text-muted-foreground" />
             {t("viewData")}
           </button>
           <button
@@ -346,8 +347,9 @@ export function SchemaTreePanel() {
               handleExportData(contextMenu.db, contextMenu.table);
               setContextMenu(null);
             }}
-            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left flex items-center gap-2"
           >
+            <Download size={14} className="text-muted-foreground" />
             {t("exportData")}
           </button>
           <button
@@ -361,9 +363,26 @@ export function SchemaTreePanel() {
                 });
               setContextMenu(null);
             }}
-            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left flex items-center gap-2"
           >
+            <Columns3 size={14} className="text-muted-foreground" />
             {t("viewStructure")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              useLayoutStore
+                .getState()
+                .openDrawer("tableDesign", {
+                  database: contextMenu.db,
+                  table: contextMenu.table,
+                });
+              setContextMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left flex items-center gap-2"
+          >
+            <PencilRuler size={14} className="text-muted-foreground" />
+            {t("designTable")}
           </button>
         </div>
       )}

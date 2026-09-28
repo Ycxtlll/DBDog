@@ -41,5 +41,12 @@
   "editingHint": "Editing {{field}} — Enter to save, Esc to cancel",
   "clickValueToEdit": "Click a value to edit",
   "cellUpdated": "Updated {{table}}.{{column}}",
-  "rowDeleted": "Deleted 1 row from {{table}}"
+  "rowDeleted": "Deleted 1 row from {{table}}",
+  "totalRowsUnknown": "Row count unknown",
+  "totalRowsInfo": "{{count}} rows in total",
+  "rowsPerPage": "{{size}} / page",
+  "pageLabel": "Page",
+  "pageOf": "/ {{total}}",
+  "goToPage": "Go to page",
+  "refresh": "Refresh"
 }

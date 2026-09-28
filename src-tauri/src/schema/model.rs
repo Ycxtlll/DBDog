@@ -30,6 +30,12 @@ pub struct Column {
     pub default_value: Option<String>,
     pub comment: Option<String>,
     pub max_length: Option<u32>,
+    /// Raw `Extra` from SHOW FULL COLUMNS ("auto_increment", "DEFAULT_GENERATED",
+    /// "on update current_timestamp()", ...). Needed so visual table editing can
+    /// round-trip ON UPDATE / expression defaults without silently dropping them.
+    /// `default` keeps older L2 disk-cache JSON (without this field) loadable.
+    #[serde(default)]
+    pub extra: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

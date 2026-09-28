@@ -82,3 +82,26 @@ export function splitSqlStatements(sql: string): string[] {
 export function escapeMysqlIdentifier(ident: string): string {
   return "`" + ident.replace(/`/g, "``") + "`";
 }
+
+/**
+ * Build the paged SELECT used by table browsing (server-side pagination).
+ * Orders by primary key when available so OFFSET paging is stable.
+ */
+export function buildTableSelect(
+  database: string,
+  table: string,
+  primaryKeyColumns: string[],
+  offset: number,
+  pageSize: number,
+): string {
+  const from = `SELECT * FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)}`;
+  const order = primaryKeyColumns.length
+    ? ` ORDER BY ${primaryKeyColumns.map(escapeMysqlIdentifier).join(", ")}`
+    : "";
+  return `${from}${order} LIMIT ${offset}, ${pageSize};`;
+}
+
+/** Build the exact row-count query for a table browse session. */
+export function buildCountSql(database: string, table: string): string {
+  return `SELECT COUNT(*) FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)};`;
+}

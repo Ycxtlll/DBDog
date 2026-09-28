@@ -71,6 +71,8 @@ export interface Column {
   defaultValue?: string;
   comment?: string;
   maxLength?: number;
+  /** Raw Extra from SHOW FULL COLUMNS: "auto_increment", "DEFAULT_GENERATED", "on update current_timestamp()"... */
+  extra?: string;
 }
 
 export interface Index {
@@ -126,8 +128,21 @@ export interface QueryTab {
   executedSql?: string;
   /** The row limit used for executedSql. */
   executedLimit?: number;
-  /** When set, the result grid enables inline editing for this table */
-  editableTable?: { database: string; table: string; primaryKeyColumns: string[] };
+  /** When set, this tab is browsing a table with server-side pagination.
+   *  Also enables inline cell editing for the browsed table. */
+  tableBrowse?: TableBrowseState;
+}
+
+export interface TableBrowseState {
+  database: string;
+  table: string;
+  primaryKeyColumns: string[];
+  /** Server-side page size (rows per fetch). */
+  pageSize: number;
+  /** 1-based page number. */
+  page: number;
+  /** Total row count from COUNT(*). Unknown while loading or if the count failed. */
+  totalRows?: number;
 }
 
 export interface QueryHistoryItem {

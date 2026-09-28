@@ -45,7 +45,7 @@ export function StatusBar() {
         <>
           <span>
             {activeTab.isQueryResult
-              ? `${(activeTab.result as { totalCount: number }).totalCount ?? 0} ${t("rows")}`
+              ? `${activeTab.tableBrowse?.totalRows ?? (activeTab.result as { totalCount: number }).totalCount ?? 0} ${t("rows")}`
               : `${(activeTab.result as { rowsAffected: number }).rowsAffected ?? 0} ${t("rowsAffected")}`}
           </span>
           <span>{activeTab.result.elapsedMs}ms</span>

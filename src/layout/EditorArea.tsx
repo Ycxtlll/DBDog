@@ -11,6 +11,7 @@ import type { SqlEditorHandle } from "../components/editor/SqlEditor";
 import { ResultGrid } from "../components/grid/ResultGrid";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { TableStructureDrawer } from "../components/drawer/TableStructureDrawer";
+import { TableDesignerModal } from "../components/drawer/TableDesignerModal";
 import { QueryHistory } from "../components/QueryHistory";
 import { ZkNodeViewer } from "../components/zookeeper/ZkNodeViewer";
 import { MemoEntryViewer } from "../components/memcached/MemoEntryViewer";
@@ -134,6 +135,7 @@ export function EditorArea() {
       )}
 
       <TableStructureDrawer connectionId={activeConnectionId} />
+      <TableDesignerModal connectionId={activeConnectionId} />
     </div>
   );
 }

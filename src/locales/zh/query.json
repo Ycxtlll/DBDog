@@ -41,5 +41,12 @@
   "editingHint": "编辑 {{field}} — Enter 保存，Esc 取消",
   "clickValueToEdit": "点击列值可编辑",
   "cellUpdated": "已更新 {{table}}.{{column}}",
-  "rowDeleted": "已删除 {{table}} 中的 1 行"
+  "rowDeleted": "已删除 {{table}} 中的 1 行",
+  "totalRowsUnknown": "总行数未知",
+  "totalRowsInfo": "共 {{count}} 行",
+  "rowsPerPage": "{{size}} 行/页",
+  "pageLabel": "第",
+  "pageOf": "/ {{total}} 页",
+  "goToPage": "跳转到指定页",
+  "refresh": "刷新"
 }

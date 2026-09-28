@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { X, PencilRuler } from "lucide-react";
 import { useLayoutStore } from "../../stores/layoutStore";
 import * as schemaService from "../../services/schemaService";
 import { parseTauriError } from "../../lib/error";
@@ -19,7 +19,7 @@ export function TableStructureDrawer({
   connectionId,
 }: TableStructureDrawerProps) {
   const { t } = useTranslation("schema");
-  const { drawer, closeDrawer } = useLayoutStore();
+  const { drawer, closeDrawer, openDrawer } = useLayoutStore();
   const [details, setDetails] = useState<TableDetails | null>(null);
   const [activeTab, setActiveTab] = useState<
     "columns" | "indexes" | "foreignKeys" | "triggers" | "sql"
@@ -51,6 +51,21 @@ export function TableStructureDrawer({
     load();
   }, [drawer.type, connectionId, db, table]);
 
+  // Reload when the table structure changes elsewhere (e.g. table designer).
+  useEffect(() => {
+    if (drawer.type !== "tableStructure" || !connectionId || !db || !table) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { database?: string } | undefined;
+      if (detail?.database && detail.database !== db) return;
+      schemaService
+        .getTableDetails(connectionId, db, table)
+        .then(setDetails)
+        .catch(() => {});
+    };
+    window.addEventListener("dbdog-schema-changed", handler);
+    return () => window.removeEventListener("dbdog-schema-changed", handler);
+  }, [drawer.type, connectionId, db, table]);
+
   if (drawer.type !== "tableStructure") return null;
 
   return (
@@ -60,9 +75,18 @@ export function TableStructureDrawer({
           <div className="font-semibold">{table}</div>
           <div className="text-xs text-muted-foreground">{db}</div>
         </div>
-        <button className="p-1 rounded hover:bg-accent" onClick={closeDrawer}>
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => openDrawer("tableDesign", { database: db, table })}
+            title={t("designTable")}
+          >
+            <PencilRuler size={15} />
+          </button>
+          <button className="p-1 rounded hover:bg-accent" onClick={closeDrawer}>
+            <X size={16} />
+          </button>
+        </div>
       </div>
       <div className="flex border-b border-border">
         {(

@@ -6,6 +6,7 @@ import * as connectionService from "../../services/connectionService";
 import { translateTauriError } from "../../lib/error";
 import { showError } from "../../stores/toastStore";
 import type { ConnectionConfig } from "../../types";
+import { Checkbox } from "../ui/Checkbox";
 
 interface ConnectionFormModalProps {
   config: ConnectionConfig | null;
@@ -190,17 +191,16 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
                     type="password"
                   />
                   {hasSavedPassword && (
-                    <label className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={clearPassword}
-                        onChange={(e) => {
-                          setClearPassword(e.target.checked);
-                          if (e.target.checked) setForm({ ...form, password: "" });
-                        }}
-                      />
+                    <Checkbox
+                      className="mt-1 text-[11px] text-muted-foreground w-fit"
+                      checked={clearPassword}
+                      onChange={(e) => {
+                        setClearPassword(e.target.checked);
+                        if (e.target.checked) setForm({ ...form, password: "" });
+                      }}
+                    >
                       {t("clearSavedPassword")}
-                    </label>
+                    </Checkbox>
                   )}
                   {hasSavedPassword && !clearPassword && !form.password && (
                     <p className="mt-0.5 text-[11px] text-muted-foreground">

@@ -196,6 +196,7 @@ impl DatabaseMetadata for MySqlDriver {
                 default_value: row.try_get("Default").ok(),
                 comment: row.try_get("Comment").ok(),
                 max_length,
+                extra,
             });
         }
         Ok(columns)

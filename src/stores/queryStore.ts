@@ -1,10 +1,19 @@
 import { create } from "zustand";
-import type { QueryHistoryItem, QueryResult, QueryTab, UpdateResult } from "../types";
+import type {
+  QueryHistoryItem,
+  QueryResult,
+  QueryTab,
+  TableBrowseState,
+  UpdateResult,
+} from "../types";
 import { generateId } from "../lib/utils";
-import { splitSqlStatements } from "../lib/sql";
+import { buildCountSql, buildTableSelect, escapeMysqlIdentifier, splitSqlStatements } from "../lib/sql";
 import * as queryService from "../services/queryService";
 import { parseTauriError } from "../lib/error";
 import { showError } from "./toastStore";
+
+/** Default rows per fetch for table browsing. */
+const BROWSE_PAGE_SIZE = 50;
 
 interface QueryState {
   tabs: QueryTab[];
@@ -21,6 +30,18 @@ interface QueryState {
     limit?: number,
     selectedSql?: string,
   ) => Promise<void>;
+  /** Open a table for browsing in the active (or a new) tab: PK lookup,
+   *  paged first fetch, and a background COUNT(*) for the pager. */
+  openTable: (connectionId: string, database: string, table: string) => Promise<void>;
+  /** Fetch one page of the browsed table and update the tab's SQL/state. */
+  browsePage: (
+    connectionId: string,
+    id: string,
+    page: number,
+    pageSize?: number,
+  ) => Promise<void>;
+  /** Re-run COUNT(*) for the browsed table (pager refresh). */
+  refreshBrowseCount: (connectionId: string, id: string) => Promise<void>;
   cancel: (connectionId: string, id: string, threadId: number) => Promise<void>;
   setTabResult: (
     id: string,
@@ -32,10 +53,7 @@ interface QueryState {
   setTabCancelled: (id: string, cancelled: boolean) => void;
   addHistory: (item: Omit<QueryHistoryItem, "timestamp">) => void;
   toggleHistory: () => void;
-  setTabEditableTable: (
-    id: string,
-    info: { database: string; table: string; primaryKeyColumns: string[] },
-  ) => void;
+  setTabTableBrowse: (id: string, info: TableBrowseState) => void;
   setTabSelectedDatabase: (id: string, database: string) => void;
 }
 
@@ -203,6 +221,127 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     }
   },
 
+  openTable: async (connectionId, database, table) => {
+    const tabId = get().activeTabId ?? get().newTab();
+
+    // Best-effort primary key lookup — needed for stable ORDER BY paging
+    // and for inline cell editing. A table without PK still browses fine.
+    let primaryKeyColumns: string[] = [];
+    try {
+      const keysResult = await queryService.executeQuery(
+        connectionId,
+        `SHOW KEYS FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} WHERE Key_name = 'PRIMARY'`,
+        undefined,
+        database,
+      );
+      const colIdx = keysResult.columns.findIndex((c) => c.name === "Column_name");
+      if (colIdx >= 0) {
+        primaryKeyColumns = keysResult.rows.map((r) => String(r[colIdx] ?? ""));
+      }
+    } catch (err) {
+      console.error("Failed to fetch primary key columns:", err);
+    }
+
+    get().setTabTableBrowse(tabId, {
+      database,
+      table,
+      primaryKeyColumns,
+      pageSize: BROWSE_PAGE_SIZE,
+      page: 1,
+    });
+    await get().browsePage(connectionId, tabId, 1, BROWSE_PAGE_SIZE);
+    // Count may take a while on large InnoDB tables — update the pager when
+    // it arrives instead of blocking the first page of data.
+    get().refreshBrowseCount(connectionId, tabId);
+  },
+
+  browsePage: async (connectionId, id, page, pageSize) => {
+    const tab = get().tabs.find((t) => t.id === id);
+    const browse = tab?.tableBrowse;
+    if (!tab || !browse || tab.isExecuting) return;
+
+    const size = pageSize ?? browse.pageSize;
+    // Clamp when the total is known (e.g. page size shrunk or rows were deleted).
+    const totalPages =
+      browse.totalRows !== undefined ? Math.max(1, Math.ceil(browse.totalRows / size)) : undefined;
+    const targetPage = totalPages !== undefined ? Math.min(Math.max(1, page), totalPages) : Math.max(1, page);
+    const offset = (targetPage - 1) * size;
+    const sql = buildTableSelect(browse.database, browse.table, browse.primaryKeyColumns, offset, size);
+
+    get().setTabExecuting(id, true);
+    get().setTabError(id, "");
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              sql,
+              name: browse.table,
+              executedSql: sql,
+              executedLimit: size,
+              tableBrowse: { ...browse, page: targetPage, pageSize: size },
+            }
+          : t,
+      ),
+    }));
+
+    try {
+      const result = await queryService.executeQuery(connectionId, sql, size, browse.database);
+      let totalRows = browse.totalRows;
+      // Count not arrived yet (or failed): a short page means we hit the end.
+      if (totalRows === undefined && result.rows.length < size) {
+        totalRows = offset + result.rows.length;
+      }
+      set((state) => ({
+        tabs: state.tabs.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                result,
+                isQueryResult: true,
+                tableBrowse: t.tableBrowse ? { ...t.tableBrowse, totalRows } : t.tableBrowse,
+              }
+            : t,
+        ),
+      }));
+      // All rows on a later page were deleted — step back until data shows.
+      if (targetPage > 1 && result.rows.length === 0 && (totalRows === undefined || totalRows > 0)) {
+        await get().browsePage(connectionId, id, targetPage - 1, size);
+      }
+    } catch (err) {
+      const msg = parseTauriError(err);
+      get().setTabError(id, msg);
+      showError(msg);
+    } finally {
+      get().setTabExecuting(id, false);
+    }
+  },
+
+  refreshBrowseCount: async (connectionId, id) => {
+    const tab = get().tabs.find((t) => t.id === id);
+    const browse = tab?.tableBrowse;
+    if (!tab || !browse) return;
+    try {
+      const countResult = await queryService.executeQuery(
+        connectionId,
+        buildCountSql(browse.database, browse.table),
+        1,
+        browse.database,
+      );
+      const count = Number(countResult.rows[0]?.[0] ?? 0);
+      set((state) => ({
+        tabs: state.tabs.map((t) =>
+          t.id === id && t.tableBrowse
+            ? { ...t, tableBrowse: { ...t.tableBrowse, totalRows: count } }
+            : t,
+        ),
+      }));
+    } catch (err) {
+      // Pager shows "unknown" and falls back to short-page detection.
+      console.error("Failed to count table rows:", err);
+    }
+  },
+
   setTabResult: (id, result, isQuery) => {
     set((state) => ({
       tabs: state.tabs.map((t) =>
@@ -246,10 +385,10 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   toggleHistory: () =>
     set((state) => ({ historyExpanded: !state.historyExpanded })),
 
-  setTabEditableTable: (id, info) =>
+  setTabTableBrowse: (id, info) =>
     set((state) => ({
       tabs: state.tabs.map((t) =>
-        t.id === id ? { ...t, editableTable: info } : t,
+        t.id === id ? { ...t, tableBrowse: info } : t,
       ),
     })),
 
