@@ -1,15 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  PlusSquare,
+  Play,
+  AlignLeft,
+  PanelLeft,
+  Sun,
+  Moon,
+  Monitor,
+  Plug,
+  Unplug,
+} from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { VirtualList } from "../virtual/VirtualList";
+import { useModalFocus } from "../../lib/useModalFocus";
+import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 
 interface Command {
   id: string;
   title: string;
   category: string;
+  icon: ReactNode;
+  /** Only real, wired-up shortcuts — never aspirational labels. */
+  shortcut?: string;
   action: () => void;
 }
 
@@ -27,15 +43,18 @@ export function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useModalFocus(panelRef, {
+    active: commandPaletteOpen,
+    onEscape: () => setCommandPaletteOpen(false),
+    initialFocus: () => inputRef.current,
+  });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setCommandPaletteOpen(true);
-      }
-      if (e.key === "Escape") {
-        setCommandPaletteOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -55,12 +74,15 @@ export function CommandPalette() {
         id: "query.new",
         title: t("newQuery"),
         category: "Query",
+        icon: <PlusSquare size={14} />,
         action: () => useQueryStore.getState().newTab(),
       },
       {
         id: "query.execute",
         title: t("executeQuery"),
         category: "Query",
+        icon: <Play size={14} />,
+        shortcut: "Ctrl+Enter",
         action: () => {
           const qs = useQueryStore.getState();
           if (activeId && qs.activeTabId) {
@@ -76,6 +98,8 @@ export function CommandPalette() {
         id: "query.format",
         title: t("formatSql"),
         category: "Query",
+        icon: <AlignLeft size={14} />,
+        shortcut: "Ctrl+Shift+F",
         action: () => {
           const qs = useQueryStore.getState();
           const tab = qs.tabs.find((qt) => qt.id === qs.activeTabId);
@@ -90,24 +114,29 @@ export function CommandPalette() {
         id: "view.sidebar",
         title: t("toggleSidebar"),
         category: "View",
+        icon: <PanelLeft size={14} />,
+        shortcut: "Ctrl+B",
         action: () => layoutStore.toggleSidebar(),
       },
       {
         id: "theme.light",
         title: t("lightTheme"),
         category: "Settings",
+        icon: <Sun size={14} />,
         action: () => setTheme("light"),
       },
       {
         id: "theme.dark",
         title: t("darkTheme"),
         category: "Settings",
+        icon: <Moon size={14} />,
         action: () => setTheme("dark"),
       },
       {
         id: "theme.system",
         title: t("systemTheme"),
         category: "Settings",
+        icon: <Monitor size={14} />,
         action: () => setTheme("system"),
       },
     ];
@@ -117,6 +146,7 @@ export function CommandPalette() {
         id: `conn.connect.${conn.id}`,
         title: `${t("connect")} ${conn.name}`,
         category: "Connection",
+        icon: <Plug size={14} />,
         action: () => connect(conn.id),
       });
       if (activeId === conn.id) {
@@ -124,6 +154,7 @@ export function CommandPalette() {
           id: `conn.disconnect.${conn.id}`,
           title: `${t("disconnect")} ${conn.name}`,
           category: "Connection",
+          icon: <Unplug size={14} />,
           action: () => disconnect(conn.id),
         });
       }
@@ -173,15 +204,18 @@ export function CommandPalette() {
     }
   };
 
-  if (!commandPaletteOpen) return null;
+  const show = useDelayedUnmount(commandPaletteOpen);
+  const closing = show && !commandPaletteOpen;
+  if (!show) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50"
+      className={`fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50 ${closing ? "animate-overlay-out" : "animate-overlay-in"}`}
       onClick={() => setCommandPaletteOpen(false)}
     >
       <div
-        className="w-[600px] max-w-[90vw] bg-card border border-border rounded-lg shadow-2xl overflow-hidden"
+        ref={panelRef}
+        className={`w-[600px] max-w-[90vw] bg-card border border-border rounded-lg shadow-2xl overflow-hidden ${closing ? "animate-modal-out" : "animate-modal-in"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -207,10 +241,18 @@ export function CommandPalette() {
                 onClick={() => runCommand(cmd)}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
-                <span className="text-xs text-muted-foreground w-24 shrink-0">
+                <span className="text-muted-foreground shrink-0 flex items-center w-4">
+                  {cmd.icon}
+                </span>
+                <span className="text-xs text-muted-foreground w-20 shrink-0">
                   {cmd.category}
                 </span>
-                <span className="text-sm">{cmd.title}</span>
+                <span className="text-sm flex-1 truncate">{cmd.title}</span>
+                {cmd.shortcut && (
+                  <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono rounded-md border border-border bg-muted text-muted-foreground">
+                    {cmd.shortcut}
+                  </span>
+                )}
               </button>
             )}
           />

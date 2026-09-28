@@ -7,11 +7,14 @@ import {
   Network,
   ChevronRight,
   Home,
+  X,
 } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useZookeeperStore } from "../../stores/zookeeperStore";
 import { VirtualTree } from "../virtual/VirtualTree";
+import { EmptyState } from "../ui/EmptyState";
+import { SkeletonLines } from "../ui/Skeleton";
 import type { ZkTreeNode } from "../../types";
 
 /** Find a node by absolute path (mirrors the helper in zookeeperStore). */
@@ -107,7 +110,7 @@ export function ZookeeperPanel() {
       {/* Header */}
       <div className="flex items-center justify-between p-2 border-b border-border">
         <button
-          className="p-1 rounded hover:bg-accent"
+          className="p-1 rounded-md hover:bg-accent"
           onClick={handleBack}
           title={t("backToConnections")}
         >
@@ -119,7 +122,7 @@ export function ZookeeperPanel() {
         </span>
         <div className="flex items-center gap-1">
           <button
-            className="p-1 rounded hover:bg-accent"
+            className="p-1 rounded-md hover:bg-accent"
             onClick={handleRefresh}
             disabled={isLoadingTree}
             title={t("refresh")}
@@ -156,7 +159,7 @@ export function ZookeeperPanel() {
       {/* Breadcrumb */}
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border text-xs overflow-x-auto whitespace-nowrap">
         <button
-          className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
+          className="p-0.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
           onClick={() => handleNavigateTo("/")}
           title="/"
         >
@@ -168,7 +171,7 @@ export function ZookeeperPanel() {
             <span key={fullPath} className="flex items-center gap-0.5">
               <ChevronRight size={10} className="text-muted-foreground shrink-0" />
               <button
-                className="px-1 py-0.5 rounded hover:bg-accent hover:text-foreground text-muted-foreground truncate max-w-[120px] font-mono"
+                className="px-1 py-0.5 rounded-md hover:bg-accent hover:text-foreground text-muted-foreground truncate max-w-[120px] font-mono"
                 onClick={() => handleNavigateTo(fullPath)}
                 title={fullPath}
               >
@@ -185,10 +188,11 @@ export function ZookeeperPanel() {
           <AlertTriangle size={12} />
           <span className="truncate flex-1">{error}</span>
           <button
-            className="p-0.5 rounded hover:bg-destructive/10 shrink-0"
+            className="p-0.5 rounded-md hover:bg-destructive/10 shrink-0"
             onClick={clearError}
+            aria-label="dismiss"
           >
-            ×
+            <X size={12} />
           </button>
         </div>
       )}
@@ -196,13 +200,11 @@ export function ZookeeperPanel() {
       {/* Tree */}
       <div className="flex-1 overflow-hidden">
         {isLoadingTree ? (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-            {t("loadingNodes")}
+          <div className="p-3">
+            <SkeletonLines lines={8} />
           </div>
         ) : !rootNode ? (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-            {t("noNodes")}
-          </div>
+          <EmptyState compact icon={<Network size={16} />} title={t("noNodes")} />
         ) : (
           <VirtualTree
             roots={treeRoots}

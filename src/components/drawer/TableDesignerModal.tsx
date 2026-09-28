@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   X,
@@ -20,6 +20,9 @@ import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
 import { confirmDialog } from "../../lib/confirm";
 import { Checkbox } from "../ui/Checkbox";
+import { SkeletonTable } from "../ui/Skeleton";
+import { useModalFocus } from "../../lib/useModalFocus";
+import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 import {
   parseServerColumn,
   parseServerIndex,
@@ -43,7 +46,7 @@ interface TableDesignerModalProps {
 const cellInput =
   "w-full bg-background border border-border rounded-md px-1.5 py-1 text-xs outline-none hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/30 transition-colors";
 const opBtn =
-  "p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:pointer-events-none";
+  "p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:pointer-events-none";
 
 function newColumn(): DesignColumn {
   return {
@@ -79,6 +82,13 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
   const db = typeof params?.database === "string" ? params.database : undefined;
   const table = typeof params?.table === "string" ? params.table : undefined;
 
+  // Keep the db/table identity available while the exit animation plays
+  // (drawer.params are already gone by then).
+  const ctxRef = useRef<{ db: string; table: string }>({ db: "", table: "" });
+  const open = drawer.type === "tableDesign";
+  if (open && db && table) ctxRef.current = { db, table };
+  const ctx = db && table ? { db, table } : ctxRef.current;
+
   const applyDetails = useCallback((data: TableDetails) => {
     const parsedCols = data.columns.map(parseServerColumn);
     const parsedIdx = data.indexes.filter((i) => !i.isPrimary).map(parseServerIndex);
@@ -112,14 +122,14 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
   const { sql: alterSql } = useMemo(
     () =>
       buildAlterStatement(
-        db ?? "",
-        table ?? "",
+        ctx.db,
+        ctx.table,
         origColumns,
         columns,
         origIndexes,
         indexes,
       ),
-    [db, table, origColumns, columns, origIndexes, indexes],
+    [ctx.db, ctx.table, origColumns, columns, origIndexes, indexes],
   );
 
   const validation = useMemo(() => validateDesign(columns, indexes), [columns, indexes]);
@@ -131,14 +141,12 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
     closeDrawer();
   }, [hasEdits, t, closeDrawer]);
 
-  useEffect(() => {
-    if (drawer.type !== "tableDesign") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [drawer.type, handleClose]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Esc goes through handleClose (confirms when there are unsaved edits).
+  useModalFocus(panelRef, {
+    active: drawer.type === "tableDesign",
+    onEscape: handleClose,
+  });
 
   const updateColumn = (i: number, patch: Partial<DesignColumn>) => {
     setColumns((cols) => cols.map((c, j) => (j === i ? { ...c, ...patch } : c)));
@@ -199,12 +207,18 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
     }
   };
 
-  if (drawer.type !== "tableDesign") return null;
-  if (!connectionId || !db || !table) return null;
+  const show = useDelayedUnmount(open);
+  const closing = show && !open;
+  if (!show || !connectionId) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-[1040px] max-w-[95vw] max-h-[88vh] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${closing ? "animate-overlay-out" : "animate-overlay-in"}`}
+    >
+      <div
+        ref={panelRef}
+        className={`w-[1040px] max-w-[95vw] max-h-[88vh] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col ${closing ? "animate-modal-out" : "animate-modal-in"}`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted shrink-0">
           <div>
@@ -213,12 +227,12 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
               {t("designTable")}
             </h3>
             <div className="text-xs text-muted-foreground">
-              {db}.{table}
+              {ctx.db}.{ctx.table}
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             aria-label={t("cancel")}
           >
             <X size={18} />
@@ -228,14 +242,13 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
         {/* Body */}
         <div className="flex-1 min-h-0 overflow-auto p-4 space-y-5">
           {loadError && (
-            <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border border-border rounded">
+            <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border border-border rounded-md">
               {t("loadDetailsFailed", { msg: loadError })}
             </div>
           )}
           {loading && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 size={14} className="animate-spin" />
-              {t("loading")}
+            <div className="h-72 shrink-0">
+              <SkeletonTable rows={8} cols={6} />
             </div>
           )}
           {!loading && details && (
@@ -254,7 +267,7 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
                     {t("addColumn")}
                   </button>
                 </div>
-                <div className="border border-border rounded overflow-x-auto">
+                <div className="border border-border rounded-md overflow-x-auto">
                   <table className="w-full text-xs min-w-[980px]">
                     <thead>
                       <tr className="bg-muted text-muted-foreground text-left">
@@ -390,11 +403,11 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
                   </button>
                 </div>
                 {indexes.length === 0 ? (
-                  <div className="border border-border rounded px-3 py-2 text-xs text-muted-foreground">
+                  <div className="border border-border rounded-md px-3 py-2 text-xs text-muted-foreground">
                     {t("noIndexes")}
                   </div>
                 ) : (
-                  <div className="border border-border rounded overflow-x-auto">
+                  <div className="border border-border rounded-md overflow-x-auto">
                     <table className="w-full text-xs min-w-[560px]">
                       <thead>
                         <tr className="bg-muted text-muted-foreground text-left">
@@ -450,7 +463,7 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
                   {t("sqlPreview")}
                 </h4>
-                <div className="border border-border rounded overflow-hidden">
+                <div className="border border-border rounded-md overflow-hidden">
                   <CodeMirror
                     value={alterSql ?? t("noChanges")}
                     editable={false}

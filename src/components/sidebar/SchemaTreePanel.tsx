@@ -18,6 +18,8 @@ import type { Database, Table as TableType } from "../../types";
 import { VirtualTree, type TreeNode } from "../virtual/VirtualTree";
 import { parseTauriError } from "../../lib/error";
 import { ExportDialog } from "../export/ExportDialog";
+import { EmptyState } from "../ui/EmptyState";
+import { SkeletonLines } from "../ui/Skeleton";
 
 interface SchemaNodeData {
   type: "database" | "table" | "column";
@@ -201,16 +203,14 @@ export function SchemaTreePanel() {
 
   if (!activeId || statusMap[activeId] !== "connected") {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-4">
-        <p className="text-sm">{t("notConnected")}</p>
-        <button
-          className="mt-2 text-xs text-primary flex items-center gap-1"
-          onClick={() => setSidebarView("connection")}
-        >
-          <ChevronLeft size={14} />
-          {t("backToConnections")}
-        </button>
-      </div>
+      <EmptyState
+        icon={<DatabaseIcon size={20} />}
+        title={t("notConnected")}
+        action={{
+          label: t("backToConnections"),
+          onClick: () => setSidebarView("connection"),
+        }}
+      />
     );
   }
 
@@ -218,12 +218,12 @@ export function SchemaTreePanel() {
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-1 p-2 border-b border-border">
         <button
-          className="p-1 rounded hover:bg-accent"
+          className="p-1 rounded-md hover:bg-accent"
           onClick={() => setSidebarView("connection")}
         >
           <ChevronLeft size={14} />
         </button>
-        <div className="flex-1 flex items-center bg-background border border-border rounded px-2 py-1">
+        <div className="flex-1 flex items-center bg-background border border-border rounded-md px-2 py-1">
           <Search size={12} className="text-muted-foreground mr-1" />
           <input
             className="flex-1 bg-transparent text-xs outline-none"
@@ -232,7 +232,7 @@ export function SchemaTreePanel() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button className="p-1 rounded hover:bg-accent" onClick={handleRefresh}>
+        <button className="p-1 rounded-md hover:bg-accent" onClick={handleRefresh}>
           <RefreshCw size={14} />
         </button>
       </div>
@@ -244,8 +244,8 @@ export function SchemaTreePanel() {
       )}
 
       {loadingKey?.startsWith("db:") && (
-        <div className="px-3 py-1 text-xs text-muted-foreground">
-          {t("loadingTables", { dbName: loadingKey.slice(3) })}
+        <div className="px-3 py-2.5 border-b border-border/50">
+          <SkeletonLines lines={3} />
         </div>
       )}
 
@@ -282,7 +282,7 @@ export function SchemaTreePanel() {
                   <Table size={14} className="text-primary shrink-0" />
                   <span className="font-medium truncate">{data.name}</span>
                   <button
-                    className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
+                    className="p-0.5 rounded-md hover:bg-accent opacity-0 group-hover:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (data.database) {
@@ -312,19 +312,18 @@ export function SchemaTreePanel() {
       </div>
 
       {/* Export dialog */}
-      {exportTable && activeId && (
-        <ExportDialog
-          connectionId={activeId}
-          database={exportTable.db}
-          table={exportTable.table}
-          onClose={() => setExportTable(null)}
-        />
-      )}
+      <ExportDialog
+        open={!!exportTable && !!activeId}
+        connectionId={activeId ?? ""}
+        database={exportTable?.db ?? ""}
+        table={exportTable?.table ?? ""}
+        onClose={() => setExportTable(null)}
+      />
 
       {/* Right-click context menu for tables */}
       {contextMenu && (
         <div
-          className="fixed z-[60] min-w-[140px] py-1 bg-card border border-border rounded-lg shadow-xl"
+          className="fixed z-[60] min-w-[140px] py-1 bg-card border border-border rounded-lg shadow-xl animate-menu-in"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 160),
             top: Math.min(contextMenu.y, window.innerHeight - 100),

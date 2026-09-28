@@ -1,10 +1,12 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import * as queryService from "../../services/queryService";
 import { parseTauriError } from "../../lib/error";
+import { useModalFocus } from "../../lib/useModalFocus";
+import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 
 interface ExportProgress {
   totalRows: number;
@@ -13,6 +15,8 @@ interface ExportProgress {
 }
 
 interface ExportDialogProps {
+  /** Stays mounted while the exit animation plays; controls visibility. */
+  open: boolean;
   connectionId: string;
   database: string;
   table: string;
@@ -25,6 +29,7 @@ function defaultPath(database: string, table: string): string {
 }
 
 export function ExportDialog({
+  open,
   connectionId,
   database,
   table,
@@ -33,11 +38,28 @@ export function ExportDialog({
   const { t } = useTranslation("export");
   type Phase = ExportProgress["phase"] | "idle";
 
+  // Keep the export target available while the exit animation plays.
+  const ctxRef = useRef({ connectionId, database, table });
+  if (open) ctxRef.current = { connectionId, database, table };
+  const ctx = ctxRef.current;
+
   const [totalRows, setTotalRows] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [savePath, setSavePath] = useState(defaultPath(database, table));
   const exportIdRef = useRef(crypto.randomUUID());
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Reset to a fresh dialog on (re)open — the component stays mounted.
+  useEffect(() => {
+    if (open) {
+      setPhase("idle");
+      setTotalRows(0);
+      setErrorMsg(null);
+      setSavePath(defaultPath(ctx.database, ctx.table));
+      exportIdRef.current = crypto.randomUUID();
+    }
+  }, [open, ctx.database, ctx.table]);
 
   const handleChoosePath = useCallback(async () => {
     const chosen = await save({
@@ -65,9 +87,9 @@ export function ExportDialog({
 
       try {
         await queryService.executeExport(
-          connectionId,
-          database,
-          table,
+          ctx.connectionId,
+          ctx.database,
+          ctx.table,
           savePath,
           exportIdRef.current,
         );
@@ -82,7 +104,7 @@ export function ExportDialog({
       setErrorMsg(parseTauriError(err));
       setPhase("error");
     }
-  }, [connectionId, database, table, savePath]);
+  }, [ctx, savePath]);
 
   const handleCancel = async () => {
     try {
@@ -97,18 +119,30 @@ export function ExportDialog({
   const idle = phase === "idle";
   const running = phase === "running";
 
+  useModalFocus(panelRef, {
+    active: open,
+    onEscape: () => {
+      if (!running) onClose();
+    },
+  });
+
+  const show = useDelayedUnmount(open);
+  const closing = show && !open;
+  if (!show) return null;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${closing ? "animate-overlay-out" : "animate-overlay-in"}`}
     >
       <div
-        className="w-[460px] max-w-[92vw] bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
+        ref={panelRef}
+        className={`w-[460px] max-w-[92vw] bg-card border border-border rounded-lg shadow-2xl overflow-hidden ${closing ? "animate-modal-out" : "animate-modal-in"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
             <h3 className="text-sm font-semibold">
-              {t("title")} {database}.{table}
+              {t("title")} {ctx.database}.{ctx.table}
             </h3>
             {!idle && (
               <p className="text-xs text-muted-foreground mt-0.5">

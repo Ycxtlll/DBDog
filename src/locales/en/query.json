@@ -48,5 +48,8 @@
   "pageLabel": "Page",
   "pageOf": "/ {{total}}",
   "goToPage": "Go to page",
-  "refresh": "Refresh"
+  "refresh": "Refresh",
+  "confirmUnscopedDml": "This {{kind}} statement has no WHERE clause and will affect every row in the table. Execute anyway?",
+  "dangerousOperation": "Dangerous operation",
+  "dmlCancelled": "Execution cancelled"
 }

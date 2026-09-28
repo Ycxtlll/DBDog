@@ -7,5 +7,12 @@
   "paste": "Paste",
   "selectAll": "Select All",
   "format": "Format",
-  "explain": "Explain"
+  "explain": "Explain",
+  "welcomeTitle": "Start querying",
+  "welcomeDescription": "Pick a table from the schema tree on the left, or open a query tab to get to work",
+  "welcomeBrowseHint": "Click a table on the left to browse its data",
+  "welcomePaletteHint": "Open the command palette for quick actions",
+  "welcomeSidebarHint": "Collapse / expand the sidebar",
+  "welcomeNewQuery": "New SQL query",
+  "editorPlaceholder": "Type SQL — database / table / column names autocomplete; Ctrl+Enter runs the statement at the cursor"
 }

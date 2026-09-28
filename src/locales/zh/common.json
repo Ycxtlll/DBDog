@@ -23,5 +23,9 @@
   "searchCommand": "搜索命令...",
   "confirmDelete": "确定要删除吗？",
   "connectToStart": "连接数据库以开始使用",
-  "close": "关闭"
+  "close": "关闭",
+  "collapseSidebar": "收起侧栏",
+  "expandSidebar": "展开侧栏",
+  "selectConnection": "从左侧选择一个连接",
+  "selectConnectionHint": "已有 {{count}} 个保存的连接，点击左侧任意一个即可连接"
 }

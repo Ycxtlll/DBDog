@@ -1,4 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+/// Schema snapshot for the SQL editor's completion: database → table →
+/// column names. BTreeMap keeps the ordering deterministic across fetches.
+pub type CompletionSchema = BTreeMap<String, BTreeMap<String, Vec<String>>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

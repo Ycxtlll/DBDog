@@ -7,13 +7,32 @@ import type {
   UpdateResult,
 } from "../types";
 import { generateId } from "../lib/utils";
-import { buildCountSql, buildTableSelect, escapeMysqlIdentifier, splitSqlStatements } from "../lib/sql";
+import { buildCountSql, buildTableSelect, escapeMysqlIdentifier, hasTopLevelWhere, splitSqlStatements } from "../lib/sql";
 import * as queryService from "../services/queryService";
 import { parseTauriError } from "../lib/error";
+import { confirmDialog } from "../lib/confirm";
+import i18n from "../lib/i18n";
 import { showError } from "./toastStore";
 
 /** Default rows per fetch for table browsing. */
 const BROWSE_PAGE_SIZE = 50;
+
+/**
+ * Safety guard for unbounded SELECTs: a bare `SELECT * FROM big_table` with
+ * no LIMIT makes the server scan and ship everything, no matter what row
+ * cap the client applies afterwards. Wrap such statements in
+ * `SELECT * FROM (<stmt>) _alias LIMIT <n>` so MySQL itself stops early.
+ * Statements that already carry a LIMIT (or FOR UPDATE / locking clauses)
+ * pass through untouched; detection errs on the side of not wrapping.
+ */
+export function limitGuardSql(stmt: string, limit?: number): string {
+  const n = limit ?? 1000;
+  const head = stmt.split(/\s+/)[0]?.toUpperCase() ?? "";
+  if (head !== "SELECT" && head !== "WITH") return stmt;
+  if (/\blimit\b/i.test(stmt)) return stmt;
+  if (/\bfor\s+(update|share)\b/i.test(stmt)) return stmt;
+  return `SELECT * FROM (\n${stmt.replace(/;\s*$/, "")}\n) _dbdog_limited LIMIT ${n}`;
+}
 
 interface QueryState {
   tabs: QueryTab[];
@@ -161,9 +180,10 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         );
 
         if (isQuery) {
+          const sent = limitGuardSql(stmt, limit);
           const result = await queryService.executeQuery(
             connectionId,
-            stmt,
+            sent,
             limit,
             currentDatabase,
           );
@@ -173,6 +193,27 @@ export const useQueryStore = create<QueryState>((set, get) => ({
             finalIsQuery = true;
           }
         } else {
+          // An UPDATE/DELETE without a top-level WHERE hits every row —
+          // confirm before letting it through (subquery/string/comment
+          // WHEREs don't count, see hasTopLevelWhere).
+          if (
+            (firstWord === "UPDATE" || firstWord === "DELETE") &&
+            !hasTopLevelWhere(stmt)
+          ) {
+            const ok = await confirmDialog(
+              i18n.t("query:confirmUnscopedDml", { kind: firstWord }),
+              i18n.t("query:dangerousOperation"),
+            );
+            if (!ok) {
+              get().addHistory({
+                sql: stmt,
+                status: "error",
+                error: i18n.t("query:dmlCancelled"),
+                elapsedMs: 0,
+              });
+              return;
+            }
+          }
           const result = await queryService.executeUpdate(
             connectionId,
             stmt,
@@ -197,6 +238,16 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         elapsedMs,
         rowsCount: totalRowsCount,
       });
+
+      // Editor-side DDL: let the completion cache, schema tree and structure
+      // drawer know the schema changed (same event the visual designer uses).
+      if (/^\s*(alter|create|drop|rename|truncate)\b/i.test(rawSql)) {
+        window.dispatchEvent(
+          new CustomEvent("dbdog-schema-changed", {
+            detail: { database: currentDatabase },
+          }),
+        );
+      }
     } catch (err) {
       const msg = parseTauriError(err);
       get().setTabError(id, msg);

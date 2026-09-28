@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Plus,
@@ -19,6 +19,7 @@ import { showError } from "../../stores/toastStore";
 import { confirmDialog } from "../../lib/confirm";
 import type { ConnectionConfig } from "../../types";
 import { ConnectionFormModal } from "../connection/ConnectionFormModal";
+import { EmptyState } from "../ui/EmptyState";
 
 const TYPE_ICON: Record<string, typeof Database> = {
   mysql: Database,
@@ -51,6 +52,16 @@ export function ConnectionPanel() {
   const [editing, setEditing] = useState<ConnectionConfig | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // Empty states elsewhere (e.g. the editor area) can request the form.
+  useEffect(() => {
+    const open = () => {
+      setEditing(null);
+      setShowForm(true);
+    };
+    window.addEventListener("dbdog-new-connection", open);
+    return () => window.removeEventListener("dbdog-new-connection", open);
+  }, []);
 
   const groups = useMemo((): ConnectionGroup[] => {
     const map = new Map<string, ConnectionConfig[]>();
@@ -129,7 +140,7 @@ export function ConnectionPanel() {
       <div className="flex items-center justify-between p-2 border-b border-border">
         <span className="text-sm font-medium">{t("connections")}</span>
         <button
-          className="p-1 rounded hover:bg-accent"
+          className="p-1 rounded-md hover:bg-accent"
           onClick={() => {
             setEditing(null);
             setShowForm(true);
@@ -140,9 +151,18 @@ export function ConnectionPanel() {
       </div>
       <div className="flex-1 overflow-auto">
         {configs.length === 0 ? (
-          <div className="p-4 text-xs text-muted-foreground text-center">
-            {t("noConnections", "No connections yet")}
-          </div>
+          <EmptyState
+            compact
+            icon={<Database size={16} />}
+            title={t("noConnections", "No connections yet")}
+            action={{
+              label: t("newConnection"),
+              onClick: () => {
+                setEditing(null);
+                setShowForm(true);
+              },
+            }}
+          />
         ) : (
           groups.map((group) => (
             <div key={group.key} className="border-b border-border/30">
@@ -180,9 +200,7 @@ export function ConnectionPanel() {
           ))
         )}
       </div>
-      {showForm && (
-        <ConnectionFormModal config={editing} onClose={() => setShowForm(false)} />
-      )}
+      <ConnectionFormModal open={showForm} config={editing} onClose={() => setShowForm(false)} />
     </div>
   );
 }
@@ -236,7 +254,7 @@ function ConnectionRow({
         />
         {status === "connected" ? (
           <button
-            className="p-1 rounded hover:bg-accent"
+            className="p-1 rounded-md hover:bg-accent"
             onClick={(e) => {
               e.stopPropagation();
               onDisconnect();
@@ -246,7 +264,7 @@ function ConnectionRow({
           </button>
         ) : (
           <button
-            className="p-1 rounded hover:bg-accent"
+            className="p-1 rounded-md hover:bg-accent"
             onClick={(e) => {
               e.stopPropagation();
               onConnect();
@@ -256,7 +274,7 @@ function ConnectionRow({
           </button>
         )}
         <button
-          className="p-1 rounded hover:bg-accent"
+          className="p-1 rounded-md hover:bg-accent"
           onClick={(e) => {
             e.stopPropagation();
             onEdit();
@@ -265,7 +283,7 @@ function ConnectionRow({
           <Edit2 size={14} />
         </button>
         <button
-          className="p-1 rounded hover:bg-accent text-destructive"
+          className="p-1 rounded-md hover:bg-accent text-destructive"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();

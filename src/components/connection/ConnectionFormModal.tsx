@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, CheckCircle2, XCircle } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -7,49 +7,61 @@ import { translateTauriError } from "../../lib/error";
 import { showError } from "../../stores/toastStore";
 import type { ConnectionConfig } from "../../types";
 import { Checkbox } from "../ui/Checkbox";
+import { useModalFocus } from "../../lib/useModalFocus";
+import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 
 interface ConnectionFormModalProps {
+  /** Stays mounted while the exit animation plays; controls visibility. */
+  open: boolean;
   config: ConnectionConfig | null;
   onClose: () => void;
 }
 
-export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProps) {
+function makeDefaultForm(): ConnectionConfig {
+  return {
+    id: crypto.randomUUID(),
+    name: "",
+    type: "mysql",
+    host: "",
+    port: 3306,
+    username: "",
+    password: "",
+    database: "",
+    maxConnections: 10,
+    sslMode: "disabled",
+  };
+}
+
+export function ConnectionFormModal({ open, config, onClose }: ConnectionFormModalProps) {
   const { t } = useTranslation("connections");
   const saveConfig = useConnectionStore((s) => s.saveConfig);
 
-  const [form, setForm] = useState<ConnectionConfig>(
-    config ?? {
-      id: crypto.randomUUID(),
-      name: "",
-      type: "mysql",
-      host: "",
-      port: 3306,
-      username: "",
-      password: "",
-      database: "",
-      maxConnections: 10,
-      sslMode: "disabled",
-    },
-  );
+  const [form, setForm] = useState<ConnectionConfig>(config ?? makeDefaultForm());
   const [testMsg, setTestMsg] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
   const [clearPassword, setClearPassword] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useModalFocus(panelRef, { active: open, onEscape: onClose });
+
+  // The modal stays mounted for the exit animation — restore a clean form
+  // every time it is (re)opened, matching the old fresh-mount behavior.
+  useEffect(() => {
+    if (open) {
+      setForm(config ?? makeDefaultForm());
+      setTestMsg(null);
+      setClearPassword(false);
+    }
+  }, [open, config]);
+
+  const show = useDelayedUnmount(open);
+  const closing = show && !open;
+  if (!show) return null;
 
   const hasSavedPassword = !!config?.passwordHash;
   const portValid = Number.isInteger(form.port) && form.port >= 1 && form.port <= 65535;
   const formValid = form.name.trim() !== "" && form.host.trim() !== "" && portValid;
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
 
   const buildPayload = (): ConnectionConfig => {
     const payload = { ...form };
@@ -88,10 +100,11 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${closing ? "animate-overlay-out" : "animate-overlay-in"}`}
     >
       <div
-        className="w-[480px] max-w-[90vw] max-h-[85vh] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col"
+        ref={panelRef}
+        className={`w-[480px] max-w-[90vw] max-h-[85vh] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col ${closing ? "animate-modal-out" : "animate-modal-in"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted">
@@ -100,7 +113,7 @@ export function ConnectionFormModal({ config, onClose }: ConnectionFormModalProp
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             aria-label={t("cancel")}
           >
             <X size={18} />

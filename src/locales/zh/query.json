@@ -48,5 +48,8 @@
   "pageLabel": "第",
   "pageOf": "/ {{total}} 页",
   "goToPage": "跳转到指定页",
-  "refresh": "刷新"
+  "refresh": "刷新",
+  "confirmUnscopedDml": "这条 {{kind}} 语句没有 WHERE 条件，会影响表中的所有行。确定要执行吗？",
+  "dangerousOperation": "危险操作",
+  "dmlCancelled": "已取消执行"
 }

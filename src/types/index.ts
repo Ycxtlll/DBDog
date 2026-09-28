@@ -114,6 +114,9 @@ export interface SearchResult {
   columnName?: string;
 }
 
+/** database → table → column names, for SQL editor completion. */
+export type CompletionSchema = Record<string, Record<string, string[]>>;
+
 export interface QueryTab {
   id: string;
   name: string;

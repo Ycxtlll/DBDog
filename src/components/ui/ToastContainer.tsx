@@ -62,7 +62,7 @@ export function ToastContainer() {
             </div>
             <button
               onClick={() => removeToast(toast.id)}
-              className="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="shrink-0 p-0.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             >
               <X size={14} />
             </button>

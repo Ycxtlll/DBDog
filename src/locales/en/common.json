@@ -23,5 +23,9 @@
   "searchCommand": "Search command...",
   "confirmDelete": "Are you sure you want to delete?",
   "connectToStart": "Connect to a database to get started",
-  "close": "Close"
+  "close": "Close",
+  "collapseSidebar": "Collapse sidebar",
+  "expandSidebar": "Expand sidebar",
+  "selectConnection": "Pick a connection on the left",
+  "selectConnectionHint": "{{count}} saved connection(s) — click one on the left to connect"
 }

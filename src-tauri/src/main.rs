@@ -75,6 +75,7 @@ fn main() {
             commands::schema::get_table_details,
             commands::schema::refresh_schema,
             commands::schema::search_schema,
+            commands::schema::get_completion_schema,
             commands::memcached::memcached_list_keys,
             commands::memcached::memcached_get_item,
             commands::memcached::memcached_delete_item,

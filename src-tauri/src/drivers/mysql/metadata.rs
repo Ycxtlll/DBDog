@@ -347,6 +347,52 @@ impl DatabaseMetadata for MySqlDriver {
         })
     }
 
+    async fn fetch_completion_schema(
+        &self,
+        pool: &MySqlPool,
+        db: Option<&str>,
+    ) -> Result<CompletionSchema, AppError> {
+        // One information_schema pass over every column (views included —
+        // completing them is useful too). Bound to a single database when
+        // one is given, otherwise all user databases.
+        let (sql, bound): (&str, Option<&str>) = match db {
+            Some(d) => (
+                "SELECT table_schema, table_name, column_name \
+                 FROM information_schema.columns \
+                 WHERE table_schema = ? \
+                 ORDER BY table_schema, table_name, ordinal_position",
+                Some(d),
+            ),
+            None => (
+                "SELECT table_schema, table_name, column_name \
+                 FROM information_schema.columns \
+                 WHERE table_schema NOT IN ('information_schema','mysql','performance_schema','sys') \
+                 ORDER BY table_schema, table_name, ordinal_position",
+                None,
+            ),
+        };
+        let query = sqlx::query(sql);
+        let query = match bound {
+            Some(d) => query.bind(d),
+            None => query,
+        };
+        let rows = query.fetch_all(pool).await?;
+
+        let mut schema = CompletionSchema::new();
+        for row in rows {
+            let schema_name: String = row.try_get("table_schema")?;
+            let table_name: String = row.try_get("table_name")?;
+            let column_name: String = row.try_get("column_name")?;
+            schema
+                .entry(schema_name)
+                .or_default()
+                .entry(table_name)
+                .or_default()
+                .push(column_name);
+        }
+        Ok(schema)
+    }
+
     async fn search_schema(
         &self,
         pool: &MySqlPool,

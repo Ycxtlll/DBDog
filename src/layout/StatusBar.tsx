@@ -65,7 +65,7 @@ export function StatusBar() {
       )}
         <div className="flex-1" />
         <button
-          className="p-0.5 rounded hover:bg-accent hover:text-foreground transition-colors"
+          className="p-0.5 rounded-md hover:bg-accent hover:text-foreground transition-colors"
           onClick={() => setShowSettings(true)}
           title={t("settings:settings", { ns: "settings" })}
         >

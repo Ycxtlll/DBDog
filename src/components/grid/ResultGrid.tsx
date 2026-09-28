@@ -13,6 +13,7 @@ import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
 import { confirmDialog } from "../../lib/confirm";
 import { escapeMysqlIdentifier, buildTableSelect } from "../../lib/sql";
+import { limitGuardSql } from "../../stores/queryStore";
 
 interface DetailCellInfo {
   columnName: string;
@@ -205,9 +206,11 @@ export function ResultGrid({ tab }: ResultGridProps) {
     const sql = current?.executedSql?.trim();
     if (!activeConnectionId || !sql) return;
     try {
+      // Same unbounded-SELECT guard as the normal execute path — the grid
+      // refresh must not bypass it and rescan a whole table.
       const freshResult = await queryService.executeQuery(
         activeConnectionId,
-        sql,
+        limitGuardSql(sql, current?.executedLimit),
         current?.executedLimit,
         current?.selectedDatabase,
       );
@@ -473,7 +476,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
       {/* Right-click context menu */}
       {contextMenu && (
         <div
-          className="fixed z-[60] min-w-[160px] py-1 bg-card border border-border rounded-lg shadow-xl"
+          className="fixed z-[60] min-w-[160px] py-1 bg-card border border-border rounded-lg shadow-xl animate-menu-in"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 180),
             top: Math.min(contextMenu.y, window.innerHeight - 120),
@@ -508,16 +511,15 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </div>
       )}
 
-      {detailCell && (
-        <CellDetailModal
-          columnName={detailCell.columnName}
-          value={detailCell.value}
-          rowData={detailCell.rowData}
-          onSave={tab.tableBrowse ? handleSave : undefined}
-          onDeleteRow={tab.tableBrowse ? handleDeleteModalRow : undefined}
-          onClose={() => setDetailCell(null)}
-        />
-      )}
+      <CellDetailModal
+        open={!!detailCell}
+        columnName={detailCell?.columnName}
+        value={detailCell?.value}
+        rowData={detailCell?.rowData}
+        onSave={tab.tableBrowse ? handleSave : undefined}
+        onDeleteRow={tab.tableBrowse ? handleDeleteModalRow : undefined}
+        onClose={() => setDetailCell(null)}
+      />
     </div>
   );
 }

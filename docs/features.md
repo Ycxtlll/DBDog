@@ -3,7 +3,8 @@
 ## MySQL
 
 - **SQL 编辑器** — 多标签编辑、CodeMirror 6 语法高亮、SQL 格式化（Ctrl+Shift+F）
-- **查询执行** — Ctrl+Enter 执行全部、Ctrl+Shift+Enter 执行选中，自动区分查询/更新语句
+- **SQL 智能补全** — 关键字 + 库名/表名/列名自动补全：输入触发，`db.` 后提示表、`table.` 后提示列、`USE` 后提示库名；schema 快照带 5 分钟缓存，DDL 变更后自动刷新（可在设置中关闭）
+- **查询执行** — Ctrl+Enter 执行选中语句，无选中时执行光标所在语句；Ctrl+Shift+Enter 执行全部，自动区分查询/更新语句
 - **结果网格** — AG Grid 虚拟滚动，列头筛选排序，单击单元格打开行数据弹窗编辑（自动生成 UPDATE）
 - **表结构浏览** — 侧边栏树形导航（数据库→表→列），Columns3 图标查看字段/索引/外键/触发器/DDL
 - **DDL 高亮** — CREATE TABLE 语句以 CodeMirror SQL 语法高亮展示

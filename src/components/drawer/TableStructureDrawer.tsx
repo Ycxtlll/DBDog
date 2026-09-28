@@ -6,6 +6,7 @@ import * as schemaService from "../../services/schemaService";
 import { parseTauriError } from "../../lib/error";
 import type { TableDetails } from "../../types";
 import { VirtualList } from "../virtual/VirtualList";
+import { SkeletonLines } from "../ui/Skeleton";
 import CodeMirror from "@uiw/react-codemirror";
 import { sql } from "@codemirror/lang-sql";
 import { vscodeDark } from "@uiw/codemirror-theme-vscode";
@@ -21,6 +22,7 @@ export function TableStructureDrawer({
   const { t } = useTranslation("schema");
   const { drawer, closeDrawer, openDrawer } = useLayoutStore();
   const [details, setDetails] = useState<TableDetails | null>(null);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<
     "columns" | "indexes" | "foreignKeys" | "triggers" | "sql"
   >("columns");
@@ -34,6 +36,7 @@ export function TableStructureDrawer({
     async function load() {
       if (drawer.type === "tableStructure" && connectionId && db && table) {
         setError(null);
+        setLoading(true);
         try {
           const data = await schemaService.getTableDetails(connectionId, db, table);
           setDetails(data);
@@ -42,6 +45,8 @@ export function TableStructureDrawer({
           setError(msg);
           setDetails(null);
           console.error("Failed to load table details:", err);
+        } finally {
+          setLoading(false);
         }
       } else {
         setDetails(null);
@@ -77,13 +82,13 @@ export function TableStructureDrawer({
         </div>
         <div className="flex items-center gap-1">
           <button
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => openDrawer("tableDesign", { database: db, table })}
             title={t("designTable")}
           >
             <PencilRuler size={15} />
           </button>
-          <button className="p-1 rounded hover:bg-accent" onClick={closeDrawer}>
+          <button className="p-1 rounded-md hover:bg-accent" onClick={closeDrawer}>
             <X size={16} />
           </button>
         </div>
@@ -107,6 +112,11 @@ export function TableStructureDrawer({
         </div>
       )}
       <div className="flex-1 overflow-hidden">
+        {loading && !details && (
+          <div className="p-3">
+            <SkeletonLines lines={8} />
+          </div>
+        )}
         {activeTab === "columns" && details && (
           <VirtualList
             items={details.columns}

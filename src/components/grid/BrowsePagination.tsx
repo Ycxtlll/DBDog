@@ -25,7 +25,7 @@ interface BrowsePaginationProps {
 }
 
 const iconBtn =
-  "p-1 rounded hover:bg-accent disabled:opacity-30 disabled:pointer-events-none text-muted-foreground hover:text-foreground transition-colors";
+  "p-1 rounded-md hover:bg-accent disabled:opacity-30 disabled:pointer-events-none text-muted-foreground hover:text-foreground transition-colors";
 
 export function BrowsePagination({
   page,

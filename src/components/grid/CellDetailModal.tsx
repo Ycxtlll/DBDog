@@ -2,17 +2,27 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { confirmDialog } from "../../lib/confirm";
+import { useModalFocus } from "../../lib/useModalFocus";
+import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 
 interface CellDetailModalProps {
-  columnName: string;
-  value: unknown;
+  /** Stays mounted while the exit animation plays; controls visibility. */
+  open: boolean;
+  columnName?: string;
+  value?: unknown;
   /** Full row data (all columns → value). */
-  rowData: Record<string, unknown>;
+  rowData?: Record<string, unknown>;
   /** If provided, the modal enables edit/save for focused cell. */
   onSave?: (columnName: string, newValue: string) => Promise<void>;
   /** If provided, shows a "Delete Row" button that deletes the entire row. */
   onDeleteRow?: () => Promise<void>;
   onClose: () => void;
+}
+
+interface CellDetailSnapshot {
+  columnName: string;
+  value: unknown;
+  rowData: Record<string, unknown>;
 }
 
 function formatValue(value: unknown): string {
@@ -23,6 +33,7 @@ function formatValue(value: unknown): string {
 }
 
 export function CellDetailModal({
+  open,
   columnName,
   value: _value,
   rowData,
@@ -32,16 +43,54 @@ export function CellDetailModal({
 }: CellDetailModalProps) {
   const { t } = useTranslation("query");
   const editInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // The parent keeps this mounted for the exit animation after the row is
+  // cleared — serve the last visible row from a snapshot while closing.
+  const snapshotRef = useRef<CellDetailSnapshot>({ columnName: "", value: null, rowData: {} });
+  if (open && rowData && Object.keys(rowData).length > 0) {
+    snapshotRef.current = { columnName: columnName ?? "", value: _value ?? null, rowData };
+  }
+  const snapshot = snapshotRef.current;
+
+  // Esc is handled by the modal itself (exit edit mode first); the hook
+  // provides initial focus + Tab trapping. The component stays mounted for
+  // the exit animation, so the hook must be gated on `open`.
+  useModalFocus(panelRef, { active: open });
 
   // Which field is being edited (column name), null = view mode
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
 
+  // Reset transient edit state on (re)open — the component stays mounted.
+  useEffect(() => {
+    if (open) {
+      setEditingField(null);
+      setCopied(false);
+      setSaving(false);
+      setDeleting(false);
+    }
+  }, [open]);
+
   const canEdit = !!onSave;
-  const columns = Object.keys(rowData);
+  const columns = Object.keys(snapshot.rowData);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (editingField) {
+          setEditingField(null);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, editingField]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -66,7 +115,7 @@ export function CellDetailModal({
 
   const startEdit = (col: string) => {
     if (!canEdit) return;
-    const rawVal = rowData[col];
+    const rawVal = snapshot.rowData[col];
     setEditingField(col);
     setEditText(rawVal === null || rawVal === undefined ? "" : formatValue(rawVal));
   };
@@ -115,7 +164,7 @@ export function CellDetailModal({
 
   const handleCopyRow = () => {
     const text = columns
-      .map((col) => `${col}: ${formatValue(rowData[col])}`)
+      .map((col) => `${col}: ${formatValue(snapshot.rowData[col])}`)
       .join("\n");
     navigator.clipboard
       .writeText(text)
@@ -128,12 +177,17 @@ export function CellDetailModal({
 
   const isNull = (v: unknown) => v === null || v === undefined;
 
+  const show = useDelayedUnmount(open);
+  const closing = show && !open;
+  if (!show) return null;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${closing ? "animate-overlay-out" : "animate-overlay-in"}`}
     >
       <div
-        className="w-[750px] max-w-[92vw] max-h-[85vh] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col"
+        ref={panelRef}
+        className={`w-[750px] max-w-[92vw] max-h-[85vh] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col ${closing ? "animate-modal-out" : "animate-modal-in"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted shrink-0">
@@ -185,10 +239,10 @@ export function CellDetailModal({
         {/* Body — scrollable form of all columns */}
         <div className="flex-1 overflow-y-auto p-4 space-y-0.5">
           {columns.map((col) => {
-            const val = rowData[col];
+            const val = snapshot.rowData[col];
             const nullVal = isNull(val);
             const isEditing = editingField === col;
-            const isFocused = col === columnName;
+            const isFocused = col === snapshot.columnName;
 
             return (
               <div
@@ -227,19 +281,19 @@ export function CellDetailModal({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleSave();
                         }}
-                        className="flex-1 bg-background text-foreground text-sm font-mono px-2 py-1 rounded border border-amber-500/50 outline-none focus:ring-1 focus:ring-amber-500"
+                        className="flex-1 bg-background text-foreground text-sm font-mono px-2 py-1 rounded-md border border-amber-500/50 outline-none focus:ring-1 focus:ring-amber-500"
                       />
                       <button
                         onClick={handleSetNull}
                         disabled={saving}
-                        className="px-2 py-1 text-xs rounded border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors disabled:opacity-50 shrink-0"
+                        className="px-2 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors disabled:opacity-50 shrink-0"
                       >
                         NULL
                       </button>
                       <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="px-2 py-1 text-xs font-medium rounded bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-1 shrink-0"
+                        className="px-2 py-1 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-1 shrink-0"
                       >
                         {saving && <Loader2 size={11} className="animate-spin" />}
                         {t("save")}

@@ -53,11 +53,11 @@ export function QueryHistory() {
               )}
               <span className="truncate flex-1 font-mono">{item.sql}</span>
               {item.elapsedMs !== undefined && (
-                <span className="text-muted-foreground shrink-0">
+                <span className="text-muted-foreground shrink-0 tabular-nums">
                   {item.elapsedMs}ms
                 </span>
               )}
-              <span className="text-muted-foreground shrink-0">
+              <span className="text-muted-foreground shrink-0 tabular-nums">
                 {t("timeAgo", { time: formatElapsed(Date.now() - item.timestamp) })}
               </span>
             </div>
