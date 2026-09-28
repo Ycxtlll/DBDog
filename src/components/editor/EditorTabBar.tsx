@@ -6,9 +6,12 @@ import { useUiStore } from "../../stores/uiStore";
 
 export function EditorTabBar({
   getSqlSelection,
+  getStatementAtCursor,
   hasSelection = false,
 }: {
   getSqlSelection?: () => { hasSelection: boolean; selectedSql: string };
+  /** Falls back between selection → statement at cursor → whole document. */
+  getStatementAtCursor?: () => string | null;
   hasSelection?: boolean;
 }) {
   const { t } = useTranslation("editor");
@@ -24,7 +27,12 @@ export function EditorTabBar({
     if (sel?.hasSelection) {
       execute(activeConnectionId, activeTabId, query.defaultLimit, sel.selectedSql);
     } else {
-      execute(activeConnectionId, activeTabId, query.defaultLimit);
+      const stmt = getStatementAtCursor?.();
+      if (stmt) {
+        execute(activeConnectionId, activeTabId, query.defaultLimit, stmt);
+      } else {
+        execute(activeConnectionId, activeTabId, query.defaultLimit);
+      }
     }
   };
 
@@ -55,7 +63,7 @@ export function EditorTabBar({
               <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
             )}
             <button
-              className="p-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
+              className="p-0.5 rounded-md hover:bg-accent opacity-0 group-hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
                 closeTab(tab.id);
@@ -71,13 +79,13 @@ export function EditorTabBar({
       </div>
       <div className="flex items-center gap-1 px-2 border-l border-border">
         {activeTab?.selectedDatabase && (
-          <span className="text-xs text-muted-foreground flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent/50">
+          <span className="text-xs text-muted-foreground flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-accent/50">
             <Database size={11} />
             {activeTab.selectedDatabase}
           </span>
         )}
         <button
-          className={`p-1.5 rounded transition-colors disabled:opacity-50 ${
+          className={`p-1.5 rounded-md transition-colors disabled:opacity-50 ${
             hasSelection
               ? "bg-primary/15 hover:bg-primary/25 text-primary"
               : "hover:bg-accent text-primary"

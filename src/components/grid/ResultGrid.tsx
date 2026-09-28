@@ -6,12 +6,14 @@ import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, UpdateResult } from "../../types";
 import { CellDetailModal } from "./CellDetailModal";
+import { BrowsePagination } from "./BrowsePagination";
 import * as queryService from "../../services/queryService";
 import { useQueryStore } from "../../stores/queryStore";
 import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
 import { confirmDialog } from "../../lib/confirm";
-import { escapeMysqlIdentifier } from "../../lib/sql";
+import { escapeMysqlIdentifier, buildTableSelect } from "../../lib/sql";
+import { limitGuardSql } from "../../stores/queryStore";
 
 interface DetailCellInfo {
   columnName: string;
@@ -39,6 +41,19 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
+  const browse = tab.tableBrowse;
+  // The pager only makes sense while the grid actually shows browse data —
+  // hide it once the user runs their own SQL in the tab.
+  const showBrowsePager =
+    !!browse &&
+    tab.executedSql ===
+      buildTableSelect(
+        browse.database,
+        browse.table,
+        browse.primaryKeyColumns,
+        (browse.page - 1) * browse.pageSize,
+        browse.pageSize,
+      );
 
   const agGridLocaleText = useMemo(
     () => ({
@@ -168,7 +183,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const handleCellContextMenu = useCallback(
     (event: CellContextMenuEvent) => {
-      if (!tab.editableTable) return;
+      if (!tab.tableBrowse) return;
       const row = (event.data as Record<string, unknown>) ?? {};
       const mouseEvent = event.event as MouseEvent | null;
       if (!mouseEvent) return;
@@ -178,7 +193,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         rowData: row,
       });
     },
-    [tab.editableTable],
+    [tab.tableBrowse],
   );
 
   /**
@@ -191,9 +206,11 @@ export function ResultGrid({ tab }: ResultGridProps) {
     const sql = current?.executedSql?.trim();
     if (!activeConnectionId || !sql) return;
     try {
+      // Same unbounded-SELECT guard as the normal execute path — the grid
+      // refresh must not bypass it and rescan a whole table.
       const freshResult = await queryService.executeQuery(
         activeConnectionId,
-        sql,
+        limitGuardSql(sql, current?.executedLimit),
         current?.executedLimit,
         current?.selectedDatabase,
       );
@@ -219,7 +236,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           if (colIdx >= 0) {
             pkCols = keysResult.rows.map((r) => String(r[colIdx] ?? ""));
           }
-          useQueryStore.getState().setTabEditableTable(tab.id, { database, table, primaryKeyColumns: pkCols });
+          useQueryStore.getState().setTabTableBrowse(tab.id, { database, table, primaryKeyColumns: pkCols, pageSize: tab.tableBrowse?.pageSize ?? 50, page: tab.tableBrowse?.page ?? 1, totalRows: tab.tableBrowse?.totalRows });
         } catch {
           return [];
         }
@@ -241,11 +258,11 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const handleSave = useCallback(
     async (colName: string, newValue: string) => {
-      if (!detailCell || !tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
+      if (!detailCell || !tab.tableBrowse || !activeConnectionId || !isQueryResult || !result) return;
 
-      const { database, table } = tab.editableTable;
+      const { database, table } = tab.tableBrowse;
 
-      const pkCols = await resolvePkColumns(database, table, tab.editableTable.primaryKeyColumns);
+      const pkCols = await resolvePkColumns(database, table, tab.tableBrowse.primaryKeyColumns);
       if (pkCols.length === 0) {
         showError(t("noPrimaryKey"));
         return;
@@ -302,17 +319,17 @@ export function ResultGrid({ tab }: ResultGridProps) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [detailCell, tab.editableTable, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
+    [detailCell, tab.tableBrowse, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
   );
 
   // Delete a row (called from context menu or modal)
   const handleDeleteRow = useCallback(
     async (row: Record<string, unknown>) => {
-      if (!tab.editableTable || !activeConnectionId || !isQueryResult || !result) return;
+      if (!tab.tableBrowse || !activeConnectionId || !isQueryResult || !result) return;
 
-      const { database, table } = tab.editableTable;
+      const { database, table } = tab.tableBrowse;
 
-      const pkCols = await resolvePkColumns(database, table, tab.editableTable.primaryKeyColumns);
+      const pkCols = await resolvePkColumns(database, table, tab.tableBrowse.primaryKeyColumns);
       if (pkCols.length === 0) {
         showError(t("noPrimaryKey"));
         return;
@@ -356,7 +373,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
       await refreshGrid();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tab.editableTable, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
+    [tab.tableBrowse, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
   );
 
   const handleDeleteModalRow = useCallback(
@@ -389,12 +406,43 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const queryResult = result as QueryResult;
 
+  const handleBrowsePage = useCallback(
+    (page: number) => {
+      if (activeConnectionId) {
+        useQueryStore.getState().browsePage(activeConnectionId, tab.id, page);
+      }
+    },
+    [activeConnectionId, tab.id],
+  );
+
+  const handleBrowsePageSize = useCallback(
+    (size: number) => {
+      if (activeConnectionId) {
+        useQueryStore.getState().browsePage(activeConnectionId, tab.id, 1, size);
+      }
+    },
+    [activeConnectionId, tab.id],
+  );
+
+  const handleBrowseRefresh = useCallback(() => {
+    if (!activeConnectionId) return;
+    const store = useQueryStore.getState();
+    store.refreshBrowseCount(activeConnectionId, tab.id);
+    store.browsePage(activeConnectionId, tab.id, tab.tableBrowse?.page ?? 1);
+  }, [activeConnectionId, tab.id]);
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-3 py-1 text-xs border-b border-border bg-muted">
         <span>
-          {queryResult.totalCount} {t("rows")}{" "}
-          {queryResult.truncated && `(${t("truncated")})`}
+          {browse
+            ? browse.totalRows !== undefined
+              ? `${browse.totalRows.toLocaleString()} ${t("rows")}`
+              : t("totalRowsUnknown")
+            : <>
+                {queryResult.totalCount} {t("rows")}{" "}
+                {queryResult.truncated && `(${t("truncated")})`}
+              </>}
         </span>
         <span>{queryResult.elapsedMs}ms</span>
       </div>
@@ -402,7 +450,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         <AgGridReact
           columnDefs={columnDefs}
           rowData={rowData}
-          pagination={true}
+          pagination={!showBrowsePager}
           paginationPageSize={100}
           paginationPageSizeSelector={[50, 100, 200, 500]}
           localeText={agGridLocaleText}
@@ -412,11 +460,23 @@ export function ResultGrid({ tab }: ResultGridProps) {
           onCellContextMenu={handleCellContextMenu}
         />
       </div>
+      {showBrowsePager && browse && (
+        <BrowsePagination
+          page={browse.page}
+          pageSize={browse.pageSize}
+          totalRows={browse.totalRows}
+          rowsOnPage={queryResult.rows.length}
+          loading={tab.isExecuting}
+          onPage={handleBrowsePage}
+          onPageSize={handleBrowsePageSize}
+          onRefresh={handleBrowseRefresh}
+        />
+      )}
 
       {/* Right-click context menu */}
       {contextMenu && (
         <div
-          className="fixed z-[60] min-w-[160px] py-1 bg-card border border-border rounded-lg shadow-xl"
+          className="fixed z-[60] min-w-[160px] py-1 bg-card border border-border rounded-lg shadow-xl animate-menu-in"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 180),
             top: Math.min(contextMenu.y, window.innerHeight - 120),
@@ -451,16 +511,15 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </div>
       )}
 
-      {detailCell && (
-        <CellDetailModal
-          columnName={detailCell.columnName}
-          value={detailCell.value}
-          rowData={detailCell.rowData}
-          onSave={tab.editableTable ? handleSave : undefined}
-          onDeleteRow={tab.editableTable ? handleDeleteModalRow : undefined}
-          onClose={() => setDetailCell(null)}
-        />
-      )}
+      <CellDetailModal
+        open={!!detailCell}
+        columnName={detailCell?.columnName}
+        value={detailCell?.value}
+        rowData={detailCell?.rowData}
+        onSave={tab.tableBrowse ? handleSave : undefined}
+        onDeleteRow={tab.tableBrowse ? handleDeleteModalRow : undefined}
+        onClose={() => setDetailCell(null)}
+      />
     </div>
   );
 }

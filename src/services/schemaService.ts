@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Database, SearchResult, Table, TableDetails } from "../types";
+import type { CompletionSchema, Database, SearchResult, Table, TableDetails } from "../types";
 
 export async function getDatabases(connectionId: string): Promise<Database[]> {
   return invoke("get_databases", { connectionId });
@@ -32,4 +32,11 @@ export async function searchSchema(
   keyword: string,
 ): Promise<SearchResult[]> {
   return invoke("search_schema", { connectionId, keyword });
+}
+
+export async function getCompletionSchema(
+  connectionId: string,
+  database?: string,
+): Promise<CompletionSchema> {
+  return invoke("get_completion_schema", { connectionId, database: database ?? null });
 }

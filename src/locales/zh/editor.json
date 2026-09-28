@@ -7,5 +7,12 @@
   "paste": "粘贴",
   "selectAll": "全选",
   "format": "格式化",
-  "explain": "分析"
+  "explain": "分析",
+  "welcomeTitle": "开始查询",
+  "welcomeDescription": "从左侧结构树选择一个表，或新建查询标签页开始工作",
+  "welcomeBrowseHint": "点击左侧表名，分页浏览表数据",
+  "welcomePaletteHint": "打开命令面板，快速执行操作",
+  "welcomeSidebarHint": "收起 / 展开左侧栏",
+  "welcomeNewQuery": "新建 SQL 查询",
+  "editorPlaceholder": "编写 SQL —— 库名 / 表名 / 列名自动补全，Ctrl+Enter 执行光标所在语句"
 }

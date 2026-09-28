@@ -61,4 +61,9 @@ pub trait DatabaseMetadata: Send + Sync {
         pool: &MySqlPool,
         keyword: &str,
     ) -> Result<Vec<SearchResult>, AppError>;
+    async fn fetch_completion_schema(
+        &self,
+        pool: &MySqlPool,
+        db: Option<&str>,
+    ) -> Result<CompletionSchema, AppError>;
 }

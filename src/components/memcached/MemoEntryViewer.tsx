@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useMemcachedStore } from "../../stores/memcachedStore";
+import { SkeletonLines } from "../ui/Skeleton";
 
 interface MemoEntryViewerProps {
   connectionId: string;
@@ -18,9 +19,8 @@ export function MemoEntryViewer({ connectionId, keyName }: MemoEntryViewerProps)
 
   if (isLoadingItem) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
-        <Loader2 size={16} className="animate-spin mr-2" />
-        <span className="text-sm">{t("loading")}</span>
+      <div className="p-4">
+        <SkeletonLines lines={8} />
       </div>
     );
   }
@@ -103,7 +103,7 @@ export function MemoEntryViewer({ connectionId, keyName }: MemoEntryViewerProps)
 
 function MetaBadge({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1 bg-muted rounded px-2 py-1">
+    <span className="inline-flex items-center gap-1 bg-muted rounded-md px-2 py-1">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-mono tabular-nums">{value}</span>
     </span>

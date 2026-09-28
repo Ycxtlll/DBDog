@@ -11,7 +11,7 @@ export function Sidebar() {
 
   return (
     <div
-      className="flex flex-col border-r border-border bg-card"
+      className="flex flex-col bg-card"
       style={{ width: sidebarWidth, minWidth: 200, maxWidth: 500 }}
     >
       <div className="flex-1 overflow-hidden">

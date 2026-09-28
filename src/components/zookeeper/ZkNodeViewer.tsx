@@ -82,7 +82,7 @@ function StatCell({
   value: string | number;
 }) {
   return (
-    <div className="bg-muted rounded px-2 py-1 flex items-baseline gap-1.5">
+    <div className="bg-muted rounded-md px-2 py-1 flex items-baseline gap-1.5">
       <span className="text-[10px] text-muted-foreground shrink-0">{label}</span>
       <span className="truncate tabular-nums">{value}</span>
     </div>

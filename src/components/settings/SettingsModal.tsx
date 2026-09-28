@@ -1,27 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import { X, Monitor, Sun, Moon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
+import { useModalFocus } from "../../lib/useModalFocus";
+import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+/* Shared segmented-button style so the theme and language groups can't drift. */
+const segBtn =
+  "flex-1 flex flex-col items-center justify-center gap-1 px-3 py-2.5 text-xs rounded-md border transition-colors";
+const segActive = "bg-primary text-primary-foreground border-primary";
+const segInactive = "bg-background border-border hover:border-primary/50 hover:bg-accent";
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { t } = useTranslation(["settings", "common"]);
   const { theme, language, setTheme, setLanguage } = useUiStore();
   const [version, setVersion] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useModalFocus(panelRef, { active: isOpen, onEscape: onClose });
 
   useEffect(() => {
     // Falls back to the Cargo.toml package version when tauri.conf.json has
@@ -31,12 +32,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       .catch(() => {});
   }, []);
 
-  if (!isOpen) return null;
+  const show = useDelayedUnmount(isOpen);
+  const closing = show && !isOpen;
+  if (!show) return null;
 
   const themes: { key: "system" | "light" | "dark"; icon: React.ReactNode; label: string }[] = [
-    { key: "system", icon: <Monitor size={14} />, label: t("common:systemTheme") },
-    { key: "light", icon: <Sun size={14} />, label: t("common:lightTheme") },
-    { key: "dark", icon: <Moon size={14} />, label: t("common:darkTheme") },
+    { key: "system", icon: <Monitor size={16} />, label: t("common:systemTheme") },
+    { key: "light", icon: <Sun size={16} />, label: t("common:lightTheme") },
+    { key: "dark", icon: <Moon size={16} />, label: t("common:darkTheme") },
   ];
 
   const languages: { key: "zh" | "en"; label: string }[] = [
@@ -46,13 +49,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${closing ? "animate-overlay-out" : "animate-overlay-in"}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="w-[360px] max-w-[90vw] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col"
+        ref={panelRef}
+        className={`w-[360px] max-w-[90vw] bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col ${closing ? "animate-modal-out" : "animate-modal-in"}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted">
@@ -61,7 +65,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             aria-label={t("common:cancel")}
           >
             <X size={18} />
@@ -80,14 +84,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <button
                   key={item.key}
                   onClick={() => setTheme(item.key)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md border transition-colors ${
-                    theme === item.key
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background border-border hover:bg-accent"
-                  }`}
+                  className={`${segBtn} ${theme === item.key ? segActive : segInactive}`}
                 >
                   {item.icon}
-                  {item.label}
+                  <span className="whitespace-nowrap">{item.label}</span>
                 </button>
               ))}
             </div>
@@ -103,13 +103,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <button
                   key={item.key}
                   onClick={() => setLanguage(item.key)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm rounded-md border transition-colors ${
-                    language === item.key
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background border-border hover:bg-accent"
-                  }`}
+                  className={`${segBtn} ${language === item.key ? segActive : segInactive}`}
                 >
-                  {item.label}
+                  <span className="whitespace-nowrap">{item.label}</span>
                 </button>
               ))}
             </div>

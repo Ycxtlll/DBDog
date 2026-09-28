@@ -13,6 +13,8 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
 import { useMemcachedStore } from "../../stores/memcachedStore";
 import { VirtualList } from "../virtual/VirtualList";
+import { SkeletonLines } from "../ui/Skeleton";
+import { EmptyState } from "../ui/EmptyState";
 import { confirmDialog } from "../../lib/confirm";
 export function MemcachedPanel() {
   const { t } = useTranslation("memcached");
@@ -88,7 +90,7 @@ export function MemcachedPanel() {
       {/* Header */}
       <div className="flex items-center justify-between p-2 border-b border-border">
         <button
-          className="p-1 rounded hover:bg-accent"
+          className="p-1 rounded-md hover:bg-accent"
           onClick={handleBack}
           title={t("backToConnections")}
         >
@@ -100,7 +102,7 @@ export function MemcachedPanel() {
         </span>
         <div className="flex items-center gap-1">
           <button
-            className="p-1 rounded hover:bg-accent"
+            className="p-1 rounded-md hover:bg-accent"
             onClick={handleRefresh}
             disabled={isLoadingKeys}
             title={t("refresh")}
@@ -108,7 +110,7 @@ export function MemcachedPanel() {
             <RefreshCw size={14} className={isLoadingKeys ? "animate-spin" : ""} />
           </button>
           <button
-            className="p-1 rounded hover:bg-accent text-destructive"
+            className="p-1 rounded-md hover:bg-accent text-destructive"
             onClick={handleFlushAll}
             disabled={isFlushing}
             title={t("flushAll")}
@@ -143,7 +145,7 @@ export function MemcachedPanel() {
           />
         </div>
         <button
-          className="p-1 rounded hover:bg-accent text-xs"
+          className="p-1 rounded-md hover:bg-accent text-xs"
           onClick={handleSearch}
           disabled={isLoadingKeys}
         >
@@ -162,13 +164,13 @@ export function MemcachedPanel() {
       {/* Key list */}
       <div className="flex-1 overflow-hidden">
         {isLoadingKeys ? (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-            {t("loadingKeys")}
+          <div className="p-3">
+            <SkeletonLines lines={8} />
           </div>
         ) : keys.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-            {searchQuery ? t("noMatchingKeys") : t("noKeys")}
-          </div>
+          <EmptyState compact icon={<Cpu size={16} />} title={
+            searchQuery ? t("noMatchingKeys") : t("noKeys")
+          } />
         ) : (
           <>
             {truncated && (
@@ -190,7 +192,7 @@ export function MemcachedPanel() {
                   </span>
                   <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      className="p-0.5 rounded hover:bg-accent"
+                      className="p-0.5 rounded-md hover:bg-accent"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleViewItem(key);
@@ -200,7 +202,7 @@ export function MemcachedPanel() {
                       <Eye size={12} />
                     </button>
                     <button
-                      className="p-0.5 rounded hover:bg-accent text-destructive"
+                      className="p-0.5 rounded-md hover:bg-accent text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteItem(key);

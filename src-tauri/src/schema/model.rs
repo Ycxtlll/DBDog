@@ -1,4 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+/// Schema snapshot for the SQL editor's completion: database → table →
+/// column names. BTreeMap keeps the ordering deterministic across fetches.
+pub type CompletionSchema = BTreeMap<String, BTreeMap<String, Vec<String>>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +35,12 @@ pub struct Column {
     pub default_value: Option<String>,
     pub comment: Option<String>,
     pub max_length: Option<u32>,
+    /// Raw `Extra` from SHOW FULL COLUMNS ("auto_increment", "DEFAULT_GENERATED",
+    /// "on update current_timestamp()", ...). Needed so visual table editing can
+    /// round-trip ON UPDATE / expression defaults without silently dropping them.
+    /// `default` keeps older L2 disk-cache JSON (without this field) loadable.
+    #[serde(default)]
+    pub extra: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

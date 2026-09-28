@@ -59,9 +59,34 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  /* Thin theme-aware scrollbars everywhere (the native ones render as a
+     chunky light bar that breaks dark theme, especially in webviews). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.45);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
-/* AG Grid theme adjustments */
+/* AG Grid theme — aligned with app tokens (GitHub light/dark palette) */
 .ag-theme-quartz,
 .ag-theme-quartz-dark {
   --ag-background-color: hsl(var(--card));
@@ -69,7 +94,38 @@
   --ag-header-background-color: hsl(var(--muted));
   --ag-header-foreground-color: hsl(var(--foreground));
   --ag-border-color: hsl(var(--border));
-  --ag-row-hover-color: hsl(var(--muted));
+  --ag-row-hover-color: hsl(var(--accent) / 0.35);
+  --ag-selected-row-background-color: hsl(var(--accent) / 0.45);
+
+  /* app-aligned chrome: dense rows, quiet chrome, no double outer border */
+  --ag-font-size: 12px;
+  --ag-font-family: inherit;
+  --ag-header-height: 34px;
+  --ag-row-height: 32px;
+  --ag-cell-horizontal-padding: 10px;
+  --ag-odd-row-background-color: transparent;
+  --ag-row-border-color: hsl(var(--border) / 0.5);
+  --ag-borders: none;
+  --ag-borders-critical: none;
+  --ag-header-column-resize-handle-color: hsl(var(--border));
+  --ag-header-column-resize-handle-width: 2px;
+  --ag-header-icon-color: hsl(var(--muted-foreground));
+  --ag-checkbox-accent-color: hsl(var(--primary));
+  --ag-accent-color: hsl(var(--primary));
+  --ag-input-border-color: hsl(var(--border));
+  --ag-input-focus-border-color: hsl(var(--primary));
+  --ag-invalid-color: hsl(var(--destructive));
+
+  /* filter/tooltip cards float like the app's own menus */
+  --ag-card-border-color: hsl(var(--border));
+  --ag-card-radius: 8px;
+  --ag-card-shadow: 0 10px 30px rgb(0 0 0 / 0.2);
+}
+
+.ag-theme-quartz .ag-header-cell-label,
+.ag-theme-quartz-dark .ag-header-cell-label {
+  font-weight: 500;
+  opacity: 0.85;
 }
 
 @keyframes toast-in {
@@ -100,4 +156,92 @@
 
 .animate-toast-out {
   animation: toast-out 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Modal / menu entrance animations (150–200ms) ── */
+
+@keyframes dbdog-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dbdog-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes dbdog-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-overlay-in {
+  animation: dbdog-fade-in 0.15s ease-out;
+}
+
+.animate-modal-in {
+  animation: dbdog-modal-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-menu-in {
+  animation: dbdog-menu-in 0.15s ease-out;
+}
+
+/* Symmetric exit animations — modals stay mounted briefly while playing
+   these (see useDelayedUnmount), so "forwards" pins the final transparent
+   frame and prevents a flash of the open modal. */
+@keyframes dbdog-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dbdog-modal-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+}
+
+.animate-overlay-out {
+  animation: dbdog-fade-out 0.15s ease-in forwards;
+}
+
+.animate-modal-out {
+  animation: dbdog-modal-out 0.15s ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-overlay-in,
+  .animate-modal-in,
+  .animate-menu-in,
+  .animate-overlay-out,
+  .animate-modal-out,
+  .animate-toast-in,
+  .animate-toast-out {
+    animation: none;
+  }
 }

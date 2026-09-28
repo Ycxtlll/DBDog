@@ -1,7 +1,7 @@
 use crate::drivers::mysql::metadata::MySqlDriver;
 use crate::drivers::DatabaseMetadata;
 use crate::error::AppError;
-use crate::schema::model::{Database, SearchResult, Table, TableDetails};
+use crate::schema::model::{CompletionSchema, Database, SearchResult, Table, TableDetails};
 use crate::state::AppState;
 use uuid::Uuid;
 
@@ -101,4 +101,25 @@ pub async fn search_schema(
 
     let driver = MySqlDriver::new();
     driver.search_schema(&pool, &keyword).await
+}
+
+/// Full database → table → column snapshot for the SQL editor's completion.
+/// Not cached server-side: the frontend keeps its own TTL cache and
+/// refetches on schema changes, so this stays cheap (one
+/// information_schema.columns pass) and always reasonably fresh.
+#[tauri::command]
+pub async fn get_completion_schema(
+    state: tauri::State<'_, AppState>,
+    connection_id: Uuid,
+    database: Option<String>,
+) -> Result<CompletionSchema, AppError> {
+    let pool = state
+        .pool_manager
+        .get(&connection_id)
+        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
+
+    let driver = MySqlDriver::new();
+    driver
+        .fetch_completion_schema(&pool, database.as_deref())
+        .await
 }
