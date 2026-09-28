@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.11] — 2026-09-28
+
+### Added
+
+- **SQL 智能补全** — 关键字（MySQL 方言、大写）+ 库名/表名/列名自动补全：`USE ` 后补库名；`FROM ` 后按当前库直接补表名（取值链：标签页选中库 → 连接默认库 → 单库服务器自动采用）；`db.` / `table.` 前缀感知补全。schema 快照一次 `information_schema.columns` 查询拉全量，前端 5 分钟 TTL 缓存，DDL 变更（可视化设计器或编辑器直接执行 DDL）后自动失效重拉，拉取失败静默降级为纯关键字。设置中的「自动补全」开关首次真正接线（关闭后无任何弹层）。
+- **语句级执行** — Ctrl+Enter 无选区时执行**光标所在语句**（有选区仍执行选区），Ctrl+Shift+Enter 执行全部；工具栏执行按钮同语义。新增 `statementRangeAt` 状态机定位语句边界，正确跳过字符串/行注释/块注释内的分号并剥除结尾分号。
+- **无 LIMIT 查询保护** — 无 LIMIT 的 SELECT/WITH 执行前自动包裹 `SELECT * FROM (…) LIMIT N`（默认 1000，取设置的默认行数），由 MySQL 服务端即停而非客户端事后截断；网格自动刷新路径同样防护。自带 LIMIT、`FOR UPDATE/SHARE` 锁语句跳过包裹；被截断时信息栏显示「已截断」。
+- **无 WHERE 写入拦截** — UPDATE/DELETE 无顶层 WHERE 条件时弹原生确认框，取消则终止执行并在历史记录留痕。`hasTopLevelWhere` 状态机判定，字符串/注释/子查询内的 WHERE 不计入，避免误放行与误拦截。
+- **侧栏拖拽调宽与快捷键** — 分隔条可拖拽调整侧栏宽度（200–500px，持久化），点击收起/展开，Ctrl+B 全局切换；3px 位移阈值区分点击与拖拽。
+- **命令面板升级** — 每条命令配语义图标，实际接线的快捷键以胶囊展示（Ctrl+Enter / Ctrl+Shift+F / Ctrl+B）。
+- **空状态全面组件化** — 新增 EmptyState / Skeleton / WelcomeGuide 组件：无标签页时编辑区显示引导面板（操作指引 + 快捷键教育 + 新建查询入口）；空编辑器显示 placeholder 提示；已有保存连接时空状态引导「从左侧选择连接」而非新建；结构树/表设计器/结构抽屉/Memcached 列表与详情的加载态全部换为骨架屏。
+- **弹窗体系升级** — 统一外壳：进出对称动画（150–180ms，`prefers-reduced-motion` 下禁用）、`useModalFocus` 焦点管理（自动聚焦首个输入框、Tab 循环、Esc 统一关闭，常驻挂载弹窗需传 `active`）、`useDelayedUnmount` 延迟卸载。全量替换为 `open` prop 模式并处理重置与退出期间数据快照。
+- **UI 一致性** — 全局细滚动条跟随主题；圆角统一为三档制（lg 面板 / md 控件 / full 圆片），清除全部 4px 裸圆角与孤立 12px；AG Grid 换贴 token 皮肤（32px 密集行、安静表头、浮层卡片同应用风格）；设置弹窗按钮不换行、主题/语言选中态统一；ZK/MC/QueryHistory 等次要区域样式对齐。
+
+### Fixed
+
+- **补全 schema 静默失效** — @uiw/react-codemirror 在 `basicSetup`/`onChange` prop 引用变化时对整个 EditorState 做全量 reconfigure，会重置 compartment 回挂载内容——首次敲键即把已加载的表结构打回纯关键字。通过 prop 稳定化（memo/useCallback）与 compartment 当前内容自愈（ref 种子）修复。
+- **行数据弹窗焦点管理失效** — 转常驻挂载时漏传 `active: open`，焦点陷阱与自动聚焦从未激活。已修复（同类问题也出现在设置/命令面板/表设计器，一并治理）。
+
 ## [0.3.10] — 2026-09-28
 
 ### Added
