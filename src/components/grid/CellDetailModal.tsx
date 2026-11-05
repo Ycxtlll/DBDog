@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { Copy, Loader2, Rows3 } from "lucide-react";
 import { confirmDialog } from "../../lib/confirm";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
@@ -25,6 +25,12 @@ interface CellDetailSnapshot {
   rowData: Record<string, unknown>;
 }
 
+interface RowContextMenu {
+  x: number;
+  y: number;
+  col: string;
+}
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "boolean") return value ? "true" : "false";
@@ -47,6 +53,7 @@ export function CellDetailModal({
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [rowMenu, setRowMenu] = useState<RowContextMenu | null>(null);
 
   // The parent keeps this mounted for the exit animation after the row is
   // cleared — serve the last visible row from a snapshot while closing.
@@ -72,6 +79,7 @@ export function CellDetailModal({
       setCopied(false);
       setSaving(false);
       setDeleting(false);
+      setRowMenu(null);
     }
   }, [open]);
 
@@ -81,7 +89,9 @@ export function CellDetailModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (editingField) {
+        if (rowMenu) {
+          setRowMenu(null);
+        } else if (editingField) {
           setEditingField(null);
         } else {
           onClose();
@@ -90,21 +100,15 @@ export function CellDetailModal({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, editingField]);
+  }, [onClose, editingField, rowMenu]);
 
+  // Close the row context menu on any left click
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (editingField) {
-          setEditingField(null);
-        } else {
-          onClose();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, editingField]);
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [rowMenu]);
 
   // Focus input when entering edit mode
   useEffect(() => {
@@ -162,10 +166,7 @@ export function CellDetailModal({
     }
   };
 
-  const handleCopyRow = () => {
-    const text = columns
-      .map((col) => `${col}: ${formatValue(snapshot.rowData[col])}`)
-      .join("\n");
+  const copyText = (text: string) => {
     navigator.clipboard
       .writeText(text)
       .then(() => {
@@ -173,6 +174,24 @@ export function CellDetailModal({
         setTimeout(() => setCopied(false), 1500);
       })
       .catch(() => {});
+  };
+
+  const handleCopyRow = () => {
+    copyText(
+      columns
+        .map((col) => `${col}: ${formatValue(snapshot.rowData[col])}`)
+        .join("\n"),
+    );
+  };
+
+  const handleCopyCell = (col: string) => {
+    const val = snapshot.rowData[col];
+    copyText(isNull(val) ? "NULL" : formatValue(val));
+  };
+
+  const handleRowContextMenu = (e: React.MouseEvent, col: string) => {
+    e.preventDefault();
+    setRowMenu({ x: e.clientX, y: e.clientY, col });
   };
 
   const isNull = (v: unknown) => v === null || v === undefined;
@@ -247,6 +266,7 @@ export function CellDetailModal({
             return (
               <div
                 key={col}
+                onContextMenu={(e) => handleRowContextMenu(e, col)}
                 className={`flex items-stretch rounded-md transition-colors ${
                   isEditing
                     ? "bg-amber-500/5 ring-1 ring-amber-500/30"
@@ -347,6 +367,40 @@ export function CellDetailModal({
           </div>
         </div>
       </div>
+
+      {/* Right-click context menu on a field row */}
+      {rowMenu && (
+        <div
+          className="fixed z-[60] min-w-[150px] py-1 bg-card border border-border rounded-lg shadow-xl animate-menu-in"
+          style={{
+            left: Math.min(rowMenu.x, window.innerWidth - 170),
+            top: Math.min(rowMenu.y, window.innerHeight - 100),
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              handleCopyCell(rowMenu.col);
+              setRowMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left flex items-center gap-2"
+          >
+            <Copy size={14} className="text-muted-foreground" />
+            {t("copyValue")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleCopyRow();
+              setRowMenu(null);
+            }}
+            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left flex items-center gap-2"
+          >
+            <Rows3 size={14} className="text-muted-foreground" />
+            {t("copyRow")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

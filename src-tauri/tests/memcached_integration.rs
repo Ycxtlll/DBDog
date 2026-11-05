@@ -17,6 +17,11 @@ fn test_config() -> ConnectionConfig {
         ssl_cert_path: None,
         password_hash: None,
         group: None,
+        ssh_enabled: None,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_key_path: None,
     }
 }
 

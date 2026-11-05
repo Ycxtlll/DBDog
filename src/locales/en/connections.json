@@ -23,5 +23,20 @@
   "noConnections": "No connections yet",
   "confirmDelete": "Delete this connection?",
   "clearSavedPassword": "Clear saved password",
-  "passwordKeepHint": "Leave blank to keep the saved password"
+  "passwordKeepHint": "Leave blank to keep the saved password",
+  "diagnose": "Diagnose",
+  "diagTitle": "Connection diagnostics",
+  "diagRunning": "Diagnosing...",
+  "diagFailed": "Diagnosis failed",
+  "diagStepResolve": "DNS resolve",
+  "diagStepTcp": "TCP connect",
+  "diagStepHandshake": "Server handshake",
+  "diagStepAuth": "Login",
+  "diagStepGrants": "Privileges",
+  "sshTunnel": "Connect via SSH tunnel",
+  "sshHost": "SSH host",
+  "sshPort": "SSH port",
+  "sshUser": "SSH user",
+  "sshKeyPath": "Private key (optional)",
+  "sshKeyHint": "Uses the system OpenSSH client. Supports key files and ssh-agent; interactive password auth is not available."
 }

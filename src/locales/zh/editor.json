@@ -14,5 +14,16 @@
   "welcomePaletteHint": "打开命令面板，快速执行操作",
   "welcomeSidebarHint": "收起 / 展开左侧栏",
   "welcomeNewQuery": "新建 SQL 查询",
-  "editorPlaceholder": "编写 SQL —— 库名 / 表名 / 列名自动补全，Ctrl+Enter 执行光标所在语句"
+  "editorPlaceholder": "编写 SQL —— 库名 / 表名 / 列名自动补全，Ctrl+Enter 执行光标所在语句",
+  "snippetsTitle": "SQL 片段库",
+  "snippetNamePlaceholder": "片段名称",
+  "saveCurrentSql": "保存当前 SQL",
+  "paramHint": "s",
+  "noSnippets": "还没有片段。写好 SQL 后点上方按钮保存。",
+  "insert": "插入",
+  "delete": "删除",
+  "snippetSaved": "片段已保存",
+  "snippetDeleted": "片段已删除",
+  "snippetInserted": "已插入「{{name}}」",
+  "close": "关闭"
 }

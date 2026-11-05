@@ -20,6 +20,10 @@ import enZookeeper from "../locales/en/zookeeper.json";
 import zhZookeeper from "../locales/zh/zookeeper.json";
 import enExport from "../locales/en/export.json";
 import zhExport from "../locales/zh/export.json";
+import enServer from "../locales/en/server.json";
+import zhServer from "../locales/zh/server.json";
+import enCompare from "../locales/en/compare.json";
+import zhCompare from "../locales/zh/compare.json";
 const resources = {
   en: {
     common: enCommon,
@@ -31,6 +35,8 @@ const resources = {
     memcached: enMemcached,
     zookeeper: enZookeeper,
     export: enExport,
+    server: enServer,
+    compare: enCompare,
   },
   zh: {
     common: zhCommon,
@@ -42,6 +48,8 @@ const resources = {
     memcached: zhMemcached,
     zookeeper: zhZookeeper,
     export: zhExport,
+    server: zhServer,
+    compare: zhCompare,
   },
 };
 

@@ -16,6 +16,8 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { SkeletonTable } from "../components/ui/Skeleton";
 import { TableStructureDrawer } from "../components/drawer/TableStructureDrawer";
 import { TableDesignerModal } from "../components/drawer/TableDesignerModal";
+import { ServerPanelDrawer } from "../components/server/ServerPanelDrawer";
+import { CompareDrawer } from "../components/compare/CompareDrawer";
 import { QueryHistory } from "../components/QueryHistory";
 import { ZkNodeViewer } from "../components/zookeeper/ZkNodeViewer";
 import { MemoEntryViewer } from "../components/memcached/MemoEntryViewer";
@@ -57,8 +59,8 @@ export function EditorArea() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-background">
-      {/* MySQL: tabs + editor + grid */}
-      {activeConfig?.type === "mysql" && (
+      {/* SQL connections (MySQL / PostgreSQL): tabs + editor + grid */}
+      {(activeConfig?.type === "mysql" || activeConfig?.type === "postgresql") && (
         <>
           <EditorTabBar
             getSqlSelection={getSqlSelection}
@@ -177,6 +179,8 @@ export function EditorArea() {
 
       <TableStructureDrawer connectionId={activeConnectionId} />
       <TableDesignerModal connectionId={activeConnectionId} />
+      <ServerPanelDrawer connectionId={activeConnectionId} />
+      <CompareDrawer connectionId={activeConnectionId} />
     </div>
   );
 }

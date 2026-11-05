@@ -1,3 +1,4 @@
+use super::decode;
 use crate::connection::model::{ConnectionConfig, DatabaseType, SslMode};
 use crate::drivers::{DatabaseDriver, DatabaseMetadata};
 use crate::error::AppError;
@@ -6,7 +7,6 @@ use crate::schema::model::*;
 use crate::utils::escape_mysql_identifier;
 use async_trait::async_trait;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPool, MySqlPoolOptions};
-use sqlx::Row;
 
 pub struct MySqlDriver;
 
@@ -121,9 +121,9 @@ impl DatabaseMetadata for MySqlDriver {
         let mut databases = Vec::new();
         for row in rows {
             databases.push(Database {
-                name: row.try_get("name").unwrap_or_default(),
-                charset: row.try_get("charset").ok(),
-                collation: row.try_get("collation").ok(),
+                name: decode::sql_string(&row, "name"),
+                charset: decode::sql_opt_string(&row, "charset"),
+                collation: decode::sql_opt_string(&row, "collation"),
             });
         }
         Ok(databases)
@@ -133,7 +133,8 @@ impl DatabaseMetadata for MySqlDriver {
         let rows = sqlx::query(
             r#"
             SELECT table_name AS name, engine, table_rows AS row_count,
-                   ROUND(data_length / 1024 / 1024, 2) AS size_mb, table_comment AS comment
+                   CAST(ROUND(data_length / 1024 / 1024, 2) AS CHAR) AS size_mb,
+                   table_comment AS comment
             FROM information_schema.tables
             WHERE table_schema = ? AND table_type = 'BASE TABLE'
             ORDER BY table_name
@@ -145,20 +146,15 @@ impl DatabaseMetadata for MySqlDriver {
 
         let mut tables = Vec::new();
         for row in rows {
-            let size_mb: Option<f64> = row
-                .try_get::<Option<String>, _>("size_mb")
-                .ok()
-                .flatten()
-                .and_then(|s| s.parse().ok());
             tables.push(Table {
-                name: row.try_get("name").unwrap_or_default(),
-                engine: row.try_get("engine").ok(),
+                name: decode::sql_string(&row, "name"),
+                engine: decode::sql_opt_string(&row, "engine"),
                 // information_schema.tables.TABLE_ROWS is BIGINT UNSIGNED;
                 // decoding it as i64 fails under sqlx strict typing and the
                 // count silently drops to None.
-                rows: row.try_get::<Option<u64>, _>("row_count").ok().flatten(),
-                size_mb,
-                comment: row.try_get("comment").ok(),
+                rows: decode::sql_opt_u64(&row, "row_count"),
+                size_mb: decode::sql_opt_string(&row, "size_mb").and_then(|s| s.parse().ok()),
+                comment: decode::sql_opt_string(&row, "comment"),
             });
         }
         Ok(tables)
@@ -179,22 +175,22 @@ impl DatabaseMetadata for MySqlDriver {
 
         let mut columns = Vec::new();
         for (i, row) in rows.iter().enumerate() {
-            let key: String = row.try_get("Key").unwrap_or_default();
-            let extra: String = row.try_get("Extra").unwrap_or_default();
-            let data_type: String = row.try_get("Type").unwrap_or_default();
+            let key: String = decode::sql_string(row, "Key");
+            let extra: String = decode::sql_string(row, "Extra");
+            let data_type: String = decode::sql_string(row, "Type");
 
             // Extract max_length from type like "varchar(255)" or "char(10)"
             let max_length = parse_max_length(&data_type);
 
             columns.push(Column {
-                name: row.try_get("Field").unwrap_or_default(),
+                name: decode::sql_string(row, "Field"),
                 ordinal_position: (i + 1) as u32,
                 data_type,
-                nullable: row.try_get::<String, _>("Null").unwrap_or_default() == "YES",
+                nullable: decode::sql_string(row, "Null") == "YES",
                 is_primary_key: key == "PRI",
                 is_auto_increment: extra.contains("auto_increment"),
-                default_value: row.try_get("Default").ok(),
-                comment: row.try_get("Comment").ok(),
+                default_value: decode::sql_opt_string(row, "Default"),
+                comment: decode::sql_opt_string(row, "Comment"),
                 max_length,
                 extra,
             });
@@ -219,10 +215,12 @@ impl DatabaseMetadata for MySqlDriver {
         let mut index_map: HashMap<String, (bool, bool, String, Vec<String>)> = HashMap::new();
 
         for row in rows {
-            let name: String = row.try_get("Key_name").unwrap_or_default();
-            let column: String = row.try_get("Column_name").unwrap_or_default();
-            let non_unique: i64 = row.try_get("Non_unique").unwrap_or(1);
-            let index_type: String = row.try_get("Index_type").unwrap_or_default();
+            let name: String = decode::sql_string(&row, "Key_name");
+            let column: String = decode::sql_string(&row, "Column_name");
+            let non_unique: i64 = decode::sql_opt_u64(&row, "Non_unique")
+                .map(|v| v as i64)
+                .unwrap_or(1);
+            let index_type: String = decode::sql_string(&row, "Index_type");
             let is_primary = name == "PRIMARY";
 
             index_map
@@ -269,12 +267,12 @@ impl DatabaseMetadata for MySqlDriver {
         let mut fks = Vec::new();
         for row in rows {
             fks.push(ForeignKey {
-                name: row.try_get("constraint_name").unwrap_or_default(),
-                column: row.try_get("column_name").unwrap_or_default(),
-                referenced_table: row.try_get("referenced_table_name").ok(),
-                referenced_column: row.try_get("referenced_column_name").ok(),
-                update_rule: row.try_get("update_rule").ok(),
-                delete_rule: row.try_get("delete_rule").ok(),
+                name: decode::sql_string(&row, "constraint_name"),
+                column: decode::sql_string(&row, "column_name"),
+                referenced_table: decode::sql_opt_string(&row, "referenced_table_name"),
+                referenced_column: decode::sql_opt_string(&row, "referenced_column_name"),
+                update_rule: decode::sql_opt_string(&row, "update_rule"),
+                delete_rule: decode::sql_opt_string(&row, "delete_rule"),
             });
         }
         Ok(fks)
@@ -301,10 +299,10 @@ impl DatabaseMetadata for MySqlDriver {
         let mut triggers = Vec::new();
         for row in rows {
             triggers.push(Trigger {
-                name: row.try_get("trigger_name").unwrap_or_default(),
-                event: row.try_get("event_manipulation").unwrap_or_default(),
-                timing: row.try_get("action_timing").unwrap_or_default(),
-                statement: row.try_get("action_statement").unwrap_or_default(),
+                name: decode::sql_string(&row, "trigger_name"),
+                event: decode::sql_string(&row, "event_manipulation"),
+                timing: decode::sql_string(&row, "action_timing"),
+                statement: decode::sql_string(&row, "action_statement"),
             });
         }
         Ok(triggers)
@@ -322,7 +320,7 @@ impl DatabaseMetadata for MySqlDriver {
             escape_mysql_identifier(table)
         );
         let row = sqlx::query(&sql).fetch_one(pool).await?;
-        let create_sql: String = row.try_get(1).unwrap_or_default();
+        let create_sql: String = decode::string_at(&row, 1);
         Ok(create_sql)
     }
 
@@ -380,9 +378,9 @@ impl DatabaseMetadata for MySqlDriver {
 
         let mut schema = CompletionSchema::new();
         for row in rows {
-            let schema_name: String = row.try_get("table_schema")?;
-            let table_name: String = row.try_get("table_name")?;
-            let column_name: String = row.try_get("column_name")?;
+            let schema_name: String = decode::sql_string(&row, "table_schema");
+            let table_name: String = decode::sql_string(&row, "table_name");
+            let column_name: String = decode::sql_string(&row, "column_name");
             schema
                 .entry(schema_name)
                 .or_default()
@@ -423,9 +421,9 @@ impl DatabaseMetadata for MySqlDriver {
 
         for row in table_rows {
             results.push(SearchResult {
-                database: row.try_get("table_schema").unwrap_or_default(),
+                database: decode::sql_string(&row, "table_schema"),
                 object_type: "table".to_string(),
-                object_name: row.try_get("table_name").unwrap_or_default(),
+                object_name: decode::sql_string(&row, "table_name"),
                 column_name: None,
             });
         }
@@ -445,10 +443,10 @@ impl DatabaseMetadata for MySqlDriver {
 
         for row in column_rows {
             results.push(SearchResult {
-                database: row.try_get("table_schema").unwrap_or_default(),
+                database: decode::sql_string(&row, "table_schema"),
                 object_type: "column".to_string(),
-                object_name: row.try_get("table_name").unwrap_or_default(),
-                column_name: row.try_get("column_name").ok(),
+                object_name: decode::sql_string(&row, "table_name"),
+                column_name: decode::sql_opt_string(&row, "column_name"),
             });
         }
 

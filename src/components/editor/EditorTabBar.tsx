@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, X, Play, Square, AlignLeft, Zap, Database } from "lucide-react";
+import { Plus, X, Play, Square, AlignLeft, Zap, Database, Bookmark } from "lucide-react";
 import { useQueryStore } from "../../stores/queryStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useUiStore } from "../../stores/uiStore";
+import { SnippetsModal } from "./SnippetsModal";
 
 export function EditorTabBar({
   getSqlSelection,
@@ -20,6 +22,7 @@ export function EditorTabBar({
   const activeConnectionId = useConnectionStore((s) => s.activeId);
   const serverInfoMap = useConnectionStore((s) => s.serverInfoMap);
   const { query } = useUiStore();
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
 
   const handleExecute = () => {
     if (!activeTabId || !activeConnectionId) return;
@@ -128,6 +131,14 @@ export function EditorTabBar({
         </button>
         <button
           className="p-1.5 hover:bg-accent disabled:opacity-50"
+          disabled={!activeTabId}
+          onClick={() => setSnippetsOpen(true)}
+          title={t("snippetsTitle")}
+        >
+          <Bookmark size={14} />
+        </button>
+        <button
+          className="p-1.5 hover:bg-accent disabled:opacity-50"
           disabled={!activeConnectionId || !activeTabId}
           onClick={() => {
             if (activeTab && activeConnectionId) {
@@ -147,6 +158,7 @@ export function EditorTabBar({
           <Zap size={14} />
         </button>
       </div>
+      <SnippetsModal open={snippetsOpen} onClose={() => setSnippetsOpen(false)} />
     </div>
   );
 }

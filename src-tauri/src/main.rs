@@ -16,6 +16,15 @@ use std::fs;
 use std::io::Write;
 
 fn main() {
+    // Server-version quirks log at "dbdog::compat" (see drivers/mysql/decode.rs).
+    // Default to warn-level stderr output; RUST_LOG overrides.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .init();
+
     // ── Global panic hook: always write crash log before exit ──
     let default_hook = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
@@ -76,6 +85,12 @@ fn main() {
             commands::schema::refresh_schema,
             commands::schema::search_schema,
             commands::schema::get_completion_schema,
+            commands::server::get_processlist,
+            commands::server::get_server_variables,
+            commands::server::get_server_status,
+            commands::server::kill_process,
+            commands::compare::compare_table_structure,
+            commands::connection::diagnose_connection,
             commands::memcached::memcached_list_keys,
             commands::memcached::memcached_get_item,
             commands::memcached::memcached_delete_item,

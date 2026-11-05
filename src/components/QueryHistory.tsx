@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ChevronUp, ChevronDown, Clock, Check, X } from "lucide-react";
+import { ChevronUp, ChevronDown, Clock, Check, X, RotateCcw } from "lucide-react";
 import { useQueryStore } from "../stores/queryStore";
 import { formatElapsed } from "../lib/utils";
 
@@ -46,12 +46,17 @@ export function QueryHistory() {
                 }
               }}
             >
-              {item.status === "success" ? (
+              {item.kind === "rollback" ? (
+                <RotateCcw size={12} className="text-primary shrink-0" />
+              ) : item.status === "success" ? (
                 <Check size={12} className="text-green-500 shrink-0" />
               ) : (
                 <X size={12} className="text-red-500 shrink-0" />
               )}
               <span className="truncate flex-1 font-mono">{item.sql}</span>
+              {item.kind === "rollback" && (
+                <span className="text-primary shrink-0">{t("rollbackEntry")}</span>
+              )}
               {item.elapsedMs !== undefined && (
                 <span className="text-muted-foreground shrink-0 tabular-nums">
                   {item.elapsedMs}ms

@@ -1,3 +1,4 @@
+use crate::connection::model::DatabaseType;
 use crate::drivers::mysql::metadata::MySqlDriver;
 use crate::drivers::DatabaseMetadata;
 use crate::error::AppError;
@@ -5,9 +6,7 @@ use crate::state::AppState;
 use crate::utils::escape_mysql_identifier;
 use futures_util::stream::TryStreamExt;
 use serde::Serialize;
-use sqlx::Column;
 use sqlx::Row;
-use sqlx::TypeInfo;
 use sqlx::ValueRef;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -30,76 +29,6 @@ pub struct ExportResult {
     pub total_rows: u64,
     pub elapsed_ms: u64,
     pub file_path: String,
-}
-
-/// Decode a MySQL cell to string for CSV output.
-fn cell_to_string(row: &sqlx::mysql::MySqlRow, i: usize) -> String {
-    if row.try_get_raw(i).map_or(true, |v| v.is_null()) {
-        return String::new();
-    }
-    let type_name = row.column(i).type_info().name().to_uppercase();
-    decode_cell_string(row, i, &type_name)
-}
-
-fn decode_cell_string(row: &sqlx::mysql::MySqlRow, i: usize, type_name: &str) -> String {
-    macro_rules! try_get {
-        ($t:ty) => {
-            row.try_get_unchecked::<$t, _>(i)
-                .map(|v| v.to_string())
-                .unwrap_or_default()
-        };
-    }
-
-    if type_name.starts_with("TINYINT") {
-        if type_name.contains("UNSIGNED") { try_get!(u8) } else { try_get!(i8) }
-    } else if type_name.starts_with("SMALLINT") {
-        if type_name.contains("UNSIGNED") { try_get!(u16) } else { try_get!(i16) }
-    } else if type_name.starts_with("MEDIUMINT") || type_name.starts_with("INT") || type_name.starts_with("INTEGER") {
-        if type_name.contains("UNSIGNED") { try_get!(u32) } else { try_get!(i32) }
-    } else if type_name.starts_with("BIGINT") {
-        if type_name.contains("UNSIGNED") { try_get!(u64) } else { try_get!(i64) }
-    } else if type_name.starts_with("FLOAT") {
-        try_get!(f32)
-    } else if type_name.starts_with("DOUBLE") || type_name.starts_with("REAL") {
-        try_get!(f64)
-    } else if type_name.starts_with("DECIMAL") || type_name.starts_with("NUMERIC") {
-        row.try_get_unchecked::<bigdecimal::BigDecimal, _>(i)
-            .map(|v| v.to_string()).unwrap_or_default()
-    } else if type_name.starts_with("BIT") {
-        row.try_get_unchecked::<Vec<u8>, _>(i)
-            .map(|bytes| {
-                if bytes.is_empty() { return String::new(); }
-                let mut val: u64 = 0;
-                for b in bytes { val = (val << 8) | u64::from(b); }
-                val.to_string()
-            }).unwrap_or_default()
-    } else if type_name.starts_with("BINARY")
-        || type_name.starts_with("VARBINARY")
-        || type_name.contains("BLOB")
-    {
-        // Blob columns frequently hold text/JSON payloads: valid UTF-8 is
-        // exported as-is, base64 is the fallback for non-UTF-8 bytes
-        // (matching the query engine's rendering of binary values).
-        row.try_get_unchecked::<Vec<u8>, _>(i)
-            .map(|bytes| match std::str::from_utf8(&bytes) {
-                Ok(text) => text.to_string(),
-                Err(_) => {
-                    use base64::Engine;
-                    base64::engine::general_purpose::STANDARD.encode(bytes)
-                }
-            })
-            .unwrap_or_default()
-    } else if type_name == "DATE" {
-        row.try_get_unchecked::<chrono::NaiveDate, _>(i).map(|v| v.to_string()).unwrap_or_default()
-    } else if type_name == "DATETIME" || type_name == "TIMESTAMP" {
-        row.try_get_unchecked::<chrono::NaiveDateTime, _>(i).map(|v| v.to_string()).unwrap_or_default()
-    } else if type_name == "TIME" {
-        row.try_get_unchecked::<chrono::NaiveTime, _>(i).map(|v| v.to_string()).unwrap_or_default()
-    } else if type_name == "YEAR" {
-        try_get!(i16)
-    } else {
-        row.try_get_unchecked::<String, _>(i).unwrap_or_default()
-    }
 }
 
 fn csv_escape(field: &str) -> String {
@@ -125,8 +54,7 @@ fn keyset_value(row: &sqlx::mysql::MySqlRow, i: usize) -> Option<String> {
     if row.try_get_raw(i).map_or(true, |v| v.is_null()) {
         return None;
     }
-    let type_name = row.column(i).type_info().name().to_uppercase();
-    Some(decode_cell_string(row, i, &type_name))
+    Some(crate::drivers::mysql::decode::cell_to_csv_string(row, i))
 }
 
 fn build_keyset_where(order_cols: &[String], last_vals: &[String]) -> String {
@@ -172,6 +100,10 @@ pub async fn execute_export(
     file_path: String,
     export_id: Uuid,
 ) -> Result<ExportResult, AppError> {
+    // Export is MySQL-only for now (it leans on SHOW-based metadata).
+    if state.get_config(&connection_id).await?.db_type != DatabaseType::Mysql {
+        return Err(AppError::QueryFailed("导出目前仅支持 MySQL 连接".to_string()));
+    }
     // Resolve relative paths to the download directory
     let file_path = {
         let p = std::path::Path::new(&file_path);
@@ -294,7 +226,9 @@ pub async fn execute_export(
                 let col_count = row.columns().len();
                 let mut fields = Vec::with_capacity(col_count);
                 for i in 0..col_count {
-                    fields.push(csv_escape(&cell_to_string(&row, i)));
+                    fields.push(csv_escape(&crate::drivers::mysql::decode::cell_to_csv_string(
+                        &row, i,
+                    )));
                 }
                 batch_csv.push_str(&fields.join(","));
                 batch_csv.push('\n');

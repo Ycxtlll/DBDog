@@ -1,0 +1,21 @@
+{
+  "title": "服务器",
+  "refresh": "刷新",
+  "tabProcesses": "进程",
+  "tabVariables": "变量",
+  "tabStatus": "状态",
+  "filterPlaceholder": "筛选...",
+  "kill": "断开连接",
+  "killConfirm": "断开连接 #{{id}}（{{user}}@{{host}}）？该连接正在执行的语句将被终止。",
+  "colId": "ID",
+  "colUser": "用户",
+  "colHost": "主机",
+  "colCommand": "命令",
+  "colTime": "耗时",
+  "colState": "状态",
+  "colInfo": "SQL",
+  "colDb": "数据库",
+  "colName": "名称",
+  "colValue": "值",
+  "empty": "无数据"
+}

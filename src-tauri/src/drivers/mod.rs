@@ -2,8 +2,10 @@ use crate::connection::model::ConnectionConfig;
 use crate::error::AppError;
 
 use crate::schema::model::*;
+pub mod backend;
 pub mod mysql;
 pub mod memcached;
+pub mod postgres;
 pub mod zookeeper;
 
 use async_trait::async_trait;

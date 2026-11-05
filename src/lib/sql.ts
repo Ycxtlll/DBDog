@@ -255,3 +255,328 @@ export function buildTableSelect(
 export function buildCountSql(database: string, table: string): string {
   return `SELECT COUNT(*) FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)};`;
 }
+
+/**
+ * Quote a MySQL string literal: single quotes with backslash and quote
+ * escaped. LIKE wildcards (% _) are deliberately left alone — users type
+ * them as wildcards.
+ */
+export function escapeMysqlString(value: string): string {
+  return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+/**
+ * Format a decoded cell value as a SQL literal for generated statements
+ * (UPDATE/INSERT from the grid). NULL stays NULL, numbers/booleans are
+ * unquoted, objects (JSON columns) are serialized before quoting.
+ */
+export function formatSqlValue(val: unknown): string {
+  if (val === null || val === undefined) return "NULL";
+  if (typeof val === "number") return String(val);
+  if (typeof val === "bigint") return String(val);
+  if (typeof val === "boolean") return val ? "1" : "0";
+  if (typeof val === "object") return escapeMysqlString(JSON.stringify(val));
+  return escapeMysqlString(String(val));
+}
+
+/** WHERE clause matching one row by its primary-key values. */
+function buildPkWhereClause(
+  pkColumns: string[],
+  row: Record<string, unknown>,
+): string {
+  return pkColumns
+    .map((col) => {
+      const val = row[col];
+      return val === null || val === undefined
+        ? `${escapeMysqlIdentifier(col)} IS NULL`
+        : `${escapeMysqlIdentifier(col)} = ${formatSqlValue(val)}`;
+    })
+    .join(" AND ");
+}
+
+/**
+ * Reverse statement for an inline cell edit: restore the column's previous
+ * value, matched by primary key. `rowDataBefore` must be the row as it was
+ * BEFORE the edit (the grid's snapshot).
+ */
+export function buildRollbackForUpdate(
+  database: string,
+  table: string,
+  pkColumns: string[],
+  rowDataBefore: Record<string, unknown>,
+  columnName: string,
+): string {
+  const set = `${escapeMysqlIdentifier(columnName)} = ${formatSqlValue(rowDataBefore[columnName])}`;
+  return `UPDATE ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} SET ${set} WHERE ${buildPkWhereClause(pkColumns, rowDataBefore)} LIMIT 1;`;
+}
+
+/**
+ * Reverse statement for a row delete: re-insert the full row (including its
+ * primary key) with the values as they were BEFORE the delete.
+ */
+export function buildRollbackForDelete(
+  database: string,
+  table: string,
+  columns: string[],
+  rowDataBefore: Record<string, unknown>,
+): string {
+  const cols = columns.map(escapeMysqlIdentifier).join(", ");
+  const values = columns.map((c) => formatSqlValue(rowDataBefore[c])).join(", ");
+  return `INSERT INTO ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} (${cols}) VALUES (${values});`;
+}
+
+// ── Structure comparison → ALTER generation ──
+
+export interface CompareColumnDiff {
+  name: string;
+  kind: "added" | "removed" | "changed";
+  sourceType: string | null;
+  targetType: string | null;
+  sourceNullable: boolean | null;
+  targetNullable: boolean | null;
+  sourceDefault: string | null;
+  targetDefault: string | null;
+  sourceExtra: string | null;
+  targetExtra: string | null;
+}
+
+export interface CompareIndexDiff {
+  name: string;
+  kind: "added" | "removed" | "changed";
+  sourceColumns: string[];
+  targetColumns: string[];
+  sourceUnique: boolean | null;
+  targetUnique: boolean | null;
+}
+
+export interface CompareTableDiff {
+  table: string;
+  sourceRows: number | null;
+  targetRows: number | null;
+  columnDiffs: CompareColumnDiff[];
+  indexDiffs: CompareIndexDiff[];
+}
+
+/** One column's fragment for ADD/MODIFY COLUMN. */
+function columnDefinition(
+  type: string | null | undefined,
+  nullable: boolean | null | undefined,
+  def: string | null | undefined,
+  extra: string | null | undefined,
+): string {
+  let s = type ?? "";
+  if (nullable === false) s += " NOT NULL";
+  if (def != null && def !== "") {
+    const upper = def.toUpperCase();
+    s +=
+      upper === "CURRENT_TIMESTAMP" || upper === "NULL"
+        ? ` DEFAULT ${upper}`
+        : ` DEFAULT ${escapeMysqlString(def)}`;
+  }
+  if (extra && extra.includes("auto_increment")) s += " AUTO_INCREMENT";
+  return s;
+}
+
+/**
+ * ALTER statements that reshape the TARGET table to match the SOURCE side
+ * of a structure diff (source wins). Column changes fold into one ALTER;
+ * each index change is its own statement. Returns [] when nothing to do.
+ */
+export function buildAlterStatements(
+  database: string,
+  diff: CompareTableDiff,
+): string[] {
+  const table = `${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(diff.table)}`;
+  const out: string[] = [];
+
+  const colClauses: string[] = [];
+  for (const c of diff.columnDiffs) {
+    const name = escapeMysqlIdentifier(c.name);
+    if (c.kind === "added") {
+      colClauses.push(
+        `ADD COLUMN ${name} ${columnDefinition(c.sourceType, c.sourceNullable, c.sourceDefault, c.sourceExtra)}`,
+      );
+    } else if (c.kind === "removed") {
+      colClauses.push(`DROP COLUMN ${name}`);
+    } else if (c.kind === "changed") {
+      colClauses.push(
+        `MODIFY COLUMN ${name} ${columnDefinition(c.sourceType, c.sourceNullable, c.sourceDefault, c.sourceExtra)}`,
+      );
+    }
+  }
+  if (colClauses.length > 0) {
+    out.push(`ALTER TABLE ${table} ${colClauses.join(", ")};`);
+  }
+
+  for (const ix of diff.indexDiffs) {
+    const ixName = escapeMysqlIdentifier(ix.name);
+    if (ix.name === "PRIMARY") {
+      if (ix.kind === "removed") {
+        out.push(`ALTER TABLE ${table} DROP PRIMARY KEY;`);
+      } else {
+        out.push(
+          `ALTER TABLE ${table} DROP PRIMARY KEY, ADD PRIMARY KEY (${ix.sourceColumns.map(escapeMysqlIdentifier).join(", ")});`,
+        );
+      }
+      continue;
+    }
+    const addClause = `ADD ${ix.sourceUnique ? "UNIQUE " : ""}INDEX ${ixName} (${ix.sourceColumns.map(escapeMysqlIdentifier).join(", ")})`;
+    if (ix.kind === "added") {
+      out.push(`ALTER TABLE ${table} ${addClause};`);
+    } else if (ix.kind === "removed") {
+      out.push(`ALTER TABLE ${table} DROP INDEX ${ixName};`);
+    } else {
+      out.push(`ALTER TABLE ${table} DROP INDEX ${ixName}, ${addClause};`);
+    }
+  }
+
+  return out;
+}
+
+/** One condition of an AG Grid column filter (fields we consume). */
+export interface AgGridFilterCondition {
+  filterType?: string;
+  type?: string;
+  filter?: string | number | null;
+  filterTo?: string | number | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}
+
+/** One column's AG Grid filter model: a condition, or two joined by an operator. */
+export interface AgGridFilterModelEntry extends AgGridFilterCondition {
+  operator?: string;
+  condition1?: AgGridFilterCondition;
+  condition2?: AgGridFilterCondition;
+}
+
+/**
+ * Turn an AG Grid filter model into a full-table `SELECT ... WHERE ...` so
+ * a column search runs against the whole table instead of only the rows
+ * already loaded in the grid. Returns null for an empty model or when no
+ * condition translates to SQL.
+ */
+export function buildTableSearchSql(
+  database: string,
+  table: string,
+  filterModel: Record<string, AgGridFilterModelEntry | null | undefined>,
+): string | null {
+  const conds: string[] = [];
+  for (const [field, entry] of Object.entries(filterModel)) {
+    const cond = entry ? buildFilterColumnCondition(field, entry) : null;
+    if (cond) conds.push(cond);
+  }
+  if (conds.length === 0) return null;
+  return `SELECT * FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} WHERE ${conds.join(" AND ")};`;
+}
+
+function buildFilterColumnCondition(
+  field: string,
+  entry: AgGridFilterModelEntry,
+): string | null {
+  const col = escapeMysqlIdentifier(field);
+  if (entry.operator && entry.condition1 && entry.condition2) {
+    const join = entry.operator.toUpperCase() === "OR" ? "OR" : "AND";
+    const a = buildFilterSimpleCondition(col, entry.condition1);
+    const b = buildFilterSimpleCondition(col, entry.condition2);
+    if (a && b) return `(${a} ${join} ${b})`;
+    return a ?? b;
+  }
+  return buildFilterSimpleCondition(col, entry);
+}
+
+function buildFilterSimpleCondition(
+  col: string,
+  c: AgGridFilterCondition,
+): string | null {
+  switch (c.filterType) {
+    case "text": {
+      const v = c.filter === null || c.filter === undefined ? "" : String(c.filter);
+      switch (c.type) {
+        case "contains":
+          return `${col} LIKE ${escapeMysqlString(`%${v}%`)}`;
+        case "notContains":
+          return `${col} NOT LIKE ${escapeMysqlString(`%${v}%`)}`;
+        case "equals":
+          return `${col} = ${escapeMysqlString(v)}`;
+        case "notEqual":
+          return `${col} <> ${escapeMysqlString(v)}`;
+        case "startsWith":
+          return `${col} LIKE ${escapeMysqlString(`${v}%`)}`;
+        case "endsWith":
+          return `${col} LIKE ${escapeMysqlString(`%${v}`)}`;
+        case "blank":
+          return `(${col} IS NULL OR ${col} = '')`;
+        case "notBlank":
+          return `(${col} IS NOT NULL AND ${col} <> '')`;
+        default:
+          return null;
+      }
+    }
+    case "number": {
+      const v = Number(c.filter);
+      const vTo = Number(c.filterTo);
+      const ok = (n: number) => Number.isFinite(n);
+      switch (c.type) {
+        case "equals":
+          return ok(v) ? `${col} = ${v}` : null;
+        case "notEqual":
+          return ok(v) ? `${col} <> ${v}` : null;
+        case "lessThan":
+          return ok(v) ? `${col} < ${v}` : null;
+        case "lessThanOrEqual":
+          return ok(v) ? `${col} <= ${v}` : null;
+        case "greaterThan":
+          return ok(v) ? `${col} > ${v}` : null;
+        case "greaterThanOrEqual":
+          return ok(v) ? `${col} >= ${v}` : null;
+        case "inRange":
+          return ok(v) && ok(vTo) ? `${col} BETWEEN ${v} AND ${vTo}` : null;
+        case "blank":
+          return `${col} IS NULL`;
+        case "notBlank":
+          return `${col} IS NOT NULL`;
+        default:
+          return null;
+      }
+    }
+    case "date": {
+      // Day-granular comparisons so the same SQL matches DATE and DATETIME
+      // columns alike (the whole day [d 00:00:00, d+1 00:00:00)).
+      const asDate = (d: unknown): string =>
+        d instanceof Date ? d.toISOString().slice(0, 10) : String(d ?? "");
+      const from = asDate(c.dateFrom);
+      const dayAfter = (d: string) => `DATE_ADD(${escapeMysqlString(d)}, INTERVAL 1 DAY)`;
+      switch (c.type) {
+        case "equals":
+          return from
+            ? `(${col} >= ${escapeMysqlString(from)} AND ${col} < ${dayAfter(from)})`
+            : null;
+        case "notEqual":
+          return from
+            ? `NOT (${col} >= ${escapeMysqlString(from)} AND ${col} < ${dayAfter(from)})`
+            : null;
+        case "lessThan":
+          return from ? `${col} < ${escapeMysqlString(from)}` : null;
+        case "lessThanOrEqual":
+          return from ? `${col} < ${dayAfter(from)}` : null;
+        case "greaterThan":
+          return from ? `${col} >= ${dayAfter(from)}` : null;
+        case "greaterThanOrEqual":
+          return from ? `${col} >= ${escapeMysqlString(from)}` : null;
+        case "inRange":
+          return from && c.dateTo
+            ? `(${col} >= ${escapeMysqlString(from)} AND ${col} < ${dayAfter(asDate(c.dateTo))})`
+            : null;
+        case "blank":
+          return `${col} IS NULL`;
+        case "notBlank":
+          return `${col} IS NOT NULL`;
+        default:
+          return null;
+      }
+    }
+    default:
+      return null;
+  }
+}

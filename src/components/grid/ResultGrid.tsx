@@ -1,7 +1,7 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent } from "ag-grid-community";
+import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, FilterChangedEvent } from "ag-grid-community";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, UpdateResult } from "../../types";
@@ -12,7 +12,14 @@ import { useQueryStore } from "../../stores/queryStore";
 import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
 import { confirmDialog } from "../../lib/confirm";
-import { escapeMysqlIdentifier, buildTableSelect } from "../../lib/sql";
+import {
+  escapeMysqlIdentifier,
+  buildTableSelect,
+  buildTableSearchSql,
+  buildRollbackForUpdate,
+  buildRollbackForDelete,
+  formatSqlValue,
+} from "../../lib/sql";
 import { limitGuardSql } from "../../stores/queryStore";
 
 interface DetailCellInfo {
@@ -38,6 +45,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const [detailCell, setDetailCell] = useState<DetailCellInfo | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const gridRef = useRef<AgGridReact>(null);
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
@@ -82,6 +90,21 @@ export function ResultGrid({ tab }: ResultGridProps) {
     return () => window.removeEventListener("click", close);
   }, [contextMenu]);
 
+  // The store drops tableBrowse.filterSql when a user-initiated run replaces
+  // the filter-driven search — clear the grid's column filter too, or the
+  // leftover model would keep client-side filtering the fresh result. The
+  // previous value must be tracked: clearing must not fire while the filter
+  // search itself is executing (filterSql was just set).
+  const prevFilterSqlRef = useRef<string | undefined>(undefined);
+  const filterSql = tab.tableBrowse?.filterSql;
+  useEffect(() => {
+    const had = prevFilterSqlRef.current;
+    prevFilterSqlRef.current = filterSql;
+    if (had && !filterSql) {
+      gridRef.current?.api.setFilterModel(null);
+    }
+  }, [filterSql]);
+
   // All hooks must be called before any conditional returns (React Rules of Hooks)
   const columnDefs: ColDef[] = useMemo(() => {
     if (!isQueryResult || !result) return [];
@@ -95,6 +118,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
         minWidth: Math.max(100, col.name.length * 9 + 24),
         wrapHeaderText: true,
         filter: getFilterType(col.dataType),
+        // Apply/reset buttons: the filter only lands on Apply/Enter, so a
+        // full-table search fires once per explicit apply instead of per
+        // keystroke.
+        filterParams: { buttons: ["apply", "reset"] },
         sortable: true,
         valueFormatter: (params) => {
           if (params.value === null || params.value === undefined) return "NULL";
@@ -220,6 +247,41 @@ export function ResultGrid({ tab }: ResultGridProps) {
     }
   }, [activeConnectionId, tab.id]);
 
+  /**
+   * Column filter applied → search the WHOLE table with generated SQL
+   * (synced into the editor above) instead of only the loaded rows. Only
+   * while the grid shows plain browse data of tab.tableBrowse — results of
+   * arbitrary SQL can't be translated to a WHERE clause. Empty filter →
+   * drop the generated search and go back to browsing.
+   */
+  const handleFilterChanged = useCallback(
+    (event: FilterChangedEvent) => {
+      if (!activeConnectionId) return;
+      const current = useQueryStore.getState().tabs.find((t) => t.id === tab.id);
+      const browse = current?.tableBrowse;
+      if (!current || !browse || current.isExecuting) return;
+      const plainBrowse =
+        current.executedSql ===
+          buildTableSelect(
+            browse.database,
+            browse.table,
+            browse.primaryKeyColumns,
+            (browse.page - 1) * browse.pageSize,
+            browse.pageSize,
+          ) ||
+        (!!browse.filterSql && current.executedSql === browse.filterSql);
+      if (!plainBrowse) return;
+      const store = useQueryStore.getState();
+      const sql = buildTableSearchSql(browse.database, browse.table, event.api.getFilterModel());
+      if (sql) {
+        void store.searchTable(activeConnectionId, tab.id, sql);
+      } else if (browse.filterSql) {
+        void store.clearTableSearch(activeConnectionId, tab.id);
+      }
+    },
+    [activeConnectionId, tab.id],
+  );
+
   /** Fetch/verify the primary-key columns usable for WHERE clauses. */
   const resolvePkColumns = useCallback(
     async (database: string, table: string, stored: string[]): Promise<string[]> => {
@@ -236,7 +298,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           if (colIdx >= 0) {
             pkCols = keysResult.rows.map((r) => String(r[colIdx] ?? ""));
           }
-          useQueryStore.getState().setTabTableBrowse(tab.id, { database, table, primaryKeyColumns: pkCols, pageSize: tab.tableBrowse?.pageSize ?? 50, page: tab.tableBrowse?.page ?? 1, totalRows: tab.tableBrowse?.totalRows });
+          useQueryStore.getState().setTabTableBrowse(tab.id, { database, table, primaryKeyColumns: pkCols, pageSize: tab.tableBrowse?.pageSize ?? 50, page: tab.tableBrowse?.page ?? 1, totalRows: tab.tableBrowse?.totalRows, filterSql: tab.tableBrowse?.filterSql });
         } catch {
           return [];
         }
@@ -285,6 +347,16 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
       const sql = `UPDATE ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} SET ${setClause} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
 
+      // Reverse statement from the pre-edit row snapshot — recorded in
+      // history as a rollback entry the user can load and run.
+      const rollbackSql = buildRollbackForUpdate(
+        database,
+        table,
+        pkCols,
+        detailCell.rowData,
+        colName,
+      );
+
       const startTime = performance.now();
       try {
         await queryService.executeUpdate(activeConnectionId, sql, database);
@@ -294,7 +366,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
           status: "success",
           elapsedMs,
         });
-        showSuccess(t("cellUpdated", { table, column: colName }));
+        useQueryStore.getState().addHistory({
+          sql: rollbackSql,
+          status: "success",
+          kind: "rollback",
+          elapsedMs: 0,
+        });
+        showSuccess(t("cellUpdatedRollback", { table, column: colName }));
 
         // Refresh row data in local state
         setDetailCell((prev) => {
@@ -347,6 +425,14 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
       const sql = `DELETE FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
 
+      // Full-row INSERT that restores the deleted row (primary key included).
+      const rollbackSql = buildRollbackForDelete(
+        database,
+        table,
+        (result as QueryResult).columns.map((c) => c.name),
+        row,
+      );
+
       const startTime = performance.now();
       try {
         await queryService.executeUpdate(activeConnectionId, sql, database);
@@ -356,7 +442,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
           status: "success",
           elapsedMs,
         });
-        showSuccess(t("rowDeleted", { table }));
+        useQueryStore.getState().addHistory({
+          sql: rollbackSql,
+          status: "success",
+          kind: "rollback",
+          elapsedMs: 0,
+        });
+        showSuccess(t("rowDeletedRollback", { table }));
       } catch (err) {
         const elapsedMs = Math.round(performance.now() - startTime);
         const msg = parseTauriError(err);
@@ -448,6 +540,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
       </div>
       <div className={`flex-1 min-h-0 ${resolvedTheme === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
         <AgGridReact
+          ref={gridRef}
           columnDefs={columnDefs}
           rowData={rowData}
           pagination={!showBrowsePager}
@@ -458,6 +551,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           preventDefaultOnContextMenu={true}
           onCellClicked={handleCellClick}
           onCellContextMenu={handleCellContextMenu}
+          onFilterChanged={handleFilterChanged}
         />
       </div>
       {showBrowsePager && browse && (
@@ -550,15 +644,6 @@ function getFilterType(dataType: string): string {
     return "agDateColumnFilter";
   }
   return "agTextColumnFilter";
-}
-
-function formatSqlValue(val: unknown): string {
-  if (val === null || val === undefined) return "NULL";
-  if (typeof val === "number") return String(val);
-  if (typeof val === "bigint") return String(val);
-  if (typeof val === "boolean") return val ? "1" : "0";
-  const s = String(val);
-  return `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 }
 
 /** Try to parse a value back to its natural JS type for local state updates. */

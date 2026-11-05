@@ -1,4 +1,6 @@
+use crate::connection::model::DatabaseType;
 use crate::drivers::mysql::metadata::MySqlDriver;
+use crate::drivers::postgres::PgDriver;
 use crate::drivers::DatabaseDriver;
 use crate::error::AppError;
 use crate::query::result::{QueryResult, UpdateResult};
@@ -50,6 +52,20 @@ pub async fn execute_query(
     limit: Option<u32>,
     database: Option<String>,
 ) -> Result<QueryResult, AppError> {
+    let db_type = state.get_config(&connection_id).await?.db_type;
+
+    if db_type == DatabaseType::Postgresql {
+        // PostgreSQL: schemas are the tree level, and the tab's selection is
+        // pinned per query via set_config (SET cannot take a parameter).
+        let pool = state
+            .pg_pool_manager
+            .get(&connection_id)
+            .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
+        return PgDriver::new()
+            .execute_query(&pool, &sql, limit.unwrap_or(1000), database.as_deref())
+            .await;
+    }
+
     let pool = state
         .pool_manager
         .get(&connection_id)
@@ -87,6 +103,16 @@ pub async fn execute_update(
     sql: String,
     database: Option<String>,
 ) -> Result<UpdateResult, AppError> {
+    let db_type = state.get_config(&connection_id).await?.db_type;
+
+    if db_type == DatabaseType::Postgresql {
+        let pool = state
+            .pg_pool_manager
+            .get(&connection_id)
+            .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
+        return PgDriver::new().execute_update(&pool, &sql).await;
+    }
+
     let pool = state
         .pool_manager
         .get(&connection_id)
@@ -101,7 +127,7 @@ pub async fn execute_update(
         switch_database(&mut conn, &db)?;
     }
 
-    let result = crate::query::engine::execute_update(&mut conn, &sql).await;
+    let result = crate::query::engine::execute_update(&pool, &mut conn, &sql).await;
 
     state.schema_cache.invalidate_on_ddl(&connection_id, &sql);
 
@@ -114,11 +140,25 @@ pub async fn cancel_query(
     connection_id: Uuid,
     thread_id: u64,
 ) -> Result<(), AppError> {
-    let pool = state
-        .pool_manager
-        .get(&connection_id)
-        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
-
-    let driver = MySqlDriver::new();
-    driver.cancel_query(&pool, thread_id).await
+    let db_type = state.get_config(&connection_id).await?.db_type;
+    if db_type == DatabaseType::Postgresql {
+        let pool = state
+            .pg_pool_manager
+            .get(&connection_id)
+            .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
+        // pg_cancel_backend takes the backend PID (int4).
+        sqlx::query("SELECT pg_cancel_backend($1)")
+            .bind(thread_id as i32)
+            .execute(&pool)
+            .await
+            .map(|_| ())
+            .map_err(|e| AppError::QueryFailed(e.to_string()))
+    } else {
+        let pool = state
+            .pool_manager
+            .get(&connection_id)
+            .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
+        let driver = MySqlDriver::new();
+        driver.cancel_query(&pool, thread_id).await
+    }
 }

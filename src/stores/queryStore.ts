@@ -48,6 +48,7 @@ interface QueryState {
     id: string,
     limit?: number,
     selectedSql?: string,
+    opts?: { fromGridFilter?: boolean },
   ) => Promise<void>;
   /** Open a table for browsing in the active (or a new) tab: PK lookup,
    *  paged first fetch, and a background COUNT(*) for the pager. */
@@ -59,6 +60,13 @@ interface QueryState {
     page: number,
     pageSize?: number,
   ) => Promise<void>;
+  /** Run the full-table search SQL generated from the grid's column
+   *  filters: swap the tab's SQL (keeping the table name as title) and
+   *  execute it against the whole table. */
+  searchTable: (connectionId: string, id: string, sql: string) => Promise<void>;
+  /** Column filters removed: drop the generated search SQL and, while the
+   *  tab still shows it, fall back to plain page-1 browsing. */
+  clearTableSearch: (connectionId: string, id: string) => Promise<void>;
   /** Re-run COUNT(*) for the browsed table (pager refresh). */
   refreshBrowseCount: (connectionId: string, id: string) => Promise<void>;
   cancel: (connectionId: string, id: string, threadId: number) => Promise<void>;
@@ -124,7 +132,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
-  execute: async (connectionId, id, limit, selectedSql) => {
+  execute: async (connectionId, id, limit, selectedSql, opts) => {
     get().setTabExecuting(id, true);
     get().setTabError(id, "");
     get().setTabCancelled(id, false);
@@ -142,11 +150,19 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
       // Remember the exact query (and limit) that produced the next result,
       // so the grid can refresh without re-running whatever the user has
-      // typed into the editor since.
+      // typed into the editor since. A user-initiated run also ends the
+      // grid-filter-driven search (the ResultGrid drops its column filter
+      // UI when it sees filterSql go away) — only the filter's own execute
+      // keeps it.
       set((state) => ({
-        tabs: state.tabs.map((t) =>
-          t.id === id ? { ...t, executedSql: rawSql, executedLimit: limit } : t,
-        ),
+        tabs: state.tabs.map((t) => {
+          if (t.id !== id) return t;
+          const tableBrowse =
+            t.tableBrowse && !opts?.fromGridFilter
+              ? { ...t.tableBrowse, filterSql: undefined }
+              : t.tableBrowse;
+          return { ...t, executedSql: rawSql, executedLimit: limit, tableBrowse };
+        }),
       }));
 
       const startTime = performance.now();
@@ -365,6 +381,41 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       showError(msg);
     } finally {
       get().setTabExecuting(id, false);
+    }
+  },
+
+  searchTable: async (connectionId, id, sql) => {
+    const tab = get().tabs.find((t) => t.id === id);
+    const browse = tab?.tableBrowse;
+    if (!tab || !browse || tab.isExecuting || !sql) return;
+    // Set the SQL directly (not setTabSql, which would rename the tab to a
+    // SQL fragment) and remember it as the active generated search.
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id
+          ? { ...t, sql, tableBrowse: { ...browse, filterSql: sql } }
+          : t,
+      ),
+    }));
+    await get().execute(connectionId, id, undefined, undefined, { fromGridFilter: true });
+  },
+
+  clearTableSearch: async (connectionId, id) => {
+    const tab = get().tabs.find((t) => t.id === id);
+    const browse = tab?.tableBrowse;
+    if (!tab || !browse || tab.isExecuting) return;
+    // Only fall back to browsing while the grid still shows the generated
+    // search — after the user ran their own SQL there is nothing to undo.
+    const showingSearch = !!browse.filterSql && tab.executedSql === browse.filterSql;
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id && t.tableBrowse
+          ? { ...t, tableBrowse: { ...t.tableBrowse, filterSql: undefined } }
+          : t,
+      ),
+    }));
+    if (showingSearch) {
+      await get().browsePage(connectionId, id, 1);
     }
   },
 

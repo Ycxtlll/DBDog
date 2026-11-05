@@ -9,6 +9,8 @@ import {
   Columns3,
   PencilRuler,
   Download,
+  Server,
+  GitCompare,
 } from "lucide-react";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useLayoutStore } from "../../stores/layoutStore";
@@ -232,6 +234,20 @@ export function SchemaTreePanel() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <button
+          className="p-1 rounded-md hover:bg-accent"
+          title={t("compare:title")}
+          onClick={() => useLayoutStore.getState().openDrawer("compare")}
+        >
+          <GitCompare size={14} />
+        </button>
+        <button
+          className="p-1 rounded-md hover:bg-accent"
+          title={t("server:title")}
+          onClick={() => useLayoutStore.getState().openDrawer("serverPanel")}
+        >
+          <Server size={14} />
+        </button>
         <button className="p-1 rounded-md hover:bg-accent" onClick={handleRefresh}>
           <RefreshCw size={14} />
         </button>

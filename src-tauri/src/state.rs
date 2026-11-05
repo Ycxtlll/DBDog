@@ -15,6 +15,12 @@ pub struct AppState {
     /// pooled connection sticks after release, so queries that don't pin a
     /// database explicitly are reset to this default before running.
     pub session_databases: Arc<DashMap<uuid::Uuid, String>>,
+    /// PostgreSQL pools (separate from the MySQL map — a connection is one
+    /// or the other; `drivers::backend::resolve` picks by config).
+    pub pg_pool_manager: crate::connection::manager::PgPoolManager,
+    /// SSH tunnel processes per MySQL connection (`ssh -N -L`); killed on
+    /// disconnect, reconnect and delete.
+    pub ssh_processes: Arc<DashMap<uuid::Uuid, tokio::process::Child>>,
 }
 
 impl AppState {
@@ -25,6 +31,8 @@ impl AppState {
             schema_cache: Arc::new(SchemaCache::new()),
             export_cancels: Arc::new(DashMap::new()),
             session_databases: Arc::new(DashMap::new()),
+            pg_pool_manager: crate::connection::manager::PgPoolManager::new(),
+            ssh_processes: Arc::new(DashMap::new()),
         }
     }
 

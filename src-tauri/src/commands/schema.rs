@@ -1,5 +1,4 @@
-use crate::drivers::mysql::metadata::MySqlDriver;
-use crate::drivers::DatabaseMetadata;
+use crate::drivers::backend::resolve;
 use crate::error::AppError;
 use crate::schema::model::{CompletionSchema, Database, SearchResult, Table, TableDetails};
 use crate::state::AppState;
@@ -14,13 +13,8 @@ pub async fn get_databases(
         return Ok(dbs);
     }
 
-    let pool = state
-        .pool_manager
-        .get(&connection_id)
-        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
-
-    let driver = MySqlDriver::new();
-    let dbs = driver.fetch_databases(&pool).await?;
+    let backend = resolve(&state, connection_id).await?;
+    let dbs = backend.fetch_databases().await?;
     state.schema_cache.set_databases(connection_id, &dbs);
     Ok(dbs)
 }
@@ -35,13 +29,8 @@ pub async fn get_tables(
         return Ok(tables);
     }
 
-    let pool = state
-        .pool_manager
-        .get(&connection_id)
-        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
-
-    let driver = MySqlDriver::new();
-    let tables = driver.fetch_tables(&pool, &database).await?;
+    let backend = resolve(&state, connection_id).await?;
+    let tables = backend.fetch_tables(&database).await?;
     state
         .schema_cache
         .set_tables(connection_id, &database, &tables);
@@ -62,13 +51,8 @@ pub async fn get_table_details(
         return Ok(details);
     }
 
-    let pool = state
-        .pool_manager
-        .get(&connection_id)
-        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
-
-    let driver = MySqlDriver::new();
-    let details = driver.fetch_table_details(&pool, &database, &table).await?;
+    let backend = resolve(&state, connection_id).await?;
+    let details = backend.fetch_table_details(&database, &table).await?;
     state
         .schema_cache
         .set_table_details(connection_id, &database, &table, &details);
@@ -94,13 +78,8 @@ pub async fn search_schema(
     connection_id: Uuid,
     keyword: String,
 ) -> Result<Vec<SearchResult>, AppError> {
-    let pool = state
-        .pool_manager
-        .get(&connection_id)
-        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
-
-    let driver = MySqlDriver::new();
-    driver.search_schema(&pool, &keyword).await
+    let backend = resolve(&state, connection_id).await?;
+    backend.search_schema(&keyword).await
 }
 
 /// Full database → table → column snapshot for the SQL editor's completion.
@@ -113,13 +92,8 @@ pub async fn get_completion_schema(
     connection_id: Uuid,
     database: Option<String>,
 ) -> Result<CompletionSchema, AppError> {
-    let pool = state
-        .pool_manager
-        .get(&connection_id)
-        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
-
-    let driver = MySqlDriver::new();
-    driver
-        .fetch_completion_schema(&pool, database.as_deref())
+    let backend = resolve(&state, connection_id).await?;
+    backend
+        .fetch_completion_schema(database.as_deref())
         .await
 }

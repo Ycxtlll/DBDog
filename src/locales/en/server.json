@@ -1,0 +1,21 @@
+{
+  "title": "Server",
+  "refresh": "Refresh",
+  "tabProcesses": "Processes",
+  "tabVariables": "Variables",
+  "tabStatus": "Status",
+  "filterPlaceholder": "Filter...",
+  "kill": "Kill connection",
+  "killConfirm": "Kill connection #{{id}} ({{user}}@{{host}})? Statements it is running will be terminated.",
+  "colId": "ID",
+  "colUser": "User",
+  "colHost": "Host",
+  "colCommand": "Command",
+  "colTime": "Time",
+  "colState": "State",
+  "colInfo": "SQL",
+  "colDb": "Database",
+  "colName": "Name",
+  "colValue": "Value",
+  "empty": "No rows"
+}

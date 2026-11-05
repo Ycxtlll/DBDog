@@ -1,7 +1,7 @@
 export interface ConnectionConfig {
   id: string;
   name: string;
-  type: "mysql" | "memcached" | "zookeeper";
+  type: "mysql" | "postgresql" | "memcached" | "zookeeper";
   host: string;
   port: number;
   username: string;
@@ -14,6 +14,12 @@ export interface ConnectionConfig {
   sslMode?: "disabled" | "required" | "verify-ca" | "verify-full";
   sslCertPath?: string;
   group?: string;
+  /** SSH tunnel (system `ssh -N -L`, key/agent auth only). */
+  sshEnabled?: boolean;
+  sshHost?: string;
+  sshPort?: number;
+  sshUser?: string;
+  sshKeyPath?: string;
 }
 
 export type ConnectionStatus =
@@ -146,6 +152,9 @@ export interface TableBrowseState {
   page: number;
   /** Total row count from COUNT(*). Unknown while loading or if the count failed. */
   totalRows?: number;
+  /** Full-table search SQL generated from the grid's column filters,
+   *  while that search is what the tab is showing. */
+  filterSql?: string;
 }
 
 export interface QueryHistoryItem {
@@ -155,6 +164,8 @@ export interface QueryHistoryItem {
   error?: string;
   elapsedMs?: number;
   rowsCount?: number;
+  /** Reverse statement generated after an inline cell edit / row delete. */
+  kind?: "rollback";
 }
 
 export interface AppSettings {
@@ -249,4 +260,79 @@ export interface MemcachedServerInfo {
   limitMaxbytes: number;
   currConnections: number;
   totalConnections: number;
+}
+
+// ── MySQL server panel ──
+
+export interface ProcessRow {
+  id: number;
+  user: string;
+  host: string;
+  db: string | null;
+  command: string;
+  timeSecs: number;
+  state: string | null;
+  info: string | null;
+}
+
+export interface ServerVariable {
+  name: string;
+  value: string | null;
+}
+
+export interface DiagnosticStep {
+  /** Machine key: resolve | tcp | handshake | auth | grants. */
+  name: string;
+  ok: boolean;
+  detail: string;
+  latencyMs: number | null;
+}
+
+export interface Snippet {
+  id: string;
+  name: string;
+  sql: string;
+  createdAt: number;
+}
+
+// ── Structure comparison ──
+
+export interface CompareColumnDiff {
+  name: string;
+  /** "added" = only in source, "removed" = only in target, "changed" = both. */
+  kind: "added" | "removed" | "changed";
+  sourceType: string | null;
+  targetType: string | null;
+  sourceNullable: boolean | null;
+  targetNullable: boolean | null;
+  sourceDefault: string | null;
+  targetDefault: string | null;
+  sourceExtra: string | null;
+  targetExtra: string | null;
+}
+
+export interface CompareIndexDiff {
+  name: string;
+  kind: "added" | "removed" | "changed";
+  sourceColumns: string[];
+  targetColumns: string[];
+  sourceUnique: boolean | null;
+  targetUnique: boolean | null;
+}
+
+export interface CompareTableDiff {
+  table: string;
+  sourceRows: number | null;
+  targetRows: number | null;
+  columnDiffs: CompareColumnDiff[];
+  indexDiffs: CompareIndexDiff[];
+}
+
+export interface StructureDiffReport {
+  sourceDatabase: string;
+  targetDatabase: string;
+  tablesOnlyInSource: string[];
+  tablesOnlyInTarget: string[];
+  changedTables: CompareTableDiff[];
+  identicalTables: string[];
 }

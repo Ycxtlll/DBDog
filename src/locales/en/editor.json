@@ -14,5 +14,16 @@
   "welcomePaletteHint": "Open the command palette for quick actions",
   "welcomeSidebarHint": "Collapse / expand the sidebar",
   "welcomeNewQuery": "New SQL query",
-  "editorPlaceholder": "Type SQL — database / table / column names autocomplete; Ctrl+Enter runs the statement at the cursor"
+  "editorPlaceholder": "Type SQL — database / table / column names autocomplete; Ctrl+Enter runs the statement at the cursor",
+  "snippetsTitle": "SQL snippets",
+  "snippetNamePlaceholder": "Snippet name",
+  "saveCurrentSql": "Save current SQL",
+  "paramHint": "U",
+  "noSnippets": "No snippets yet. Write some SQL and save it here.",
+  "insert": "Insert",
+  "delete": "Delete",
+  "snippetSaved": "Snippet saved",
+  "snippetDeleted": "Snippet deleted",
+  "snippetInserted": "\"{{name}}\" inserted",
+  "close": "Close"
 }

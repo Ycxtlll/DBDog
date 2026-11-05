@@ -5,7 +5,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import * as connectionService from "../../services/connectionService";
 import { translateTauriError } from "../../lib/error";
 import { showError } from "../../stores/toastStore";
-import type { ConnectionConfig } from "../../types";
+import type { ConnectionConfig, DiagnosticStep } from "../../types";
 import { Checkbox } from "../ui/Checkbox";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
@@ -42,6 +42,8 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
     text: string;
   } | null>(null);
   const [clearPassword, setClearPassword] = useState(false);
+  const [diagSteps, setDiagSteps] = useState<DiagnosticStep[] | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useModalFocus(panelRef, { active: open, onEscape: onClose });
 
@@ -52,6 +54,7 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
       setForm(config ?? makeDefaultForm());
       setTestMsg(null);
       setClearPassword(false);
+      setDiagSteps(null);
     }
   }, [open, config]);
 
@@ -98,6 +101,21 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
     }
   };
 
+  // Step-by-step connection doctor (MySQL only): resolve → TCP → handshake
+  // → auth → grants, stopping at the first failure with the exact cause.
+  const handleDiagnose = async () => {
+    setDiagSteps(null);
+    setDiagLoading(true);
+    try {
+      setDiagSteps(await connectionService.diagnoseConnection(buildPayload()));
+    } catch (err) {
+      setDiagSteps([]);
+      showError(translateTauriError(err, t));
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${closing ? "animate-overlay-out" : "animate-overlay-in"}`}
@@ -129,7 +147,7 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
               {t("type") ?? "Type"}
             </label>
             <div className="flex gap-2">
-              {(["mysql", "memcached", "zookeeper"] as const).map((dt) => (
+              {(["mysql", "postgresql", "memcached", "zookeeper"] as const).map((dt) => (
                 <button
                   key={dt}
                   className={`px-4 py-2 text-sm rounded-md border transition-colors ${
@@ -144,11 +162,12 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
                       port:
                         dt === "memcached" ? 11211
                         : dt === "zookeeper" ? 2181
+                        : dt === "postgresql" ? 5432
                         : 3306,
                     })
                   }
                 >
-                  {dt === "memcached" ? "Memcached" : dt === "zookeeper" ? "ZooKeeper" : "MySQL"}
+                  {dt === "memcached" ? "Memcached" : dt === "zookeeper" ? "ZooKeeper" : dt === "postgresql" ? "PostgreSQL" : "MySQL"}
                 </button>
               ))}
             </div>
@@ -229,6 +248,57 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
                     placeholder={t("databasePlaceholder")}
                   />
                 </div>
+
+                {/* SSH tunnel */}
+                <div className="col-span-3">
+                  <Checkbox
+                    checked={!!form.sshEnabled}
+                    onChange={(e) => setForm({ ...form, sshEnabled: e.target.checked })}
+                  >
+                    {t("sshTunnel")}
+                  </Checkbox>
+                  {form.sshEnabled && (
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div className="col-span-2">
+                        <FormField
+                          label={t("sshHost")}
+                          value={form.sshHost ?? ""}
+                          onChange={(v) => setForm({ ...form, sshHost: v })}
+                          placeholder="jump.example.com"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <FormField
+                          label={t("sshPort")}
+                          value={String(form.sshPort ?? 22)}
+                          onChange={(v) => {
+                            const num = Number(v);
+                            setForm({ ...form, sshPort: Number.isNaN(num) ? 22 : num });
+                          }}
+                          type="number"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <FormField
+                          label={t("sshUser")}
+                          value={form.sshUser ?? ""}
+                          onChange={(v) => setForm({ ...form, sshUser: v })}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <FormField
+                          label={t("sshKeyPath")}
+                          value={form.sshKeyPath ?? ""}
+                          onChange={(v) => setForm({ ...form, sshKeyPath: v || undefined })}
+                          placeholder="C:\\Users\\me\\.ssh\\id_ed25519"
+                        />
+                      </div>
+                      <p className="col-span-3 text-[11px] text-muted-foreground">
+                        {t("sshKeyHint")}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -259,16 +329,58 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
               <span className="break-all">{testMsg.text}</span>
             </div>
           )}
+
+          {/* Connection doctor steps (MySQL only) */}
+          {(diagLoading || (diagSteps && diagSteps.length > 0)) && (
+            <div className="border border-border rounded-md p-3 space-y-1.5">
+              <div className="text-xs font-medium text-muted-foreground">
+                {t("diagTitle")}
+              </div>
+              {diagLoading && (
+                <div className="text-xs text-muted-foreground">{t("diagRunning")}</div>
+              )}
+              {diagSteps?.map((step) => (
+                <div key={step.name} className="flex items-start gap-2 text-xs">
+                  {step.ok ? (
+                    <CheckCircle2 size={13} className="text-green-500 shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle size={13} className="text-red-500 shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <span className="font-medium">{t(`diagStep${step.name[0]!.toUpperCase()}${step.name.slice(1)}`)}</span>
+                    {step.latencyMs !== null && step.latencyMs !== undefined && (
+                      <span className="text-muted-foreground ml-1 tabular-nums">{step.latencyMs}ms</span>
+                    )}
+                    <div className={`break-all ${step.ok ? "text-muted-foreground" : "text-destructive"}`}>
+                      {step.detail}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {diagSteps?.length === 0 && !diagLoading && (
+                <div className="text-xs text-destructive">{t("diagFailed")}</div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-muted">
           <button
-            className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-accent transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onClose}
           >
             {t("cancel")}
           </button>
+          {form.type === "mysql" && (
+            <button
+              className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleDiagnose}
+              disabled={!formValid || diagLoading}
+            >
+              {t("diagnose")}
+            </button>
+          )}
           <button
             className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleTest}

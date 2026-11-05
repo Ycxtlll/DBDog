@@ -23,5 +23,20 @@
   "noConnections": "暂无连接",
   "confirmDelete": "确定删除此连接？",
   "clearSavedPassword": "清除已保存的密码",
-  "passwordKeepHint": "留空保持已保存的密码不变"
+  "passwordKeepHint": "留空保持已保存的密码不变",
+  "diagnose": "诊断",
+  "diagTitle": "连接诊断",
+  "diagRunning": "诊断中...",
+  "diagFailed": "诊断失败",
+  "diagStepResolve": "域名解析",
+  "diagStepTcp": "TCP 连接",
+  "diagStepHandshake": "服务端握手",
+  "diagStepAuth": "登录",
+  "diagStepGrants": "权限概览",
+  "sshTunnel": "通过 SSH 隧道连接",
+  "sshHost": "SSH 主机",
+  "sshPort": "SSH 端口",
+  "sshUser": "SSH 用户",
+  "sshKeyPath": "私钥路径（可选）",
+  "sshKeyHint": "使用系统 OpenSSH 客户端，支持密钥文件和 ssh-agent；不支持交互式密码认证。"
 }

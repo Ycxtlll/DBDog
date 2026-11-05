@@ -1,6 +1,6 @@
 [package]
 name = "dbdog"
-version = "0.3.11"
+version = "0.3.13"
 description = "DBDog - Cross-platform database GUI tool"
 authors = ["DBDog Team"]
 edition = "2021"
@@ -18,13 +18,14 @@ tauri = { version = "2", features = [] }
 
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
-sqlx = { version = "0.8", features = ["runtime-tokio", "mysql", "json", "chrono", "bigdecimal"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "mysql", "postgres", "json", "chrono", "bigdecimal"] }
 dashmap = "6"
 keyring = { version = "3", features = ["sync-secret-service", "vendored"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }
 bigdecimal = "0.4"
 uuid = { version = "1", features = ["v4", "serde"] }

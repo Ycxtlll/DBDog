@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ConnectionConfig, ServerInfo } from "../types";
+import type { ConnectionConfig, DiagnosticStep, ServerInfo } from "../types";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
   return invoke("list_connections");
@@ -27,4 +27,9 @@ export async function connect(id: string): Promise<ServerInfo> {
 
 export async function disconnect(id: string): Promise<void> {
   return invoke("disconnect", { id });
+}
+
+/** Step-by-step MySQL connection doctor (resolve/tcp/handshake/auth/grants). */
+export async function diagnoseConnection(config: ConnectionConfig): Promise<DiagnosticStep[]> {
+  return invoke("diagnose_connection", { config });
 }
