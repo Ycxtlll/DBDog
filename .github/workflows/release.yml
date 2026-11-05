@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   publish-tauri:
-    name: Build ${{ matrix.platform }} ${{ matrix.target }}
+    name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -23,9 +23,6 @@ jobs:
           - platform: windows-latest
             target: default
             args: ""
-          - platform: windows-latest
-            target: portable
-            args: --no-bundle
 
     steps:
       - name: Check out release tag
@@ -69,7 +66,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: DBDog ${{ github.ref_name }}
           releaseBody: |
-            Download the installer or package for your platform from the assets below.
+            Download the installer for your platform from the assets below.
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true

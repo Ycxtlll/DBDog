@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "build:portable": "tauri build --no-bundle"
+    "build:installer": "tauri build"
   },
   "dependencies": {
     "@codemirror/lang-sql": "^6.7.0",

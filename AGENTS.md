@@ -9,7 +9,7 @@
 | Typecheck + build | `npm run build` (= `tsc && vite build`) |
 | Rust typecheck | `cargo check` |
 | Rust tests | `cargo test` |
-| Tauri portable build | `npm run tauri build --no-bundle` |
+| Tauri installer build | `npm run build:installer` |
 
 - No lint, no formatter, no frontend tests, no CI configured.
 - `tsc` is the only typecheck; `build` runs it before `vite build`.

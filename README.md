@@ -56,7 +56,7 @@ npm install
 npm run tauri dev
 ```
 
-Requires Node.js ≥ 18 and Rust ≥ 1.78. Use `npm run build` for a type-check and frontend build, or `npm run build:portable` to create a no-bundle Tauri build.
+Requires Node.js ≥ 18 and Rust ≥ 1.78. Use `npm run build` for a type-check and frontend build, or `npm run build:installer` to create the Windows installers (MSI + NSIS).
 
 ## Releases
 

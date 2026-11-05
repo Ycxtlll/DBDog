@@ -55,11 +55,10 @@ Memcached，没起服务时必然失败——不要因此卡住流程，`cargo c
 ## Release 构建
 
 ```bash
-npm run tauri build --no-bundle
+npm run build:installer
 ```
 
-产物（即使加了 `--no-bundle`，wix/nsis 也会一并产出）：
-- 便携版：`src-tauri/target/release/dbdog.exe`
+产物（只发安装包，裸 `dbdog.exe` 不再作为交付物）：
 - 安装包：`src-tauri/target/release/bundle/msi/DBDog_<ver>_x64_en-US.msi`
   和 `bundle/nsis/DBDog_<ver>_x64-setup.exe`
 
