@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.13] — 2026-10-22
+
+### Fixed
+
+- **MySQL 8.4 下 schema 树显示为空白** — 8.4 对 information_schema / SHOW 的标识符列在协议层带 BINARY 标志（sqlx 将其视为 VARBINARY，拒绝解码为字符串），且未加别名的列名以大写返回（`TABLE_SCHEMA`）；此前解码失败被 `unwrap_or_default` 静默吞掉，库表树出现有节点无名字的空面板。新增集中式容错解码模块 `drivers/mysql/decode.rs`：字符串解码失败回退原始字节按 UTF-8 渲染、列名大小写不敏感定位，每次降级写 `dbdog::compat` 日志（默认 warn 级，`RUST_LOG` 可调），后续未知服务器怪癖可在日志中暴露而非悄悄显示空值。库列表、表列表、表结构、索引/外键/触发器、对象搜索、SQL 补全在 8.4 上全部恢复正常。
+- **SQL 编辑器无法创建触发器 / 存储过程 / 函数 / 事件** — MySQL 所有版本的服务端预处理协议均拒绝这类 DDL（ER_UNSUPPORTED_PS 1295），此前执行必然报 "This command is not supported in the prepared statement protocol yet"。现在检测到 1295 自动改用文本协议在连接池连接上重试；该回退不经过当前标签页的 `USE db` 会话状态，此类语句建议写全限定名（`库名`.`表名`）。
+
+### Changed
+
+- **CSV 导出不再对 latin1 / 二进制标记的文本列导出空单元格** — 无法按 UTF-8 解码的文本值改为有损字节渲染（与查询网格的显示策略一致），只有真正的二进制列才走 base64。
+- **新增 MySQL 变体兼容矩阵测试** `src-tauri/tests/mysql_compat.rs`（可选执行，不设环境变量自动跳过）— 自动建临时库并实测 5.7 / 8.0 / 8.4 / 9 / MariaDB 11 的全部元数据路径、查询网格解码与 DDL 回退，本次修复已在五个版本上全部通过；回归命令见测试文件头注释。
+
+## [0.3.12] — 2026-10-13
+
+### Added
+
+- **表浏览列筛选升级为全表搜索** — 结果网格的列头筛选不再只作用于当前已加载的行（此前一页只有 50 行，命中的行不在页内就等于搜不到）：点 Apply 后把筛选条件翻译成 `SELECT * FROM 库.表 WHERE …` 直接对全表执行，生成的 SQL 同步到上方编辑器、可继续改写（执行时仍走无 LIMIT 保护包裹，默认 1000 行）。支持文本 contains/notContains/equals/notEqual/startsWith/endsWith/blank/notBlank、数字比较与区间、日期按天粒度（`>= 'd' AND < 次日`，DATE 与 DATETIME 列同一写法均命中整天），多列 AND 组合、同列双条件 AND/OR，标识符与字符串统一走转义 helper。筛选弹窗新增 Apply/Reset 按钮——条件显式应用后才触发，避免逐键打全表查询；清空筛选时若当前结果正来自生成的搜索 SQL，自动回到第 1 页分页浏览并恢复分页条。任意 SQL 的结果集（JOIN 等）列筛选保持客户端过滤不变，标签页标题保持表名不被 SQL 片段覆盖。
+
 ## [0.3.11] — 2026-09-28
 
 ### Added
