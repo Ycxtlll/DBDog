@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.14] — 2026-11-05
+
+### Added
+
+- **PostgreSQL 连接支持** — 新增 `postgresql` 连接类型与完整驱动（`drivers/postgres.rs`，配合新的驱动抽象层 `drivers/backend.rs`）：库/模式下的表列表、列/索引/外键/触发器浏览、建表语句查看、对象搜索、SQL 智能补全快照、查询与更新执行全部可用（sqlx 增加 `postgres` feature）。此前仅支持 MySQL 的驱动层开始按协议拆分。
+- **数据库结构对比** — 在两个连接（可跨实例）的两个库之间做表结构 diff：表存在性（仅在一侧存在）、列（类型/可空/默认值/extra）、索引（列组合/唯一性）与两侧估算行数。纯 diff 报告，ALTER 语句在前端按选定基准侧生成，避免后端擅自决定改哪一边。
+- **服务器信息面板** — 查看 MySQL 服务器的进程列表（可一键 KILL 进程）、全局变量与全局状态（`information_schema.processlist / global_variables / global_status`），用于排查连接占用与配置问题。
+- **SQL 代码片段** — 命名保存常用 SQL 片段并在编辑器中一键插入，支持 `{{param}}` 占位符（插入时弹窗填参）；片段本地持久化，属用户内容不随连接走。
+- **行数据弹窗支持右键复制** — 行数据弹窗中右键任意字段行弹出菜单：复制该字段值（NULL 复制为字面量 `NULL`）或复制整行（`列名: 值` 逐行排列）；复制成功后头部按钮闪绿提示，Esc/点击空白处关闭菜单。
+
+### Changed
+
+- **再次运行 SQL 时清除列过滤器** — 表浏览应用列筛选后，从编辑器再次执行 SQL 会同时清掉网格表头过滤器：此前残留的过滤器模型会在客户端继续过滤新结果，用户跑任意 SQL 时看到的是被旧条件删过的行集。过滤器自身触发的全表搜索不受影响（`execute` 增加 `fromGridFilter` 标记区分两种来源）。
+- **发版不再提供便携版** — Release 构建只产出 MSI 与 NSIS 安装包，裸 `dbdog.exe` 不再作为交付物（CI 的 portable 构建矩阵项已移除）。
+
 ## [0.3.13] — 2026-10-22
 
 ### Fixed
