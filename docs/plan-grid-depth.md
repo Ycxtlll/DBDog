@@ -13,6 +13,26 @@
 3. **可回溯**——改数据必须有undo/回滚/审计路径；敢在生产库上点鼠标是最高易用性。
 4. **AG Grid Community 约束内工作**——无范围选区、无集合筛选（set filter）、无状态栏组件，以下方案均给出社区版替代。
 
+## 0.5 架构原则（硬约束）
+
+**算法落入 Rust，TS 只管 UI。** 凡是承载语义或数据的算法——SQL 守卫与生成、关系推断、
+值验证、变更集 diff、回滚语句生成——全部放 `src-tauri/src/`（Rust 侧），前端只负责渲染状态、
+转发用户事件、格式化剪贴板/显示文本。理由：单线程 Rust 计算不被 UI 阻塞，逻辑可被
+`cargo test` 覆盖，未来 dbdog-mcp 类无 GUI 入口直接复用同一套核心。
+
+**迁移清单**（现有 TS 侧算法，随里程碑下沉，前端改为调 Tauri command）：
+
+| TS 现状（src/lib/sql.ts / queryStore） | 去向 |
+|------|------|
+| `limitGuardSql`（LIMIT 包裹） | Rust `query/guard.rs` |
+| `hasTopLevelWhere`（无 WHERE DML 拦截判定） | Rust `query/guard.rs` |
+| `buildTableSearchSql` / `buildFilterColumnCondition`（筛选→SQL） | Rust `query/gen.rs` |
+| M2 关系分析器（候选生成/值验证/匹配） | **新建即 Rust**：`src-tauri/src/relationships/`，TS 零算法 |
+| M4 变更集 diff 与回滚生成 | Rust `query/changeset.rs`（现 rollback 生成在 TS，一并下沉） |
+
+留在 TS 的（纯 UI 格式化）：剪贴板文本（TSV/JSON 字符串拼装）、显示格式化（NULL 斜体、
+相对时间、截断）、AG Grid 过滤模型的数据结构转换。
+
 ## M1 网格活化与复制体验（0.3.15）
 
 ### 1.1 复制体系（复制不好用的工具不可能易用）
@@ -62,6 +82,8 @@
 
 现代 MySQL 设计普遍不建物理外键（关联靠业务层维护），读 `information_schema` 的 FK 跳转在真实库上基本不亮。
 **做深 = 推断逻辑关联，把业务代码里的隐性知识显式化成一张可导航的关系图。**
+按 0.5 节硬约束：分析器整体为 Rust 模块 `src-tauri/src/relationships/`（解析导入清单、
+候选生成、值验证 SQL 生成、置信度合并、裁决存储读写），前端只拿到现成的关系图渲染。
 
 ### 2.1 关系来源（置信度从高到低）
 
@@ -122,3 +144,22 @@
 | 推断误判 | 80% 命中率阈值 + 类型相容 + 用户否决优先于一切自动结论 |
 | 表名大小写（Linux 服务器敏感） | 匹配大小写不敏感，SQL 生成一律用 schema 返回的真实表名 |
 | AG Grid Community 功能缺失 | 见第 0 节替代方案；不引企业版授权 |
+
+## 进度日志（新会话从这里续）
+
+- **2026-11-06** 计划立项：完成讨论收敛（深度三支点 + 逻辑外键推断修正 + bitanswer 验收基准），
+  计划文档与本清单入库；`docs/relationships-bitanswer.txt` 为 M2 验收基准（约 110 条，含
+  命名陷阱案例）。0.3.14 已发布（安装包only 构建逻辑已切换）。
+- **2026-11-06** M1 编码开始。已完成：`src/lib/sql.ts` 增加 `buildTableSelect` 的 sort 参数、
+  `browseStateSelectSql`（统一浏览 SELECT 生成，替代 ResultGrid 三处手拼比较）、
+  `buildInsertStatements`（复制为 INSERT / M4 变更集复用，纯 UI 复制用途留 TS）。
+- **M1 待续**（下一批）：`types/index.ts` TableBrowseState 加 `sort` 字段 →
+  `queryStore` 的 `browsePage` 带排序 + 新增 `browseSort` 动作 → ResultGrid
+  `onSortChanged` 接服务端排序（`showBrowsePager`/`plainBrowse` 判定改用
+  `browseStateSelectSql`）→ 右键菜单重构（复制块：值/JSON/整行/整行JSON/INSERT；
+  快捷筛选块：=、≠、空值、非空——走既有 `setFilterModel → handleFilterChanged →
+  searchTable` 管道；菜单从"仅浏览模式"放开为任意结果集可用）→ NULL 斜体 +
+  空串 `''` 标记渲染 → Ctrl+C 复制聚焦单元格 → i18n 中英键 → build 验证提交。
+  注意两个交互约束：多选行（复选框）与"点单元格开详情"冲突，与筛选 chips、
+  选区统计条同批设计；快捷筛选对任意 SQL 结果集退化为客户端过滤（与现状一致）。
+- **架构提醒**：新算法一律 Rust 优先（见 0.5 节），TS 迁移清单随里程碑执行。
