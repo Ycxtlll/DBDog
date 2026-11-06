@@ -2,12 +2,13 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, SortChangedEvent } from "ag-grid-community";
-import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, Link2, Rows3, Trash2 } from "lucide-react";
+import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, GitFork, Link2, Rows3, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, ReverseReference, TableRelationship, UpdateResult } from "../../types";
 import { CellDetailModal } from "./CellDetailModal";
+import { RelationshipModal } from "./RelationshipModal";
 import { BrowsePagination } from "./BrowsePagination";
 import * as queryService from "../../services/queryService";
 import * as relationshipService from "../../services/relationshipService";
@@ -30,6 +31,8 @@ interface DetailCellInfo {
   columnName: string;
   value: unknown;
   rowData: Record<string, unknown>;
+  /** Table the row belongs to — parent table on FK jumps. */
+  tableName?: string;
 }
 
 interface ContextMenuState {
@@ -57,6 +60,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
   // Logical foreign keys for the browsed table (M2 关系分析器).
   const [relationships, setRelationships] = useState<TableRelationship[]>([]);
   const [referencedBy, setReferencedBy] = useState<ReverseReference[]>([]);
+  /** Column whose relationship editor is open (manual link management). */
+  const [relModalCol, setRelModalCol] = useState<string | null>(null);
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
@@ -303,13 +308,14 @@ export function ResultGrid({ tab }: ResultGridProps) {
   }, [isQueryResult, result]);
 
   const openRowDetail = useCallback(
-    (row: Record<string, unknown>, focusColumn?: string) => {
+    (row: Record<string, unknown>, focusColumn?: string, tableName?: string) => {
       const firstCol = Object.keys(row)[0] ?? "";
       const col = focusColumn ?? firstCol;
       setDetailCell({
         columnName: col,
         value: row[col] ?? null,
         rowData: row,
+        tableName,
       });
     },
     [],
@@ -334,7 +340,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         res.columns.forEach((c, i) => {
           row[c.name] = res.rows[0][i] ?? null;
         });
-        openRowDetail(row, rel.parentColumn);
+        openRowDetail(row, rel.parentColumn, rel.parentTable);
       } catch (err) {
         showError(parseTauriError(err));
       }
@@ -408,9 +414,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
         columnName: col,
         value: event.value,
         rowData: row,
+        tableName: browse?.table,
       });
     },
-    [handleFkJump],
+    [handleFkJump, browse],
   );
 
   const handleCellContextMenu = useCallback(
@@ -901,8 +908,18 @@ export function ResultGrid({ tab }: ResultGridProps) {
                 </>
               );
             })()}
+            {browse && (
+              <MenuRow
+                icon={GitFork}
+                label={fkByColumn.get(contextMenu.col) ? t("editRelationship") : t("setRelationship")}
+                onClick={() => {
+                  setRelModalCol(contextMenu.col);
+                  setContextMenu(null);
+                }}
+              />
+            )}
             <div className="my-1 border-t border-border" />
-            <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col); setContextMenu(null); }} />
+            <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col, browse?.table); setContextMenu(null); }} />
             {browse && (
               <MenuRow
                 icon={Trash2}
@@ -923,12 +940,47 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
       <CellDetailModal
         open={!!detailCell}
+        title={detailCell?.tableName}
         columnName={detailCell?.columnName}
         value={detailCell?.value}
         rowData={detailCell?.rowData}
         onSave={tab.tableBrowse ? handleSave : undefined}
         onDeleteRow={tab.tableBrowse ? handleDeleteModalRow : undefined}
         onClose={() => setDetailCell(null)}
+      />
+
+      <RelationshipModal
+        open={!!relModalCol}
+        connectionId={activeConnectionId}
+        database={browse?.database}
+        childTable={browse?.table}
+        childColumn={relModalCol ?? undefined}
+        existing={relModalCol ? fkByColumn.get(relModalCol) ?? null : null}
+        onChanged={() => {
+          // Reload persisted links, keeping inferred ones that were neither
+          // confirmed nor vetoed (they are not part of the stored overview).
+          if (!browse || !activeConnectionId) return;
+          relationshipService
+            .getRelationships(activeConnectionId, browse.database, browse.table)
+            .then((overview) => {
+              setRelationships((prev) => {
+                const keptInferred = prev.filter(
+                  (r) =>
+                    r.source === "inferred" &&
+                    !overview.relationships.some(
+                      (x) =>
+                        x.childColumn === r.childColumn &&
+                        x.parentTable === r.parentTable &&
+                        x.parentColumn === r.parentColumn,
+                    ),
+                );
+                return [...overview.relationships, ...keptInferred];
+              });
+              setReferencedBy(overview.referencedBy);
+            })
+            .catch(() => {});
+        }}
+        onClose={() => setRelModalCol(null)}
       />
     </div>
   );

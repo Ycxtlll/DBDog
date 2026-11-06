@@ -8,6 +8,9 @@ import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 interface CellDetailModalProps {
   /** Stays mounted while the exit animation plays; controls visibility. */
   open: boolean;
+  /** Table the row belongs to — shown as a badge in the header (the FK
+   *  jump shows the PARENT table, plain row view shows the browsed one). */
+  title?: string;
   columnName?: string;
   value?: unknown;
   /** Full row data (all columns → value). */
@@ -40,6 +43,7 @@ function formatValue(value: unknown): string {
 
 export function CellDetailModal({
   open,
+  title,
   columnName,
   value: _value,
   rowData,
@@ -212,6 +216,11 @@ export function CellDetailModal({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm font-medium">{t("rowData")}</span>
+            {title && (
+              <span className="text-xs font-mono text-primary bg-primary/10 rounded-md px-1.5 py-0.5">
+                {title}
+              </span>
+            )}
             <span className="text-xs text-muted-foreground">
               {t("columnCount", { count: columns.length })}
             </span>
