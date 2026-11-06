@@ -332,7 +332,7 @@ pub async fn infer_reverse_references(
     pool: &MySqlPool,
     database: &str,
     parent_table: &str,
-    pk_column: &str,
+    _pk_column: &str,
     tables: &[TableSchema],
     samples: &[serde_json::Value],
 ) -> Vec<ReverseCandidate> {

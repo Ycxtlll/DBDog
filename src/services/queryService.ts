@@ -39,3 +39,11 @@ export async function cancelQuery(
   return invoke("cancel_query", { connectionId, threadId });
 }
 
+
+/** Apply a staged changeset: all statements in ONE transaction. */
+export async function executeTransaction(
+  connectionId: string,
+  statements: string[],
+): Promise<number> {
+  return invoke("execute_transaction", { connectionId, statements });
+}

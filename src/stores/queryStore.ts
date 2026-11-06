@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  PendingChange,
   QueryHistoryItem,
   QueryResult,
   QueryTab,
@@ -90,6 +91,11 @@ interface QueryState {
   toggleHistory: () => void;
   setTabTableBrowse: (id: string, info: TableBrowseState) => void;
   setTabSelectedDatabase: (id: string, database: string) => void;
+  /** Stage a grid modification for the tab's changeset (M4). */
+  stageChange: (id: string, change: PendingChange) => void;
+  removePendingChange: (id: string, changeId: string) => void;
+  clearPendingChanges: (id: string) => void;
+  setLastAppliedRollbacks: (id: string, rollbacks: string[]) => void;
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
@@ -529,6 +535,36 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === id ? { ...t, selectedDatabase: database } : t,
+      ),
+    })),
+
+  stageChange: (id, change) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, pendingChanges: [...(t.pendingChanges ?? []), change] } : t,
+      ),
+    })),
+
+  removePendingChange: (id, changeId) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id
+          ? { ...t, pendingChanges: (t.pendingChanges ?? []).filter((c) => c.id !== changeId) }
+          : t,
+      ),
+    })),
+
+  clearPendingChanges: (id) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, pendingChanges: [], lastAppliedRollbacks: undefined } : t,
+      ),
+    })),
+
+  setLastAppliedRollbacks: (id, rollbacks) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, lastAppliedRollbacks: rollbacks } : t,
       ),
     })),
 }));

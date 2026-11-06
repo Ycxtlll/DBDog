@@ -103,7 +103,16 @@ pub async fn execute_update(
     sql: String,
     database: Option<String>,
 ) -> Result<UpdateResult, AppError> {
-    let db_type = state.get_config(&connection_id).await?.db_type;
+    let config = state.get_config(&connection_id).await?;
+    let db_type = config.db_type;
+
+    // Connection-level safety switch: read-only connections refuse every
+    // write at the engine layer, before any driver sees the statement.
+    if config.read_only == Some(true) {
+        return Err(AppError::QueryFailed(
+            "此连接为只读连接，已拒绝写入语句（UPDATE/DELETE/INSERT/DDL）".to_string(),
+        ));
+    }
 
     if db_type == DatabaseType::Postgresql {
         let pool = state
@@ -161,4 +170,40 @@ pub async fn cancel_query(
         let driver = MySqlDriver::new();
         driver.cancel_query(&pool, thread_id).await
     }
+}
+
+/// Apply a staged changeset: every statement runs inside ONE transaction —
+/// either the whole batch lands or nothing does. A failed statement aborts
+/// and rolls back, and the error names the failing statement.
+#[tauri::command]
+pub async fn execute_transaction(
+    state: tauri::State<'_, AppState>,
+    connection_id: Uuid,
+    statements: Vec<String>,
+) -> Result<u64, AppError> {
+    let config = state.get_config(&connection_id).await?;
+    if config.read_only == Some(true) {
+        return Err(AppError::QueryFailed(
+            "此连接为只读连接，已拒绝写入".to_string(),
+        ));
+    }
+    if config.db_type != DatabaseType::Mysql {
+        return Err(AppError::DriverNotSupported(
+            "变更集事务暂仅支持 MySQL 连接".to_string(),
+        ));
+    }
+    if statements.is_empty() {
+        return Ok(0);
+    }
+
+    let pool = state
+        .pool_manager
+        .get(&connection_id)
+        .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
+
+    for stmt in &statements {
+        state.schema_cache.invalidate_on_ddl(&connection_id, stmt);
+    }
+    let affected = crate::query::engine::execute_transaction(pool, statements).await?;
+    Ok(affected)
 }

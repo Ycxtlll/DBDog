@@ -79,6 +79,7 @@ fn main() {
             commands::connection::disconnect,
             commands::query::execute_query,
             commands::query::execute_update,
+            commands::query::execute_transaction,
             commands::query::cancel_query,
             commands::schema::get_databases,
             commands::schema::get_tables,

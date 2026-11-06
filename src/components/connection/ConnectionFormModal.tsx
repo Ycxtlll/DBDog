@@ -247,6 +247,13 @@ export function ConnectionFormModal({ open, config, onClose }: ConnectionFormMod
                     onChange={(v) => setForm({ ...form, database: v })}
                     placeholder={t("databasePlaceholder")}
                   />
+                  <Checkbox
+                    className="mt-2 text-xs text-muted-foreground w-fit"
+                    checked={!!form.readOnly}
+                    onChange={(e) => setForm({ ...form, readOnly: e.target.checked })}
+                  >
+                    {t("readOnlyConnection")}
+                  </Checkbox>
                 </div>
 
                 {/* SSH tunnel */}

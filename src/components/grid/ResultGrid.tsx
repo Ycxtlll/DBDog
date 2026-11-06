@@ -2,13 +2,14 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, SortChangedEvent } from "ag-grid-community";
-import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, GitFork, Link2, Rows3, Trash2 } from "lucide-react";
+import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, GitFork, Link2, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, ReverseReference, TableRelationship, UpdateResult } from "../../types";
 import { CellDetailModal } from "./CellDetailModal";
 import { RelationshipModal } from "./RelationshipModal";
+import { RowDiffModal } from "./RowDiffModal";
 import { BrowsePagination } from "./BrowsePagination";
 import * as queryService from "../../services/queryService";
 import * as relationshipService from "../../services/relationshipService";
@@ -16,6 +17,7 @@ import { useQueryStore } from "../../stores/queryStore";
 import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
 import { confirmDialog } from "../../lib/confirm";
+import { generateId } from "../../lib/utils";
 import {
   escapeMysqlIdentifier,
   browseStateSelectSql,
@@ -634,7 +636,9 @@ export function ResultGrid({ tab }: ResultGridProps) {
     [activeConnectionId, tab.id],
   );
 
-  /** Fetch/verify the primary-key columns usable for WHERE clauses. */
+  /** Fetch/verify the primary-key columns usable for WHERE clauses. Falls
+   *  back to the first UNIQUE index when no PK exists (M3: tables without a
+   *  primary key get a real edit path instead of a dead end). */
   const resolvePkColumns = useCallback(
     async (database: string, table: string, stored: string[]): Promise<string[]> => {
       let pkCols = stored;
@@ -642,13 +646,29 @@ export function ResultGrid({ tab }: ResultGridProps) {
         try {
           const keysResult = await queryService.executeQuery(
             activeConnectionId!,
-            `SHOW KEYS FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} WHERE Key_name = 'PRIMARY'`,
+            `SHOW KEYS FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)}`,
             undefined,
             database,
           );
-          const colIdx = keysResult.columns.findIndex((c) => c.name === "Column_name");
-          if (colIdx >= 0) {
-            pkCols = keysResult.rows.map((r) => String(r[colIdx] ?? ""));
+          const nameIdx = keysResult.columns.findIndex((c) => c.name.toLowerCase() === "key_name");
+          const colIdx = keysResult.columns.findIndex((c) => c.name.toLowerCase() === "column_name");
+          const nuIdx = keysResult.columns.findIndex((c) => c.name.toLowerCase() === "non_unique");
+          const seqIdx = keysResult.columns.findIndex((c) => c.name.toLowerCase() === "seq_in_index");
+          if (nameIdx >= 0 && colIdx >= 0 && nuIdx >= 0 && seqIdx >= 0) {
+            // Unique indexes in declaration order; columns ordered by seq.
+            const groups = new Map<string, { seq: number; col: string }[]>();
+            for (const row of keysResult.rows) {
+              if (Number(row[nuIdx] ?? 1) !== 0) continue;
+              const key = String(row[nameIdx] ?? "");
+              const list = groups.get(key) ?? [];
+              list.push({ seq: Number(row[seqIdx] ?? 0), col: String(row[colIdx] ?? "") });
+              groups.set(key, list);
+            }
+            const chosen =
+              groups.get("PRIMARY") ?? (groups.size > 0 ? groups.values().next().value : undefined);
+            if (chosen) {
+              pkCols = [...chosen].sort((a, b) => a.seq - b.seq).map((c) => c.col);
+            }
           }
           useQueryStore.getState().setTabTableBrowse(tab.id, { database, table, primaryKeyColumns: pkCols, pageSize: tab.tableBrowse?.pageSize ?? 50, page: tab.tableBrowse?.page ?? 1, totalRows: tab.tableBrowse?.totalRows, filterSql: tab.tableBrowse?.filterSql });
         } catch {
@@ -671,7 +691,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
   );
 
   const handleSave = useCallback(
-    async (colName: string, newValue: string) => {
+    async (colName: string, newValue: string | null) => {
       if (!detailCell || !tab.tableBrowse || !activeConnectionId || !isQueryResult || !result) return;
 
       const { database, table } = tab.tableBrowse;
@@ -693,14 +713,14 @@ export function ResultGrid({ tab }: ResultGridProps) {
       }
 
       const setClause =
-        newValue === ""
+        newValue === null
           ? `${escapeMysqlIdentifier(colName)} = NULL`
           : `${escapeMysqlIdentifier(colName)} = ${formatSqlValue(newValue)}`;
 
       const sql = `UPDATE ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} SET ${setClause} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
 
       // Reverse statement from the pre-edit row snapshot — recorded in
-      // history as a rollback entry the user can load and run.
+      // history as a rollback entry when the batch applies.
       const rollbackSql = buildRollbackForUpdate(
         database,
         table,
@@ -709,47 +729,20 @@ export function ResultGrid({ tab }: ResultGridProps) {
         colName,
       );
 
-      const startTime = performance.now();
-      try {
-        await queryService.executeUpdate(activeConnectionId, sql, database);
-        const elapsedMs = Math.round(performance.now() - startTime);
-        useQueryStore.getState().addHistory({
-          sql,
-          status: "success",
-          elapsedMs,
-        });
-        useQueryStore.getState().addHistory({
-          sql: rollbackSql,
-          status: "success",
-          kind: "rollback",
-          elapsedMs: 0,
-        });
-        showSuccess(t("cellUpdatedRollback", { table, column: colName }));
-
-        // Refresh row data in local state
-        setDetailCell((prev) => {
-          if (!prev) return null;
-          const updatedRow = { ...prev.rowData };
-          updatedRow[colName] = newValue === "" ? null : tryParseValue(newValue);
-          return { ...prev, rowData: updatedRow, value: updatedRow[prev.columnName] ?? null };
-        });
-
-        await refreshGrid();
-      } catch (err) {
-        const elapsedMs = Math.round(performance.now() - startTime);
-        const msg = parseTauriError(err);
-        useQueryStore.getState().addHistory({
-          sql,
-          status: "error",
-          error: msg,
-          elapsedMs,
-        });
-        showError(msg);
-        throw err;
-      }
+      // Stage instead of applying immediately (M4 changeset): the batch goes
+      // to the server as ONE transaction from the pending-changes bar.
+      useQueryStore.getState().stageChange(tab.id, {
+        id: generateId(),
+        kind: "update",
+        sql,
+        rollbackSql,
+        table,
+        database,
+      });
+      showSuccess(t("stagedToast"));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [detailCell, tab.tableBrowse, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
+    [detailCell, tab.tableBrowse, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns],
   );
 
   // Delete a row (called from context menu or modal)
@@ -785,36 +778,16 @@ export function ResultGrid({ tab }: ResultGridProps) {
         row,
       );
 
-      const startTime = performance.now();
-      try {
-        await queryService.executeUpdate(activeConnectionId, sql, database);
-        const elapsedMs = Math.round(performance.now() - startTime);
-        useQueryStore.getState().addHistory({
-          sql,
-          status: "success",
-          elapsedMs,
-        });
-        useQueryStore.getState().addHistory({
-          sql: rollbackSql,
-          status: "success",
-          kind: "rollback",
-          elapsedMs: 0,
-        });
-        showSuccess(t("rowDeletedRollback", { table }));
-      } catch (err) {
-        const elapsedMs = Math.round(performance.now() - startTime);
-        const msg = parseTauriError(err);
-        useQueryStore.getState().addHistory({
-          sql,
-          status: "error",
-          error: msg,
-          elapsedMs,
-        });
-        showError(msg);
-        throw err;
-      }
-
-      await refreshGrid();
+      // Stage the delete (M4 changeset) — applied with the batch.
+      useQueryStore.getState().stageChange(tab.id, {
+        id: generateId(),
+        kind: "delete",
+        sql,
+        rollbackSql,
+        table,
+        database,
+      });
+      showSuccess(t("stagedToast"));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tab.tableBrowse, tab.id, activeConnectionId, isQueryResult, result, resolvePkColumns, refreshGrid],
@@ -827,6 +800,73 @@ export function ResultGrid({ tab }: ResultGridProps) {
       setDetailCell(null);
     },
     [detailCell, handleDeleteRow],
+  );
+
+  // ── M4 changeset: apply / discard / undo ─────────────────────────────────
+  const [changesetOpen, setChangesetOpen] = useState(false);
+  const [applyingChanges, setApplyingChanges] = useState(false);
+
+  const applyChanges = useCallback(async () => {
+    const changes = tab.pendingChanges ?? [];
+    if (!activeConnectionId || changes.length === 0 || applyingChanges) return;
+    setApplyingChanges(true);
+    try {
+      await queryService.executeTransaction(activeConnectionId, changes.map((c) => c.sql));
+      for (const c of changes) {
+        useQueryStore.getState().addHistory({ sql: c.sql, status: "success", elapsedMs: 0 });
+        useQueryStore.getState().addHistory({
+          sql: c.rollbackSql,
+          status: "success",
+          kind: "rollback",
+          elapsedMs: 0,
+        });
+      }
+      showSuccess(t("changesetApplied", { count: changes.length }));
+      useQueryStore.getState().setLastAppliedRollbacks(tab.id, changes.map((c) => c.rollbackSql));
+      useQueryStore.getState().clearPendingChanges(tab.id);
+      setChangesetOpen(false);
+      await refreshGrid();
+    } catch (err) {
+      // The backend rolled the whole batch back; staged changes stay so the
+      // failing statement can be removed or fixed and reapplied.
+      showError(parseTauriError(err));
+    } finally {
+      setApplyingChanges(false);
+    }
+  }, [tab.pendingChanges, tab.id, activeConnectionId, applyingChanges, t, refreshGrid]);
+
+  const undoLastApplied = useCallback(async () => {
+    const rollbacks = tab.lastAppliedRollbacks ?? [];
+    if (!activeConnectionId || rollbacks.length === 0 || applyingChanges) return;
+    setApplyingChanges(true);
+    try {
+      await queryService.executeTransaction(activeConnectionId, [...rollbacks].reverse());
+      for (const sql of rollbacks) {
+        useQueryStore.getState().addHistory({ sql, status: "success", elapsedMs: 0 });
+      }
+      showSuccess(t("undoDone"));
+      useQueryStore.getState().setLastAppliedRollbacks(tab.id, []);
+      await refreshGrid();
+    } catch (err) {
+      showError(parseTauriError(err));
+    } finally {
+      setApplyingChanges(false);
+    }
+  }, [tab.lastAppliedRollbacks, tab.id, activeConnectionId, applyingChanges, t, refreshGrid]);
+
+  // ── M3 row diff: pin up to two rows, compare side by side ────────────────
+  const [pinnedRows, setPinnedRows] = useState<Record<string, unknown>[]>([]);
+  const [rowDiffOpen, setRowDiffOpen] = useState(false);
+  const pinRow = useCallback((row: Record<string, unknown>) => {
+    setPinnedRows((prev) => (prev.length >= 2 ? [prev[0], row] : [...prev, row]));
+  }, []);
+  const rowLabel = useCallback(
+    (row: Record<string, unknown>) => {
+      const pkCol = browse?.primaryKeyColumns[0];
+      const label = (pkCol && row[pkCol] !== null && row[pkCol] !== undefined ? row[pkCol] : Object.values(row)[0]);
+      return `${pkCol ?? ""}${pkCol ? "=" : ""}${String(label).slice(0, 20)}`;
+    },
+    [browse],
   );
 
   if (!result) return null;
@@ -910,11 +950,85 @@ export function ResultGrid({ tab }: ResultGridProps) {
               copyText(formatCellValue((e as CellKeyDownEvent).value));
               ke.preventDefault();
             }
+            // Ctrl+Z reverts the last applied changeset via its rollback SQL.
+            if ((ke.ctrlKey || ke.metaKey) && !ke.shiftKey && !ke.altKey && ke.key.toLowerCase() === "z") {
+              if (tab.lastAppliedRollbacks?.length) {
+                ke.preventDefault();
+                void undoLastApplied();
+              }
+            }
           }}
           onFilterChanged={handleFilterChanged}
           onSortChanged={handleSortChanged}
         />
       </div>
+      {/* Pinned rows (row diff) */}
+      {pinnedRows.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-1 text-xs border-t border-border bg-muted">
+          <Pin size={11} className="text-muted-foreground shrink-0" />
+          {pinnedRows.map((r, i) => (
+            <span key={i} className="font-mono text-muted-foreground">
+              {rowLabel(r)}
+            </span>
+          ))}
+          {pinnedRows.length === 2 && (
+            <button
+              onClick={() => setRowDiffOpen(true)}
+              className="text-primary hover:underline"
+            >
+              {t("rowDiffView")}
+            </button>
+          )}
+          <button
+            onClick={() => setPinnedRows([])}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            {t("rowDiffClear")}
+          </button>
+        </div>
+      )}
+      {/* Changeset bar (M4): staged modifications apply as one transaction */}
+      {((tab.pendingChanges?.length ?? 0) > 0 || !!tab.lastAppliedRollbacks?.length) && (
+        <div className="flex items-center justify-between gap-2 px-3 py-1 text-xs border-t border-border bg-muted">
+          <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+            <Loader2 size={11} className={applyingChanges ? "animate-spin" : "hidden"} />
+            {(tab.pendingChanges?.length ?? 0) > 0 &&
+              t("changesetBar", { count: tab.pendingChanges!.length })}
+          </span>
+          <div className="flex items-center gap-2">
+            {(tab.pendingChanges?.length ?? 0) > 0 && (
+              <>
+                <button onClick={() => setChangesetOpen(true)} className="text-primary hover:underline">
+                  {t("changesetView")}
+                </button>
+                <button
+                  onClick={() => void applyChanges()}
+                  disabled={applyingChanges}
+                  className="px-2 py-0.5 font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  {t("changesetApply")}
+                </button>
+                <button
+                  onClick={() => useQueryStore.getState().clearPendingChanges(tab.id)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  {t("changesetDiscard")}
+                </button>
+              </>
+            )}
+            {!!tab.lastAppliedRollbacks?.length && (
+              <button
+                onClick={() => void undoLastApplied()}
+                disabled={applyingChanges}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                title="Ctrl+Z"
+              >
+                {t("undoLast")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {showBrowsePager && browse && (
         <BrowsePagination
           page={browse.page}
@@ -1026,6 +1140,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
               />
             )}
             <div className="my-1 border-t border-border" />
+            <MenuRow icon={Pin} label={t("pinRow")} onClick={() => { pinRow(contextMenu.rowData); setContextMenu(null); }} />
             <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col, browse?.table); setContextMenu(null); }} />
             {browse && (
               <MenuRow
@@ -1089,6 +1204,68 @@ export function ResultGrid({ tab }: ResultGridProps) {
             .catch(() => {});
         }}
         onClose={() => setRelModalCol(null)}
+      />
+
+      {/* Changeset review panel: every staged statement, then one-transaction apply */}
+      {changesetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-overlay-in">
+          <div className="w-[680px] max-w-[94vw] max-h-[80vh] bg-card border border-border rounded-lg shadow-2xl flex flex-col animate-modal-in">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted shrink-0">
+              <span className="text-sm font-medium">
+                {t("changesetTitle")} · {t("changesetBar", { count: tab.pendingChanges?.length ?? 0 })}
+              </span>
+              <button onClick={() => setChangesetOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label={t("close")}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {(tab.pendingChanges ?? []).map((c, i) => (
+                <div key={c.id} className="border border-border rounded-md p-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-medium ${c.kind === "delete" ? "text-destructive" : "text-amber-600 dark:text-amber-400"}`}>
+                      {i + 1}. {c.kind.toUpperCase()} · {c.table}
+                    </span>
+                    <button
+                      onClick={() => useQueryStore.getState().removePendingChange(tab.id, c.id)}
+                      className="p-0.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      aria-label={t("changesetRemove")}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                  <pre className="text-xs font-mono whitespace-pre-wrap break-all text-foreground/90 bg-muted rounded-md px-2 py-1.5">{c.sql}</pre>
+                </div>
+              ))}
+              {(tab.pendingChanges?.length ?? 0) === 0 && (
+                <div className="text-xs text-muted-foreground px-1 py-2">{t("empty")}</div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-muted shrink-0">
+              <button
+                onClick={() => void applyChanges()}
+                disabled={applyingChanges || (tab.pendingChanges?.length ?? 0) === 0}
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+              >
+                {applyingChanges && <Loader2 size={12} className="animate-spin" />}
+                {t("changesetApply")}
+              </button>
+              <button
+                onClick={() => setChangesetOpen(false)}
+                className="px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+              >
+                {t("close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <RowDiffModal
+        open={rowDiffOpen}
+        left={pinnedRows[0]}
+        right={pinnedRows[1]}
+        tableName={browse?.table}
+        onClose={() => setRowDiffOpen(false)}
       />
     </div>
   );
@@ -1160,13 +1337,3 @@ function getFilterType(dataType: string): string {
   return "agTextColumnFilter";
 }
 
-/** Try to parse a value back to its natural JS type for local state updates. */
-function tryParseValue(s: string): unknown {
-  if (s === "") return null;
-  if (s === "null" || s === "NULL") return null;
-  if (s === "true") return true;
-  if (s === "false") return false;
-  const n = Number(s);
-  if (!isNaN(n) && s.trim() !== "") return n;
-  return s;
-}

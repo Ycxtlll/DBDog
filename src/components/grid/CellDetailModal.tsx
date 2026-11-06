@@ -4,6 +4,7 @@ import { Copy, Loader2, Rows3 } from "lucide-react";
 import { confirmDialog } from "../../lib/confirm";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
+import { LargeValueDrawer } from "./LargeValueDrawer";
 
 interface CellDetailModalProps {
   /** Stays mounted while the exit animation plays; controls visibility. */
@@ -15,8 +16,10 @@ interface CellDetailModalProps {
   value?: unknown;
   /** Full row data (all columns → value). */
   rowData?: Record<string, unknown>;
-  /** If provided, the modal enables edit/save for focused cell. */
-  onSave?: (columnName: string, newValue: string) => Promise<void>;
+  /** If provided, the modal enables edit/save for focused cell.
+   *  `null` = set the column to NULL; a string (including "") is saved
+   *  literally — NULL and the empty string are distinct values (M3). */
+  onSave?: (columnName: string, newValue: string | null) => Promise<void>;
   /** If provided, shows a "Delete Row" button that deletes the entire row. */
   onDeleteRow?: () => Promise<void>;
   onClose: () => void;
@@ -52,7 +55,7 @@ export function CellDetailModal({
   onClose,
 }: CellDetailModalProps) {
   const { t } = useTranslation("query");
-  const editInputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,6 +78,8 @@ export function CellDetailModal({
   // Which field is being edited (column name), null = view mode
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  /** Long-value viewer (M3 大值抽屉). */
+  const [largeValue, setLargeValue] = useState<{ col: string; value: unknown } | null>(null);
 
   // Reset transient edit state on (re)open — the component stays mounted.
   useEffect(() => {
@@ -84,6 +89,7 @@ export function CellDetailModal({
       setSaving(false);
       setDeleting(false);
       setRowMenu(null);
+      setLargeValue(null);
     }
   }, [open]);
 
@@ -132,8 +138,11 @@ export function CellDetailModal({
     if (!onSave || !editingField || saving) return;
     setSaving(true);
     try {
+      // editText is saved literally — "" stores an empty string, which is a
+      // different value from NULL. NULL has its own explicit action.
       await onSave(editingField, editText);
       setEditingField(null);
+      onClose();
     } catch {
       // Error already surfaced by the caller; stay in edit mode.
     } finally {
@@ -145,8 +154,9 @@ export function CellDetailModal({
     if (!onSave || !editingField || saving) return;
     setSaving(true);
     try {
-      await onSave(editingField, "");
+      await onSave(editingField, null);
       setEditingField(null);
+      onClose();
     } catch {
       // Error already surfaced by the caller; stay in edit mode.
     } finally {
@@ -199,6 +209,26 @@ export function CellDetailModal({
   };
 
   const isNull = (v: unknown) => v === null || v === undefined;
+
+  // Editing helpers: long/newline values get a tall textarea with Enter kept
+  // for newlines; JSON-looking text gets a format button + validity hint.
+  const isMultiline = editText.length > 60 || editText.includes("\n");
+  const trimmedJson = editText.trim();
+  const looksJson = trimmedJson.startsWith("{") || trimmedJson.startsWith("[");
+  let parsedJson: unknown = null;
+  let jsonInvalid = false;
+  if (looksJson) {
+    try {
+      parsedJson = JSON.parse(trimmedJson);
+    } catch {
+      jsonInvalid = true;
+    }
+  }
+  const formatJson = () => {
+    if (looksJson && !jsonInvalid && parsedJson !== null) {
+      setEditText(JSON.stringify(parsedJson, null, 2));
+    }
+  };
 
   const show = useDelayedUnmount(open);
   const closing = show && !open;
@@ -301,45 +331,78 @@ export function CellDetailModal({
                 {/* Value */}
                 <div className="flex-1 min-w-0 px-3 py-2 flex items-center">
                   {isEditing ? (
-                    <div className="flex items-center gap-2 w-full">
-                      <input
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <textarea
                         ref={editInputRef}
-                        type="text"
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSave();
+                          // Single-line edits save on Enter; multiline keeps
+                          // Enter for newlines and saves on Ctrl+Enter.
+                          if (e.key === "Enter" && (!e.shiftKey && (e.ctrlKey || e.metaKey || !isMultiline))) {
+                            e.preventDefault();
+                            handleSave();
+                          }
                         }}
-                        className="flex-1 bg-background text-foreground text-sm font-mono px-2 py-1 rounded-md border border-amber-500/50 outline-none focus:ring-1 focus:ring-amber-500"
+                        rows={isMultiline ? 6 : 2}
+                        className="w-full bg-background text-foreground text-sm font-mono px-2 py-1 rounded-md border border-amber-500/50 outline-none focus:ring-1 focus:ring-amber-500 resize-y"
                       />
-                      <button
-                        onClick={handleSetNull}
-                        disabled={saving}
-                        className="px-2 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors disabled:opacity-50 shrink-0"
-                      >
-                        NULL
-                      </button>
-                      <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="px-2 py-1 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-1 shrink-0"
-                      >
-                        {saving && <Loader2 size={11} className="animate-spin" />}
-                        {t("save")}
-                      </button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {looksJson && !jsonInvalid && (
+                          <button
+                            onClick={formatJson}
+                            className="px-2 py-0.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors"
+                          >
+                            {t("jsonFormat")}
+                          </button>
+                        )}
+                        {jsonInvalid && (
+                          <span className="text-xs text-destructive">{t("jsonInvalid")}</span>
+                        )}
+                        <span className="text-xs text-muted-foreground/70">
+                          {isMultiline ? t("multilineHint") : t("singlelineHint")}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleSave}
+                          disabled={saving}
+                          className="px-2 py-1 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-1 shrink-0"
+                        >
+                          {saving && <Loader2 size={11} className="animate-spin" />}
+                          {t("save")}
+                        </button>
+                        <button
+                          onClick={handleSetNull}
+                          disabled={saving}
+                          className="px-2 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-colors disabled:opacity-50 shrink-0"
+                        >
+                          {t("setNullAction")}
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <span
-                      className={`text-sm font-mono truncate ${
-                        nullVal
-                          ? "text-muted-foreground italic"
-                          : "text-foreground"
-                      } ${canEdit ? "cursor-pointer hover:underline" : ""}`}
-                      onClick={() => startEdit(col)}
-                      title={nullVal ? "NULL" : formatValue(val)}
-                    >
-                      {nullVal ? "NULL" : formatValue(val)}
-                    </span>
+                    <div className="flex items-center gap-2 min-w-0 w-full">
+                      <span
+                        className={`text-sm font-mono truncate ${
+                          nullVal
+                            ? "text-muted-foreground italic"
+                            : "text-foreground"
+                        } ${canEdit ? "cursor-pointer hover:underline" : ""}`}
+                        onClick={() => startEdit(col)}
+                        title={nullVal ? "NULL" : formatValue(val)}
+                      >
+                        {nullVal ? "NULL" : formatValue(val)}
+                      </span>
+                      {!nullVal && formatValue(val).length > 120 && (
+                        <button
+                          onClick={() => setLargeValue({ col, value: val })}
+                          className="shrink-0 text-xs text-primary hover:underline"
+                        >
+                          {t("viewFullValue")}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -376,6 +439,14 @@ export function CellDetailModal({
           </div>
         </div>
       </div>
+
+      <LargeValueDrawer
+        open={!!largeValue}
+        columnName={largeValue?.col}
+        tableName={title}
+        value={largeValue?.value}
+        onClose={() => setLargeValue(null)}
+      />
 
       {/* Right-click context menu on a field row */}
       {rowMenu && (

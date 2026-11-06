@@ -20,6 +20,20 @@ export interface ConnectionConfig {
   sshPort?: number;
   sshUser?: string;
   sshKeyPath?: string;
+  /** Safety switch: the engine rejects every write on this connection. */
+  readOnly?: boolean;
+}
+
+/** One staged grid modification, applied later in a single transaction. */
+export interface PendingChange {
+  id: string;
+  kind: "update" | "delete";
+  sql: string;
+  /** Reverse statement (recorded to history when the batch applies). */
+  rollbackSql: string;
+  /** Fully qualified target table. */
+  table: string;
+  database: string;
 }
 
 export type ConnectionStatus =
@@ -174,6 +188,10 @@ export interface QueryTab {
   executedSql?: string;
   /** The row limit used for executedSql. */
   executedLimit?: number;
+  /** Staged grid modifications, applied later in one transaction (M4). */
+  pendingChanges?: PendingChange[];
+  /** Rollback statements of the last applied changeset — Ctrl+Z target. */
+  lastAppliedRollbacks?: string[];
   /** When set, this tab is browsing a table with server-side pagination.
    *  Also enables inline cell editing for the browsed table. */
   tableBrowse?: TableBrowseState;

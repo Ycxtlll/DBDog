@@ -120,3 +120,54 @@ async fn run_text_protocol(
     let result = sqlx::raw_sql(sql).execute(pool).await?;
     Ok(result)
 }
+
+/// One executor call per function — same HRTB discipline as run_prepared.
+/// `persistent(false)` runs the text protocol (no PREPARE), so transaction
+/// control statements and DDL work; raw_sql + &mut connection trips
+/// "Executor is not general enough" (sqlx HRTB gap).
+async fn run_raw_on_conn(
+    conn: &mut MySqlConnection,
+    sql: &str,
+) -> Result<sqlx::mysql::MySqlQueryResult, sqlx::Error> {
+    sqlx::query(sql).persistent(false).execute(&mut *conn).await
+}
+
+/// Apply a staged changeset: every statement runs inside ONE transaction on
+/// a pooled connection — either the whole batch lands or nothing does. A
+/// failing statement triggers an explicit ROLLBACK and names itself in the
+/// error. Statements must be fully qualified (no session `USE` state).
+/// Takes owned arguments — borrowed params across the tauri command macro's
+/// boxed future trip "Send/Executor is not general enough".
+pub async fn execute_transaction(
+    pool: MySqlPool,
+    statements: Vec<String>,
+) -> Result<u64, AppError> {
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| AppError::QueryFailed(e.to_string()))?;
+    run_raw_on_conn(&mut conn, "START TRANSACTION")
+        .await
+        .map_err(|e| AppError::QueryFailed(format!("开启事务失败: {}", e)))?;
+
+    let mut affected: u64 = 0;
+    for (idx, stmt) in statements.iter().enumerate() {
+        match run_raw_on_conn(&mut conn, stmt).await {
+            Ok(n) => affected += n.rows_affected(),
+            Err(e) => {
+                let _ = run_raw_on_conn(&mut conn, "ROLLBACK").await;
+                return Err(AppError::QueryFailed(format!(
+                    "第 {}/{} 条失败，已全部回滚: {}",
+                    idx + 1,
+                    statements.len(),
+                    e
+                )));
+            }
+        }
+    }
+
+    run_raw_on_conn(&mut conn, "COMMIT")
+        .await
+        .map_err(|e| AppError::QueryFailed(format!("事务提交失败: {}", e)))?;
+    Ok(affected)
+}
