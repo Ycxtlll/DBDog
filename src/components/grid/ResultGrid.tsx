@@ -2,12 +2,13 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, SortChangedEvent } from "ag-grid-community";
-import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, GitFork, Link2, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
+import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, ReverseReference, TableRelationship, UpdateResult } from "../../types";
 import { CellDetailModal } from "./CellDetailModal";
+import { FkJumpButton } from "./FkJumpButton";
 import { RelationshipModal } from "./RelationshipModal";
 import { RowDiffModal } from "./RowDiffModal";
 import { BrowsePagination } from "./BrowsePagination";
@@ -58,6 +59,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
   // Logical foreign keys for the browsed table (M2 关系分析器).
   const [relationships, setRelationships] = useState<TableRelationship[]>([]);
   const [referencedBy, setReferencedBy] = useState<ReverseReference[]>([]);
+  // Cache per table so the row modal can show jump buttons for parent rows
+  // too (the modal's displayed table changes with each FK jump).
+  const tableRelsRef = useRef<Map<string, TableRelationship[]>>(new Map());
+  const [modalRels, setModalRels] = useState<TableRelationship[]>([]);
   /** Column whose relationship editor is open (manual link management). */
   const [relModalCol, setRelModalCol] = useState<string | null>(null);
 
@@ -132,6 +137,11 @@ export function ResultGrid({ tab }: ResultGridProps) {
   }, [filterSql]);
 
   // child column → relationship, for cell rendering and click routing.
+  useEffect(() => {
+    if (!browse) return;
+    tableRelsRef.current.set(`${browse.database}|${browse.table}`, relationships);
+  }, [relationships, browse]);
+
   const fkByColumn = useMemo(() => {
     const map = new Map<string, TableRelationship>();
     for (const rel of relationships) map.set(rel.childColumn, rel);
@@ -375,22 +385,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
                 if (v === 0 || v === "0" || v === "" || v === null || v === undefined) return null;
                 const rel = fkByColumn.get(col.name);
                 if (!rel) return null;
-                return (
-                  <span
-                    data-fk-jump="1"
-                    title={`${t(`source_${rel.source}`)} · ${t("fkJumpTitle", {
-                      table: rel.parentTable,
-                      confidence: Math.round(rel.confidence * 100),
-                    })}`}
-                    className={`shrink-0 cursor-pointer rounded-md p-1 -m-1 transition-colors ${
-                      rel.source === "inferred"
-                        ? "text-muted-foreground/60"
-                        : "text-primary/80"
-                    } hover:text-primary hover:bg-primary/10`}
-                  >
-                    <Link2 size={14} />
-                  </span>
-                );
+                return <FkJumpButton rel={rel} />;
               })()}
             </span>
           );
@@ -428,6 +423,33 @@ export function ResultGrid({ tab }: ResultGridProps) {
     },
     [],
   );
+
+  // Relationships for the table the row modal is currently showing — the
+  // browsed table comes from cache, others (jump targets) fetch on demand.
+  useEffect(() => {
+    const tableName = detailCell?.tableName;
+    if (!tableName || !activeConnectionId || !browse) return;
+    const key = `${browse.database}|${tableName}`;
+    const cached = tableRelsRef.current.get(key);
+    if (cached) {
+      setModalRels(cached);
+      return;
+    }
+    let stale = false;
+    relationshipService
+      .getRelationships(activeConnectionId, browse.database, tableName)
+      .then((overview) => {
+        if (stale) return;
+        tableRelsRef.current.set(key, overview.relationships);
+        setModalRels(overview.relationships);
+      })
+      .catch(() => {
+        if (!stale) setModalRels([]);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [detailCell?.tableName, activeConnectionId, browse]);
 
   /** FK link click → fetch the parent row and show it in the row modal. */
   const handleFkJump = useCallback(
@@ -1177,6 +1199,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
       <CellDetailModal
         open={!!detailCell}
         title={detailCell?.tableName}
+        relationships={detailCell?.tableName === browse?.table ? relationships : modalRels}
+        onFkJump={(rel, value) => void handleFkJump(rel, value)}
         columnName={detailCell?.columnName}
         value={detailCell?.value}
         rowData={detailCell?.rowData}

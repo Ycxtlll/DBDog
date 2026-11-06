@@ -4,6 +4,8 @@ import { Copy, Loader2, Rows3 } from "lucide-react";
 import { confirmDialog } from "../../lib/confirm";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
+import { FkJumpButton } from "./FkJumpButton";
+import type { TableRelationship } from "../../types";
 import { LargeValueDrawer } from "./LargeValueDrawer";
 
 interface CellDetailModalProps {
@@ -12,6 +14,10 @@ interface CellDetailModalProps {
   /** Table the row belongs to — shown as a badge in the header (the FK
    *  jump shows the PARENT table, plain row view shows the browsed one). */
   title?: string;
+  /** Logical FK links for the displayed table — FK columns render a jump
+   *  button (same look/size as the grid cells). */
+  relationships?: TableRelationship[];
+  onFkJump?: (rel: TableRelationship, value: unknown) => void;
   columnName?: string;
   value?: unknown;
   /** Full row data (all columns → value). */
@@ -47,6 +53,8 @@ function formatValue(value: unknown): string {
 export function CellDetailModal({
   open,
   title,
+  relationships = [],
+  onFkJump,
   columnName,
   value: _value,
   rowData,
@@ -398,6 +406,31 @@ export function CellDetailModal({
                       >
                         {nullVal ? "NULL" : formatValue(val)}
                       </span>
+                      {(() => {
+                        // FK jump button — same pill as the grid cells.
+                        const rel = relationships.find((r) => r.childColumn === col);
+                        const v = val;
+                        if (
+                          !rel ||
+                          !onFkJump ||
+                          v === null ||
+                          v === undefined ||
+                          v === 0 ||
+                          v === "0" ||
+                          v === ""
+                        ) {
+                          return null;
+                        }
+                        return (
+                          <FkJumpButton
+                            rel={rel}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onFkJump(rel, v);
+                            }}
+                          />
+                        );
+                      })()}
                       {!nullVal && formatValue(val).length > 120 && (
                         <button
                           onClick={() => setLargeValue({ col, value: val })}
