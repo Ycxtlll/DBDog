@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   RelationshipImportResult,
   RelationshipsOverview,
+  ReverseReference,
   TableRelationship,
 } from "../types";
 
@@ -59,6 +60,23 @@ export async function probeRelationship(
     database,
     parentTable,
     parentColumn,
+    samples,
+  });
+}
+
+/** Reverse inference: indexed child columns that reference this table's PK. */
+export async function inferReverseReferences(
+  connectionId: string,
+  database: string,
+  table: string,
+  pkColumn: string,
+  samples: unknown[],
+): Promise<ReverseReference[]> {
+  return invoke("relationships_reverse_infer", {
+    connectionId,
+    database,
+    table,
+    pkColumn,
     samples,
   });
 }

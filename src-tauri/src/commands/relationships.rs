@@ -6,7 +6,8 @@ use crate::connection::model::DatabaseType;
 use crate::drivers::mysql::decode;
 use crate::error::AppError;
 use crate::relationships::infer::{
-    infer_relationships, looks_like_fk_column, validate_candidate, ColumnSchema, TableSchema,
+    infer_relationships, infer_reverse_references, looks_like_fk_column, validate_candidate,
+    ColumnSchema, TableSchema,
 };
 use crate::relationships::model::{
     Relationship, RelationshipSource, ReverseReference, StoredRelationship,
@@ -160,6 +161,7 @@ pub async fn relationships_get(
             child_column: decode::sql_string(row, "COLUMN_NAME"),
             parent_column: decode::sql_string(row, "REFERENCED_COLUMN_NAME"),
             source: RelationshipSource::Declared,
+            confidence: 1.0,
         })
         .collect();
 
@@ -308,4 +310,55 @@ pub async fn relationships_probe(
 ) -> Result<Option<f64>, AppError> {
     let pool = require_mysql_pool(&state, &connection_id).await?;
     Ok(validate_candidate(&pool, &database, &parent_table, &parent_column, &samples).await)
+}
+
+/// Reverse inference for the safety net: scan the schema for indexed child
+/// columns that name-match `table` and value-validate them against sampled
+/// primary keys. Runs once per browsed table from the frontend.
+#[tauri::command]
+pub async fn relationships_reverse_infer(
+    state: tauri::State<'_, AppState>,
+    connection_id: Uuid,
+    database: String,
+    table: String,
+    pk_column: String,
+    samples: Vec<serde_json::Value>,
+) -> Result<Vec<ReverseReference>, AppError> {
+    let pool = require_mysql_pool(&state, &connection_id).await?;
+
+    let rows = sqlx::query(
+        "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_KEY \
+         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? \
+         ORDER BY TABLE_NAME, ORDINAL_POSITION",
+    )
+    .bind(&database)
+    .fetch_all(&pool)
+    .await?;
+    let tables = group_schema_rows(&rows);
+
+    let mut cleaned: Vec<serde_json::Value> = Vec::new();
+    for v in samples {
+        let usable =
+            !v.is_null() && !matches!(&v, serde_json::Value::String(s) if s.trim().is_empty());
+        if usable && !cleaned.contains(&v) {
+            cleaned.push(v);
+        }
+        if cleaned.len() >= 50 {
+            break;
+        }
+    }
+
+    let candidates =
+        infer_reverse_references(&pool, &database, &table, &pk_column, &tables, &cleaned).await;
+    let sample_count = cleaned.len().max(1);
+    Ok(candidates
+        .into_iter()
+        .map(|c| ReverseReference {
+            child_table: c.child_table,
+            child_column: c.child_column,
+            parent_column: pk_column.clone(),
+            source: RelationshipSource::Inferred,
+            confidence: (c.matched as f64 / sample_count as f64 * 100.0).round() / 100.0,
+        })
+        .collect())
 }

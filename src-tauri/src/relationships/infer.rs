@@ -268,6 +268,120 @@ pub async fn infer_relationships(
     rels
 }
 
+/// A child column that (probably) references the browsed table's primary key,
+/// found by whole-schema reverse inference.
+pub struct ReverseCandidate {
+    pub child_table: String,
+    pub child_column: String,
+    /// Number of DISTINCT child values found among the sampled parent keys.
+    pub matched: usize,
+}
+
+/// Name-match child columns that could reference `parent_table` — but only
+/// ones sitting on an index, so the probe (`WHERE child_col IN (keys)`) is an
+/// index range scan instead of a table scan. Pure; unit-tested.
+pub fn candidate_reverse_edges<'a>(
+    tables: &'a [TableSchema],
+    parent_table: &str,
+) -> Vec<(&'a TableSchema, String)> {
+    let parent_keys = table_name_keys(parent_table);
+    // A base can carry its own plural (`snsid` → base `sns`), so a key also
+    // matches when the base minus a trailing `s` equals it.
+    let matches = |key: &str| {
+        parent_keys.iter().any(|pk| {
+            key == *pk
+                || key == format!("{pk}s")
+                || key == format!("{pk}es")
+                || (key.ends_with('s') && &key[..key.len() - 1] == *pk)
+        })
+    };
+    let mut out = Vec::new();
+    for table in tables {
+        if table.name.eq_ignore_ascii_case(parent_table) {
+            continue;
+        }
+        for col in &table.columns {
+            let lower = col.name.to_ascii_lowercase();
+            let fkish = lower.starts_with("fk_")
+                || ["id", "no", "code", "key", "guid"]
+                    .iter()
+                    .any(|s| lower.ends_with(s));
+            if !fkish {
+                continue;
+            }
+            let indexed = col.column_key.eq_ignore_ascii_case("MUL")
+                || col.column_key.eq_ignore_ascii_case("UNI");
+            if !indexed {
+                continue;
+            }
+            let bases = child_column_bases(&col.name);
+            if bases.iter().any(|b| matches(&norm(b))) {
+                out.push((table, col.name.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// Reverse inference: which child columns across the schema reference
+/// `parent_table.pk_column`? Samples are primary-key values from the loaded
+/// page (zero extra queries on the parent). Signal = ≥3 DISTINCT child values
+/// found among the samples; capped at 40 probes. Distinct-count (not row
+/// count) keeps the metric comparable to the samples size.
+pub async fn infer_reverse_references(
+    pool: &MySqlPool,
+    database: &str,
+    parent_table: &str,
+    pk_column: &str,
+    tables: &[TableSchema],
+    samples: &[serde_json::Value],
+) -> Vec<ReverseCandidate> {
+    if samples.is_empty() {
+        return Vec::new();
+    }
+    let placeholders = vec!["?"; samples.len()].join(", ");
+    let mut out = Vec::new();
+    let mut probes = 0usize;
+    for (table, col) in candidate_reverse_edges(tables, parent_table) {
+        if probes >= 40 {
+            break;
+        }
+        probes += 1;
+        let sql = format!(
+            "SELECT COUNT(DISTINCT {}) AS m FROM {}.{} WHERE {} IN ({placeholders})",
+            escape_mysql_identifier(&col),
+            escape_mysql_identifier(database),
+            escape_mysql_identifier(&table.name),
+            escape_mysql_identifier(&col),
+        );
+        let mut query = sqlx::query(&sql);
+        for v in samples {
+            query = match v {
+                serde_json::Value::Number(n) => match n.as_i64() {
+                    Some(i) => query.bind(i),
+                    None => query.bind(n.as_f64().unwrap_or(0.0)),
+                },
+                serde_json::Value::Bool(b) => query.bind(if *b { 1i64 } else { 0i64 }),
+                other => query.bind(match other {
+                    serde_json::Value::String(s) => s.clone(),
+                    _ => other.to_string(),
+                }),
+            };
+        }
+        if let Ok(row) = query.fetch_one(pool).await {
+            let matched = decode::sql_opt_u64(&row, "m").unwrap_or(0) as usize;
+            if matched >= 3 {
+                out.push(ReverseCandidate {
+                    child_table: table.name.clone(),
+                    child_column: col,
+                    matched,
+                });
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,5 +466,38 @@ mod tests {
         assert!(looks_like_fk_column("uid", &s));
         assert!(!looks_like_fk_column("remark", &s));
         assert!(!looks_like_fk_column("created_at", &s));
+    }
+
+    #[test]
+    fn reverse_edges_require_name_match_and_index() {
+        let tables = vec![
+            table("t_sn", &[("snID", "int", "PRI")]),
+            // fk-ish + indexed + name matches t_sn → in
+            table("t_sndata", &[("snid", "int", "MUL"), ("payload", "text", "")]),
+            // fk-ish but NOT indexed → out (probe would be a table scan)
+            table("t_snlog2", &[("fk_snId", "int", "")]),
+            // indexed but name doesn't match t_sn → out
+            table("t_other", &[("biz_id", "int", "MUL")]),
+        ];
+        let edges = candidate_reverse_edges(&tables, "t_sn");
+        let pairs: Vec<(String, String)> = edges
+            .into_iter()
+            .map(|(t, c)| (t.name.clone(), c))
+            .collect();
+        assert_eq!(pairs, vec![("t_sndata".to_string(), "snid".to_string())]);
+    }
+
+    #[test]
+    fn reverse_edges_exclude_self_and_support_plural() {
+        let tables = vec![
+            table("t_sn", &[("snID", "int", "PRI")]),
+            // self-reference is meaningless for the safety net
+            table("t_sn", &[("parentSn", "int", "MUL")]),
+            // plural name variant: column "snsid" base "sn" vs parent keys sn/sns
+            table("t_snarchive", &[("snsid", "int", "MUL")]),
+        ];
+        let edges = candidate_reverse_edges(&tables, "t_sn");
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].0.name, "t_snarchive");
     }
 }

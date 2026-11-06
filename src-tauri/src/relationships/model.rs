@@ -79,6 +79,10 @@ pub struct ReverseReference {
     pub child_column: String,
     pub parent_column: String,
     pub source: RelationshipSource,
+    /// Inferred only: distinct child values found among the sampled keys,
+    /// relative to the sample size (0–1). Declared = 1.0.
+    #[serde(default)]
+    pub confidence: f64,
 }
 
 impl StoredRelationship {

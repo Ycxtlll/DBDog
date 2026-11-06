@@ -141,6 +141,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
   }, [relationships]);
   const fkByColumnRef = useRef(fkByColumn);
   fkByColumnRef.current = fkByColumn;
+  // Forward negative cache (tableKey → probed-without-hit fingerprints) and
+  // the once-per-table reverse scan guard.
+  const fwdNegativeRef = useRef<Map<string, Set<string>>>(new Map());
+  const revRanRef = useRef<Set<string>>(new Set());
 
   // Declared/adjudicated links load once per browsed table (cheap — no
   // probing); re-browsing the same table keeps what inference has merged.
@@ -152,6 +156,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
     relTableKeyRef.current = key;
     setRelationships([]);
     setReferencedBy([]);
+    revRanRef.current.delete(key); // re-opening a table rescans reverse refs
     if (!browse || !activeConnectionId) return;
     const fetchId = ++relFetchIdRef.current;
     relationshipService
@@ -170,6 +175,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
   // Inference pass: sample distinct values from the loaded page (zero extra
   // child-side queries) and let the backend probe parent primary keys.
   // Runs per new result while the grid shows this table's browse data.
+  // Negative cache: a (column, samples) combo that produced no link is never
+  // re-probed — page flips must not hammer the production DB with probes.
   useEffect(() => {
     if (!browse || !activeConnectionId || !result || !isQueryResult) return;
     const current = useQueryStore.getState().tabs.find((tt) => tt.id === tab.id);
@@ -179,7 +186,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
       (!!browse.filterSql && current.executedSql === browse.filterSql);
     if (!plainBrowse) return;
     const qr = result as QueryResult;
+    const tableKey = `${browse.database}|${browse.table}`;
+    const negative = fwdNegativeRef.current.get(tableKey) ?? new Set<string>();
     const samples: Record<string, unknown[]> = {};
+    const fingerprints: Record<string, string> = {};
     qr.columns.forEach((col, colIdx) => {
       if (fkByColumnRef.current.has(col.name)) return;
       const vals: unknown[] = [];
@@ -193,14 +203,27 @@ export function ResultGrid({ tab }: ResultGridProps) {
         vals.push(v);
         if (vals.length >= 50) break;
       }
-      if (vals.length > 0) samples[col.name] = vals;
+      if (vals.length === 0) return;
+      const fp = `${col.name}|${vals.length}:${vals
+        .slice(0, 3)
+        .map((v) => String(v))
+        .join(",")}`;
+      if (negative.has(fp)) return;
+      fingerprints[col.name] = fp;
+      samples[col.name] = vals;
     });
     if (Object.keys(samples).length === 0) return;
     let stale = false;
     relationshipService
       .inferRelationships(activeConnectionId, browse.database, browse.table, samples)
       .then((inferred) => {
-        if (stale || inferred.length === 0) return;
+        if (stale) return;
+        const linked = new Set(inferred.map((r) => r.childColumn));
+        for (const [colName, fp] of Object.entries(fingerprints)) {
+          if (!linked.has(colName)) negative.add(fp);
+        }
+        fwdNegativeRef.current.set(tableKey, negative);
+        if (inferred.length === 0) return;
         setRelationships((prev) => {
           const merged = [...prev];
           for (const rel of inferred) {
@@ -217,6 +240,65 @@ export function ResultGrid({ tab }: ResultGridProps) {
       })
       .catch(() => {
         /* probing failed (permissions, timeout) — links just stay absent */
+      });
+    return () => {
+      stale = true;
+    };
+  }, [result, browse, activeConnectionId, isQueryResult, tab.id]);
+
+  // Reverse inference (the safety net): which indexed child columns reference
+  // this table's primary key. Declared-only lists stay empty on schemas
+  // without physical FKs (bitanswer) — this lights the menu up there.
+  // Samples are the page's PK values; runs once per browsed table.
+  useEffect(() => {
+    if (!browse || !activeConnectionId || !result || !isQueryResult) return;
+    const current = useQueryStore.getState().tabs.find((tt) => tt.id === tab.id);
+    if (!current) return;
+    const plainBrowse =
+      current.executedSql === browseStateSelectSql(browse) ||
+      (!!browse.filterSql && current.executedSql === browse.filterSql);
+    if (!plainBrowse) return;
+    const pkCol = browse.primaryKeyColumns[0];
+    if (!pkCol) return;
+    const tableKey = `${browse.database}|${browse.table}`;
+    if (revRanRef.current.has(tableKey)) return;
+    const qr = result as QueryResult;
+    const idx = qr.columns.findIndex((c) => c.name === pkCol);
+    if (idx < 0) return;
+    const vals: unknown[] = [];
+    const seen = new Set<string>();
+    for (const row of qr.rows) {
+      const v = row[idx];
+      if (v === null || v === undefined || v === "") continue;
+      const key = String(v);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      vals.push(v);
+      if (vals.length >= 50) break;
+    }
+    if (vals.length < 3) return;
+    revRanRef.current.add(tableKey);
+    let stale = false;
+    relationshipService
+      .inferReverseReferences(activeConnectionId, browse.database, browse.table, pkCol, vals)
+      .then((refs) => {
+        if (stale || refs.length === 0) return;
+        setReferencedBy((prev) => {
+          const merged = [...prev];
+          for (const ref of refs) {
+            const dup = prev.some(
+              (x) =>
+                x.childTable === ref.childTable &&
+                x.childColumn === ref.childColumn &&
+                x.parentColumn === ref.parentColumn,
+            );
+            if (!dup) merged.push(ref);
+          }
+          return merged;
+        });
+      })
+      .catch(() => {
+        /* reverse probing failed — menu just stays declared-only */
       });
     return () => {
       stale = true;
@@ -295,11 +377,15 @@ export function ResultGrid({ tab }: ResultGridProps) {
                 return (
                   <span
                     data-fk-jump="1"
-                    title={t("fkJumpTitle", {
+                    title={`${t(`source_${rel.source}`)} · ${t("fkJumpTitle", {
                       table: rel.parentTable,
                       confidence: Math.round(rel.confidence * 100),
-                    })}
-                    className="shrink-0 text-muted-foreground/70 hover:text-primary cursor-pointer"
+                    })}`}
+                    className={`shrink-0 cursor-pointer ${
+                      rel.source === "inferred"
+                        ? "text-muted-foreground/50"
+                        : "text-primary/70"
+                    } hover:text-primary`}
                   >
                     <Link2 size={12} />
                   </span>

@@ -75,6 +75,8 @@ export interface ReverseReference {
   /** Column of OUR table being referenced (usually the primary key). */
   parentColumn: string;
   source: RelationshipSource;
+  /** Inferred only: share of sampled keys found in the child column. */
+  confidence: number;
 }
 
 export interface RelationshipsOverview {

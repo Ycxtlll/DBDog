@@ -108,6 +108,7 @@ fn main() {
             commands::relationships::relationships_adjudicate,
             commands::relationships::relationships_infer,
             commands::relationships::relationships_probe,
+            commands::relationships::relationships_reverse_infer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
