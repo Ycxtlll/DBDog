@@ -1,0 +1,106 @@
+# bitanswer 库逻辑外键关系清单（M2 关系分析器验收基准）
+# 格式：表.列 -> 表.列 [LEFT|RIGHT]?
+# [LEFT]/[RIGHT] 为关联展开时建议的 JOIN 类型提示
+# 注意：本清单包含命名启发无法命中的案例（如 t_businessidentityprovider.fk_Business -> t_products.productID、
+#       t_featuregroupitems.uid -> t_productfeatures.featureId），是值验证与用户裁决存在的实证。
+t_auth.fk_Product -> t_products.productID
+t_auth.fk_Template -> t_sntemplates.snTemplateId
+t_authattr.fk_Auth -> t_auth.id
+t_authfeaturecoll.fk_Auth -> t_auth.id
+t_borrow.fk_snMachine -> t_snmachine.snMachineId
+t_borrowdata.fk_snmachineid -> t_snmachine.snMachineId
+t_borrowfeature.fk_borrow -> t_borrow.id
+t_business.fk_Developer -> t_developers.developerID
+t_business.fk_Template -> t_sntemplates.snTemplateId
+t_businessattr.fk_Business -> t_business.id
+t_businessdata.fk_Business -> t_business.id
+t_businessidentityprovider.fk_Business -> t_products.productID
+t_businessidentityprovider.fk_identityProvider -> t_identityprovider.id
+t_customer.fk_CustomerGroupID -> t_customergroup.id  [LEFT]
+t_customertoken.fk_Customer -> t_customer.id
+t_customertoken.fk_Token -> t_token.id
+t_customeruser.fk_customer -> t_customer.id
+t_customeruser.fk_user -> t_user.id
+t_dev.fk_Admin -> t_admin.id
+t_devconf.fk_DeveloperID -> t_developers.developerID
+t_featuregroupitems.fk_FeatureGroupID -> t_featuregroups.featureGroupID  [LEFT]
+t_featuregroupitems.uid -> t_productfeatures.featureId  [RIGHT]
+t_federatedidentity.fk_identityProvider -> t_identityprovider.id
+t_federatedidentity.fk_user -> t_user.id
+t_hookevent.fk_Hook -> t_hook.id
+t_host.fk_Dev -> t_dev.id
+t_identityproviderconfig.fk_identityProvider -> t_identityprovider.id
+t_memmachine.fk_SnId -> t_sn.snID
+t_memsession.fk_memmachineid -> t_memmachine.memMachineId
+t_memsessionfeature.fk_SnId -> t_sn.snID
+t_memsessionfeature.fk_memSession -> t_memsession.memSessionId
+t_midbinding.fk_Business -> t_business.id
+t_midmachine.fk_midid -> t_mid.midId
+t_midmachine.fk_snmachineid -> t_snmachine.snMachineId
+t_pointslog.fk_SnId -> t_sn.snID
+t_productattr.fk_Product -> t_products.productID
+t_productdata.fk_productId -> t_products.productID
+t_productfeatures.fk_ProductId -> t_products.productID
+t_products.fk_DeveloperID -> t_developers.developerID
+t_redirect.fk_Business -> t_business.id
+t_remoteupdate.fk_requestId -> t_request.id  [LEFT]
+t_remoteupdate.fk_snmachineid -> t_snmachine.snMachineId
+t_remoteupdatefailure.fk_midId -> t_mid.midId
+t_remoteupdatefailure.fk_requestId -> t_request.id
+t_remoteupdatefailure.fk_snId -> t_sn.snID
+t_remoteupdatefailure.fk_snmachineid -> t_snmachine.snMachineId
+t_remoteupdatefailuremessage.fk_remoteupdateFailureId -> t_remoteupdatefailure.id  [RIGHT]
+t_rolebusinessaccess.fk_Business -> t_business.id
+t_rolebusinessaccess.fk_Role -> t_role.id
+t_rolebusinessaccess.fk_Sn -> t_sn.snID
+t_roleuser.fk_Role -> t_role.id
+t_sn.fk_Business -> t_business.id
+t_sn.fk_CustomerID -> t_customer.id  [RIGHT]
+t_sn.fk_sntemplateId -> t_sntemplates.snTemplateId
+t_snarchived.fk_Business -> t_business.id
+t_snarchived.fk_SNTemplateID -> t_sntemplates.snTemplateId
+t_snbigdata.fk_Sn -> t_sn.snID
+t_snblack.fk_snId -> t_sn.snID  [RIGHT]
+t_snchargedate.fk_snId -> t_sn.snID
+t_sncustommachine.fk_snmachineId -> t_snmachine.snMachineId
+t_sndata.fk_snid -> t_sn.snID
+t_snfeaturecoll.fk_snId -> t_sn.snID
+t_snfeatureinfo.fk_SnFeature -> t_snfeatures.featureId
+t_snfeatures.fk_SNID -> t_sn.snID
+t_snfeaturestatus.fk_snID -> t_sn.snID
+t_snhelper.fk_snID -> t_sn.snID  [RIGHT]
+t_snip.fk_snid -> t_sn.snID
+t_snlog.fk_midid -> t_mid.midId
+t_snlogdata.fk_sn -> t_sn.snID
+t_snmachine.fk_SnUsageInfo -> t_snusageinfo.ID
+t_snmachine.fk_snId -> t_sn.snID
+t_snmid.fk_snmachineid -> t_snmachine.snMachineId
+t_snoption.fk_snId -> t_sn.snID  [RIGHT]
+t_snpartner.fk_PartnerDev -> t_developers.developerID
+t_snpartner.fk_PartnerSn -> t_sn.snID
+t_snpartner.fk_sn -> t_sn.snID
+t_snpassword.fk_snId -> t_sn.snID
+t_snselector.fk_snId -> t_sn.snID
+t_sntemplatebigdata.fk_Template -> t_sntemplates.snTemplateId
+t_sntemplatedata.fk_sntemplateid -> t_sntemplates.snTemplateId
+t_sntemplaterelation.fk_sn -> t_sn.snID  [RIGHT]
+t_sntemplates.fk_productId -> t_products.productID
+t_sntoken.fk_snId -> t_sn.snID  [RIGHT]
+t_sntoken.fk_tokenId -> t_token.id
+t_snupdated.fk_snid -> t_sn.snID
+t_snusagefeature.fk_SnUsageInfo -> t_snusageinfo.ID
+t_snusagefeature.fk_snId -> t_sn.snID
+t_snusageinfo.fk_snId -> t_sn.snID  [RIGHT]
+t_snuser.fk_SnID -> t_sn.snID  [RIGHT]
+t_snuser.fk_UserID -> t_user.id  [RIGHT]
+t_softmachinemachine.fk_SoftMachineid -> t_softmachine.id  [LEFT]
+t_softmachinemachine.fk_snmachineid -> t_snmachine.snMachineId
+t_templatefeaturecoll.fk_TemplateId -> t_sntemplates.snTemplateId
+t_templatefeaturestatus.fk_SNTemplateID -> t_sntemplates.snTemplateId
+t_user.fk_DeveloperID -> t_developers.developerID
+t_userbusinessaccess.fk_Business -> t_business.id
+t_usercredential.fk_user -> t_user.id
+t_userdata.fk_User -> t_user.id
+t_usersession.fk_WebDevice -> t_webdevice.id
+t_usertoken.fk_tokenId -> t_token.id  [RIGHT]
+t_usertoken.fk_userId -> t_user.id  [RIGHT]
