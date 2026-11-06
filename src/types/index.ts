@@ -53,6 +53,41 @@ export interface UpdateResult {
   elapsedMs: number;
 }
 
+/** Logical foreign key sources, highest confidence first. */
+export type RelationshipSource = "declared" | "imported" | "adjudicated" | "inferred";
+
+/** One logical link: childTable.childColumn → parentTable.parentColumn. */
+export interface TableRelationship {
+  childTable: string;
+  childColumn: string;
+  parentTable: string;
+  parentColumn: string;
+  source: RelationshipSource;
+  /** 0–1; declared/adjudicated are 1, inferred carries the probe hit rate. */
+  confidence: number;
+  joinHint: "left" | "right" | null;
+}
+
+/** A child table referencing the browsed table (reverse direction). */
+export interface ReverseReference {
+  childTable: string;
+  childColumn: string;
+  /** Column of OUR table being referenced (usually the primary key). */
+  parentColumn: string;
+  source: RelationshipSource;
+}
+
+export interface RelationshipsOverview {
+  relationships: TableRelationship[];
+  referencedBy: ReverseReference[];
+}
+
+export interface RelationshipImportResult {
+  imported: number;
+  skipped: number;
+  errors: { line: number; reason: string }[];
+}
+
 export interface Database {
   name: string;
   charset?: string;

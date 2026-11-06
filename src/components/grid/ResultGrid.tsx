@@ -2,14 +2,15 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, SortChangedEvent } from "ag-grid-community";
-import { Braces, CircleDot, CircleSlash, Copy, Database, Eye, FileJson, Filter, FilterX, Rows3, Trash2 } from "lucide-react";
+import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, Link2, Rows3, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
-import type { QueryResult, QueryTab, UpdateResult } from "../../types";
+import type { QueryResult, QueryTab, ReverseReference, TableRelationship, UpdateResult } from "../../types";
 import { CellDetailModal } from "./CellDetailModal";
 import { BrowsePagination } from "./BrowsePagination";
 import * as queryService from "../../services/queryService";
+import * as relationshipService from "../../services/relationshipService";
 import { useQueryStore } from "../../stores/queryStore";
 import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
@@ -53,6 +54,9 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const [detailCell, setDetailCell] = useState<DetailCellInfo | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const gridRef = useRef<AgGridReact>(null);
+  // Logical foreign keys for the browsed table (M2 关系分析器).
+  const [relationships, setRelationships] = useState<TableRelationship[]>([]);
+  const [referencedBy, setReferencedBy] = useState<ReverseReference[]>([]);
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
@@ -102,6 +106,96 @@ export function ResultGrid({ tab }: ResultGridProps) {
       gridRef.current?.api.setFilterModel(null);
     }
   }, [filterSql]);
+
+  // child column → relationship, for cell rendering and click routing.
+  const fkByColumn = useMemo(() => {
+    const map = new Map<string, TableRelationship>();
+    for (const rel of relationships) map.set(rel.childColumn, rel);
+    return map;
+  }, [relationships]);
+  const fkByColumnRef = useRef(fkByColumn);
+  fkByColumnRef.current = fkByColumn;
+
+  // Declared/adjudicated links load once per browsed table (cheap — no
+  // probing); re-browsing the same table keeps what inference has merged.
+  const relTableKeyRef = useRef("");
+  const relFetchIdRef = useRef(0);
+  useEffect(() => {
+    const key = browse ? `${browse.database}|${browse.table}` : "";
+    if (key === relTableKeyRef.current) return;
+    relTableKeyRef.current = key;
+    setRelationships([]);
+    setReferencedBy([]);
+    if (!browse || !activeConnectionId) return;
+    const fetchId = ++relFetchIdRef.current;
+    relationshipService
+      .getRelationships(activeConnectionId, browse.database, browse.table)
+      .then((overview) => {
+        if (fetchId === relFetchIdRef.current) {
+          setRelationships(overview.relationships);
+          setReferencedBy(overview.referencedBy);
+        }
+      })
+      .catch(() => {
+        /* analyzer unavailable or non-MySQL — grid renders without links */
+      });
+  }, [browse, activeConnectionId]);
+
+  // Inference pass: sample distinct values from the loaded page (zero extra
+  // child-side queries) and let the backend probe parent primary keys.
+  // Runs per new result while the grid shows this table's browse data.
+  useEffect(() => {
+    if (!browse || !activeConnectionId || !result || !isQueryResult) return;
+    const current = useQueryStore.getState().tabs.find((tt) => tt.id === tab.id);
+    if (!current) return;
+    const plainBrowse =
+      current.executedSql === browseStateSelectSql(browse) ||
+      (!!browse.filterSql && current.executedSql === browse.filterSql);
+    if (!plainBrowse) return;
+    const qr = result as QueryResult;
+    const samples: Record<string, unknown[]> = {};
+    qr.columns.forEach((col, colIdx) => {
+      if (fkByColumnRef.current.has(col.name)) return;
+      const vals: unknown[] = [];
+      const seen = new Set<string>();
+      for (const row of qr.rows) {
+        const v = row[colIdx];
+        if (v === null || v === undefined || v === "") continue;
+        const key = String(v);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        vals.push(v);
+        if (vals.length >= 50) break;
+      }
+      if (vals.length > 0) samples[col.name] = vals;
+    });
+    if (Object.keys(samples).length === 0) return;
+    let stale = false;
+    relationshipService
+      .inferRelationships(activeConnectionId, browse.database, browse.table, samples)
+      .then((inferred) => {
+        if (stale || inferred.length === 0) return;
+        setRelationships((prev) => {
+          const merged = [...prev];
+          for (const rel of inferred) {
+            const dup = merged.some(
+              (r) =>
+                r.childColumn === rel.childColumn &&
+                r.parentTable === rel.parentTable &&
+                r.parentColumn === rel.parentColumn,
+            );
+            if (!dup) merged.push(rel);
+          }
+          return merged;
+        });
+      })
+      .catch(() => {
+        /* probing failed (permissions, timeout) — links just stay absent */
+      });
+    return () => {
+      stale = true;
+    };
+  }, [result, browse, activeConnectionId, isQueryResult, tab.id]);
 
   // All hooks must be called before any conditional returns (React Rules of Hooks)
   const columnDefs: ColDef[] = useMemo(() => {
@@ -165,12 +259,24 @@ export function ResultGrid({ tab }: ResultGridProps) {
                   <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
                 </svg>
               )}
+              {fkByColumn.get(col.name) && (
+                <span
+                  data-fk-jump="1"
+                  title={t("fkJumpTitle", {
+                    table: fkByColumn.get(col.name)!.parentTable,
+                    confidence: Math.round(fkByColumn.get(col.name)!.confidence * 100),
+                  })}
+                  className="shrink-0 text-muted-foreground/70 hover:text-primary cursor-pointer"
+                >
+                  <Link2 size={12} />
+                </span>
+              )}
             </span>
           );
         },
       }),
     );
-  }, [isQueryResult, result, t]);
+  }, [isQueryResult, result, t, fkByColumn]);
 
   const rowData = useMemo(() => {
     if (!isQueryResult || !result) return [];
@@ -201,17 +307,102 @@ export function ResultGrid({ tab }: ResultGridProps) {
     [],
   );
 
+  /** FK link click → fetch the parent row and show it in the row modal. */
+  const handleFkJump = useCallback(
+    async (rel: TableRelationship, value: unknown) => {
+      if (!activeConnectionId || !browse) return;
+      try {
+        const res = await queryService.executeQuery(
+          activeConnectionId,
+          `SELECT * FROM ${escapeMysqlIdentifier(browse.database)}.${escapeMysqlIdentifier(rel.parentTable)} WHERE ${escapeMysqlIdentifier(rel.parentColumn)} = ${formatSqlValue(value)} LIMIT 1;`,
+          undefined,
+          browse.database,
+        );
+        if (res.rows.length === 0) {
+          showError(t("fkParentNotFound"));
+          return;
+        }
+        const row: Record<string, unknown> = {};
+        res.columns.forEach((c, i) => {
+          row[c.name] = res.rows[0][i] ?? null;
+        });
+        openRowDetail(row, rel.parentColumn);
+      } catch (err) {
+        showError(parseTauriError(err));
+      }
+    },
+    [activeConnectionId, browse, t, openRowDetail],
+  );
+
+  /** Reverse reference: run the child-side query in this tab. */
+  const viewReferencingRows = useCallback(
+    (ref: ReverseReference, value: unknown) => {
+      setContextMenu(null);
+      if (!browse || !activeConnectionId) return;
+      const sql = `SELECT * FROM ${escapeMysqlIdentifier(browse.database)}.${escapeMysqlIdentifier(ref.childTable)} WHERE ${escapeMysqlIdentifier(ref.childColumn)} = ${formatSqlValue(value)} LIMIT 200;`;
+      void useQueryStore.getState().execute(activeConnectionId, tab.id, undefined, sql);
+    },
+    [browse, activeConnectionId, tab.id],
+  );
+
+  /** Persist a verdict on an inferred link and update the local view. */
+  const adjudicateRel = useCallback(
+    (rel: TableRelationship, confirm: boolean) => {
+      setContextMenu(null);
+      if (!activeConnectionId) return;
+      relationshipService
+        .adjudicateRelationship(
+          activeConnectionId,
+          {
+            childTable: rel.childTable,
+            childColumn: rel.childColumn,
+            parentTable: rel.parentTable,
+            parentColumn: rel.parentColumn,
+          },
+          confirm,
+        )
+        .then(() => {
+          showSuccess(t("fkAdjudicated"));
+          setRelationships((prev) =>
+            confirm
+              ? prev.map((r) =>
+                  r === rel ? { ...r, source: "adjudicated" as const, confidence: 1 } : r,
+                )
+              : prev.filter((r) => r !== rel),
+          );
+        })
+        .catch((err) => showError(parseTauriError(err)));
+    },
+    [activeConnectionId, t],
+  );
+
   const handleCellClick = useCallback(
-    (event: { colDef: { field?: string; headerName?: string }; value: unknown; data: unknown }) => {
-      const row = (event.data as Record<string, unknown>) ?? {};
+    (event: {
+      colDef: { field?: string; headerName?: string };
+      value: unknown;
+      data: unknown;
+      event?: unknown;
+    }) => {
       const col = String(event.colDef.field ?? event.colDef.headerName ?? "");
+      // Click on the FK jump icon navigates to the parent row instead of
+      // opening this row's detail.
+      const mouse = event.event as MouseEvent | undefined;
+      const fkEl = (mouse?.target as HTMLElement | null | undefined)?.closest?.("[data-fk-jump]");
+      if (fkEl) {
+        const rel = fkByColumnRef.current.get(col);
+        if (rel && event.value !== null && event.value !== undefined) {
+          void handleFkJump(rel, event.value);
+        }
+        return;
+      }
+      const row = (event.data as Record<string, unknown>) ?? {};
       setDetailCell({
         columnName: col,
         value: event.value,
         rowData: row,
       });
     },
-    [],
+    [handleFkJump],
   );
 
   const handleCellContextMenu = useCallback(
@@ -677,6 +868,31 @@ export function ResultGrid({ tab }: ResultGridProps) {
             )}
             <MenuRow icon={CircleSlash} label={t("filterBlank")} onClick={() => applyQuickFilter({ filterType: filterKind, type: "blank" })} />
             <MenuRow icon={CircleDot} label={t("filterNotBlank")} onClick={() => applyQuickFilter({ filterType: filterKind, type: "notBlank" })} />
+            {(referencedBy.length > 0 || fkByColumn.get(contextMenu.col)?.source === "inferred") && (
+              <div className="my-1 border-t border-border" />
+            )}
+            {referencedBy.map((ref) => {
+              const refValue = ref.parentColumn ? contextMenu.rowData[ref.parentColumn] : null;
+              if (refValue === null || refValue === undefined) return null;
+              return (
+                <MenuRow
+                  key={`${ref.childTable}.${ref.childColumn}`}
+                  icon={CornerDownRight}
+                  label={t("viewReferencingRows", { table: ref.childTable })}
+                  onClick={() => viewReferencingRows(ref, refValue)}
+                />
+              );
+            })}
+            {(() => {
+              const rel = fkByColumn.get(contextMenu.col);
+              if (!rel || rel.source !== "inferred") return null;
+              return (
+                <>
+                  <MenuRow icon={Check} label={t("confirmRelationship")} onClick={() => adjudicateRel(rel, true)} />
+                  <MenuRow icon={Ban} label={t("vetoRelationship")} onClick={() => adjudicateRel(rel, false)} />
+                </>
+              );
+            })()}
             <div className="my-1 border-t border-border" />
             <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col); setContextMenu(null); }} />
             {browse && (

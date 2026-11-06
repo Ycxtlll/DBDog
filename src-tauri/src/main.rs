@@ -5,6 +5,7 @@ mod connection;
 mod drivers;
 mod error;
 mod query;
+mod relationships;
 mod schema;
 mod state;
 mod utils;
@@ -102,6 +103,10 @@ fn main() {
             commands::zookeeper::zookeeper_get_server_info,
             commands::export::execute_export,
             commands::export::cancel_export,
+            commands::relationships::relationships_get,
+            commands::relationships::relationships_import,
+            commands::relationships::relationships_adjudicate,
+            commands::relationships::relationships_infer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,7 @@
 pub mod connection;
 pub mod export;
 pub mod query;
+pub mod relationships;
 pub mod schema;
 pub mod server;
 pub mod compare;

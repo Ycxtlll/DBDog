@@ -21,18 +21,22 @@ pub struct AppState {
     /// SSH tunnel processes per MySQL connection (`ssh -N -L`); killed on
     /// disconnect, reconnect and delete.
     pub ssh_processes: Arc<DashMap<uuid::Uuid, tokio::process::Child>>,
+    /// Logical foreign key verdicts (imports + user adjudications),
+    /// one JSON file per connection.
+    pub relationships_store: crate::relationships::store::RelationshipStore,
 }
 
 impl AppState {
     pub fn new(app_handle: tauri::AppHandle) -> Self {
         Self {
             pool_manager: PoolManager::new(),
-            storage: ConnectionStorage::new(app_handle),
+            storage: ConnectionStorage::new(app_handle.clone()),
             schema_cache: Arc::new(SchemaCache::new()),
             export_cancels: Arc::new(DashMap::new()),
             session_databases: Arc::new(DashMap::new()),
             pg_pool_manager: crate::connection::manager::PgPoolManager::new(),
             ssh_processes: Arc::new(DashMap::new()),
+            relationships_store: crate::relationships::store::RelationshipStore::new(app_handle),
         }
     }
 

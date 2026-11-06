@@ -3,6 +3,7 @@ pub mod connection;
 pub mod drivers;
 pub mod error;
 pub mod query;
+pub mod relationships;
 pub mod schema;
 pub mod state;
 pub mod utils;
