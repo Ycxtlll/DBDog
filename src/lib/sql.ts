@@ -1,3 +1,5 @@
+import type { TableBrowseState } from "../types";
+
 /**
  * 将多语句 SQL 按分号分割为独立语句。
  * 处理字符串字面量与反引号标识符中的分号，跳过注释（行注释与块注释）中的分号。
@@ -235,7 +237,9 @@ export function escapeMysqlIdentifier(ident: string): string {
 
 /**
  * Build the paged SELECT used by table browsing (server-side pagination).
- * Orders by primary key when available so OFFSET paging is stable.
+ * Orders by primary key when available so OFFSET paging is stable. With an
+ * explicit sort, the sort column leads and primary keys follow so paging
+ * stays stable within equal sort values.
  */
 export function buildTableSelect(
   database: string,
@@ -243,12 +247,59 @@ export function buildTableSelect(
   primaryKeyColumns: string[],
   offset: number,
   pageSize: number,
+  sort?: { col: string; dir: "asc" | "desc" } | null,
 ): string {
   const from = `SELECT * FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)}`;
-  const order = primaryKeyColumns.length
-    ? ` ORDER BY ${primaryKeyColumns.map(escapeMysqlIdentifier).join(", ")}`
-    : "";
+  let order = "";
+  if (sort) {
+    const parts = [
+      `${escapeMysqlIdentifier(sort.col)} ${sort.dir === "desc" ? "DESC" : "ASC"}`,
+      ...primaryKeyColumns
+        .filter((c) => c !== sort.col)
+        .map((c) => `${escapeMysqlIdentifier(c)} ASC`),
+    ];
+    order = ` ORDER BY ${parts.join(", ")}`;
+  } else if (primaryKeyColumns.length) {
+    order = ` ORDER BY ${primaryKeyColumns.map(escapeMysqlIdentifier).join(", ")}`;
+  }
   return `${from}${order} LIMIT ${offset}, ${pageSize};`;
+}
+
+/**
+ * The paged browse SELECT a table-browse state currently points at — the
+ * single source for "is the grid showing plain browse data" comparisons
+ * (pager visibility, filter applicability), including its server-side sort.
+ */
+export function browseStateSelectSql(browse: TableBrowseState): string {
+  return buildTableSelect(
+    browse.database,
+    browse.table,
+    browse.primaryKeyColumns,
+    (browse.page - 1) * browse.pageSize,
+    browse.pageSize,
+    browse.sort,
+  );
+}
+
+/**
+ * Build INSERT statements for the given rows — grid "copy as INSERT" today,
+ * the changeset workflow later. Identifiers escaped, values formatted via
+ * formatSqlValue (NULL/number/bool/string/JSON aware).
+ */
+export function buildInsertStatements(
+  database: string,
+  table: string,
+  columns: string[],
+  rows: Record<string, unknown>[],
+): string {
+  const cols = columns.map(escapeMysqlIdentifier).join(", ");
+  const target = `${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)}`;
+  return rows
+    .map((row) => {
+      const values = columns.map((c) => formatSqlValue(row[c])).join(", ");
+      return `INSERT INTO ${target} (${cols}) VALUES (${values});`;
+    })
+    .join("\n");
 }
 
 /** Build the exact row-count query for a table browse session. */

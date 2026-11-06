@@ -152,6 +152,8 @@ export interface TableBrowseState {
   page: number;
   /** Total row count from COUNT(*). Unknown while loading or if the count failed. */
   totalRows?: number;
+  /** Server-side sort for browsing (header click). Null/undefined = primary-key order. */
+  sort?: { col: string; dir: "asc" | "desc" } | null;
   /** Full-table search SQL generated from the grid's column filters,
    *  while that search is what the tab is showing. */
   filterSql?: string;

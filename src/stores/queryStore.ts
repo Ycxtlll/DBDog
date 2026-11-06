@@ -60,6 +60,14 @@ interface QueryState {
     page: number,
     pageSize?: number,
   ) => Promise<void>;
+  /** Header-click sort in browse mode: store it (server-side ORDER BY) and
+   *  re-fetch page 1. col=null falls back to primary-key order. */
+  browseSort: (
+    connectionId: string,
+    id: string,
+    col: string | null,
+    dir?: "asc" | "desc",
+  ) => Promise<void>;
   /** Run the full-table search SQL generated from the grid's column
    *  filters: swap the tab's SQL (keeping the table name as title) and
    *  execute it against the whole table. */
@@ -333,7 +341,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       browse.totalRows !== undefined ? Math.max(1, Math.ceil(browse.totalRows / size)) : undefined;
     const targetPage = totalPages !== undefined ? Math.min(Math.max(1, page), totalPages) : Math.max(1, page);
     const offset = (targetPage - 1) * size;
-    const sql = buildTableSelect(browse.database, browse.table, browse.primaryKeyColumns, offset, size);
+    const sql = buildTableSelect(browse.database, browse.table, browse.primaryKeyColumns, offset, size, browse.sort);
 
     get().setTabExecuting(id, true);
     get().setTabError(id, "");
@@ -382,6 +390,29 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     } finally {
       get().setTabExecuting(id, false);
     }
+  },
+
+  browseSort: async (connectionId, id, col, dir = "asc") => {
+    const tab = get().tabs.find((t) => t.id === id);
+    if (!tab || !tab.tableBrowse || tab.isExecuting) return;
+    // Sorting sorts the plain browse pages — it exits an active filter
+    // search (composing ORDER BY into the generated search comes later).
+    // The grid clears its column filter when it sees filterSql go away.
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id && t.tableBrowse
+          ? {
+              ...t,
+              tableBrowse: {
+                ...t.tableBrowse,
+                sort: col ? { col, dir } : null,
+                filterSql: undefined,
+              },
+            }
+          : t,
+      ),
+    }));
+    await get().browsePage(connectionId, id, 1);
   },
 
   searchTable: async (connectionId, id, sql) => {

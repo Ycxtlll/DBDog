@@ -1,7 +1,9 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, FilterChangedEvent } from "ag-grid-community";
+import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, SortChangedEvent } from "ag-grid-community";
+import { Braces, CircleDot, CircleSlash, Copy, Database, Eye, FileJson, Filter, FilterX, Rows3, Trash2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { QueryResult, QueryTab, UpdateResult } from "../../types";
@@ -14,7 +16,8 @@ import { parseTauriError } from "../../lib/error";
 import { confirmDialog } from "../../lib/confirm";
 import {
   escapeMysqlIdentifier,
-  buildTableSelect,
+  browseStateSelectSql,
+  buildInsertStatements,
   buildTableSearchSql,
   buildRollbackForUpdate,
   buildRollbackForDelete,
@@ -32,6 +35,10 @@ interface ContextMenuState {
   x: number;
   y: number;
   rowData: Record<string, unknown>;
+  /** Column the menu was opened on (right-click target). */
+  col: string;
+  /** Raw value of the clicked cell (null when NULL/missing). */
+  value: unknown;
 }
 
 interface ResultGridProps {
@@ -52,16 +59,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const browse = tab.tableBrowse;
   // The pager only makes sense while the grid actually shows browse data —
   // hide it once the user runs their own SQL in the tab.
-  const showBrowsePager =
-    !!browse &&
-    tab.executedSql ===
-      buildTableSelect(
-        browse.database,
-        browse.table,
-        browse.primaryKeyColumns,
-        (browse.page - 1) * browse.pageSize,
-        browse.pageSize,
-      );
+  const showBrowsePager = !!browse && tab.executedSql === browseStateSelectSql(browse);
 
   const agGridLocaleText = useMemo(
     () => ({
@@ -134,6 +132,14 @@ export function ResultGrid({ tab }: ResultGridProps) {
           return formatted.slice(0, 200) + "...";
         },
         cellRenderer: (params: ICellRendererParams) => {
+          // NULL and the empty string must be distinguishable at a glance —
+          // both previously rendered as blank-ish text.
+          if (params.value === null || params.value === undefined) {
+            return <span className="italic text-muted-foreground/80">NULL</span>;
+          }
+          if (params.value === "") {
+            return <span className="italic text-muted-foreground/60">&apos;&apos;</span>;
+          }
           const formatted = formatCellValue(params.value);
           const displayText =
             formatted.length > 50
@@ -210,17 +216,57 @@ export function ResultGrid({ tab }: ResultGridProps) {
 
   const handleCellContextMenu = useCallback(
     (event: CellContextMenuEvent) => {
-      if (!tab.tableBrowse) return;
       const row = (event.data as Record<string, unknown>) ?? {};
       const mouseEvent = event.event as MouseEvent | null;
       if (!mouseEvent) return;
+      const col = String(event.colDef.field ?? event.colDef.headerName ?? "");
       setContextMenu({
         x: mouseEvent.clientX,
         y: mouseEvent.clientY,
         rowData: row,
+        col,
+        value: col in row ? row[col] ?? null : null,
       });
     },
-    [tab.tableBrowse],
+    [],
+  );
+
+  const copyText = useCallback(
+    (text: string) => {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => showSuccess(t("copiedToast")))
+        .catch(() => {});
+    },
+    [t],
+  );
+
+  /** Header-click sort: plain browse data sorts server-side (ORDER BY +
+   *  re-fetch page 1); arbitrary SQL results keep their client-side page
+   *  sort, so the handler no-ops there. */
+  const handleSortChanged = useCallback(
+    (event: SortChangedEvent) => {
+      if (!activeConnectionId || !browse) return;
+      const current = useQueryStore.getState().tabs.find((t) => t.id === tab.id);
+      if (!current || current.isExecuting) return;
+      const plainBrowse =
+        current.executedSql === browseStateSelectSql(browse) ||
+        (!!browse.filterSql && current.executedSql === browse.filterSql);
+      if (!plainBrowse) return;
+      const first = event.api.getColumnState().find((c) => c.sort);
+      const next =
+        first && first.sort
+          ? { col: first.colId, dir: first.sort === "desc" ? ("desc" as const) : ("asc" as const) }
+          : null;
+      const prev = browse.sort ?? null;
+      if ((prev?.col ?? null) === (next?.col ?? null) && (prev?.dir ?? null) === (next?.dir ?? null)) {
+        return;
+      }
+      void useQueryStore
+        .getState()
+        .browseSort(activeConnectionId, tab.id, next?.col ?? null, next?.dir);
+    },
+    [activeConnectionId, tab.id, browse],
   );
 
   /**
@@ -261,14 +307,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
       const browse = current?.tableBrowse;
       if (!current || !browse || current.isExecuting) return;
       const plainBrowse =
-        current.executedSql ===
-          buildTableSelect(
-            browse.database,
-            browse.table,
-            browse.primaryKeyColumns,
-            (browse.page - 1) * browse.pageSize,
-            browse.pageSize,
-          ) ||
+        current.executedSql === browseStateSelectSql(browse) ||
         (!!browse.filterSql && current.executedSql === browse.filterSql);
       if (!plainBrowse) return;
       const store = useQueryStore.getState();
@@ -551,7 +590,16 @@ export function ResultGrid({ tab }: ResultGridProps) {
           preventDefaultOnContextMenu={true}
           onCellClicked={handleCellClick}
           onCellContextMenu={handleCellContextMenu}
+          onCellKeyDown={(e) => {
+            const ke = e.event as KeyboardEvent | undefined;
+            if (!ke) return;
+            if ((ke.ctrlKey || ke.metaKey) && !ke.shiftKey && !ke.altKey && ke.key.toLowerCase() === "c") {
+              copyText(formatCellValue((e as CellKeyDownEvent).value));
+              ke.preventDefault();
+            }
+          }}
           onFilterChanged={handleFilterChanged}
+          onSortChanged={handleSortChanged}
         />
       </div>
       {showBrowsePager && browse && (
@@ -567,43 +615,87 @@ export function ResultGrid({ tab }: ResultGridProps) {
         />
       )}
 
-      {/* Right-click context menu */}
-      {contextMenu && (
-        <div
-          className="fixed z-[60] min-w-[160px] py-1 bg-card border border-border rounded-lg shadow-xl animate-menu-in"
-          style={{
-            left: Math.min(contextMenu.x, window.innerWidth - 180),
-            top: Math.min(contextMenu.y, window.innerHeight - 120),
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              openRowDetail(contextMenu.rowData);
-              setContextMenu(null);
+      {/* Right-click context menu — copy / quick filter / row ops,
+          available on any query result (row ops stay browse-only). */}
+      {contextMenu && (() => {
+        const cols = Object.keys(contextMenu.rowData);
+        const menuValue = contextMenu.value;
+        const valueIsNull = menuValue === null;
+        const parsedJson =
+          !valueIsNull && typeof menuValue !== "object" ? tryParseJson(String(menuValue)) : null;
+        const colType = queryResult.columns.find((c) => c.name === contextMenu.col)?.dataType ?? "";
+        const filterKind =
+          getFilterType(colType) === "agNumberColumnFilter"
+            ? "number"
+            : getFilterType(colType) === "agDateColumnFilter"
+              ? "date"
+              : "text";
+        const numericOk =
+          filterKind !== "number" || (menuValue !== null && Number.isFinite(Number(menuValue)));
+        const eqNeModel = (eq: boolean): Record<string, unknown> | null => {
+          if (filterKind === "number") {
+            return { filterType: "number", type: eq ? "equals" : "notEqual", filter: Number(menuValue) };
+          }
+          if (filterKind === "date") {
+            return { filterType: "date", type: eq ? "equals" : "notEqual", dateFrom: String(menuValue).slice(0, 10) };
+          }
+          return { filterType: "text", type: eq ? "equals" : "notEqual", filter: formatCellValue(menuValue) };
+        };
+        const applyQuickFilter = (model: Record<string, unknown> | null) => {
+          setContextMenu(null);
+          if (!model || !gridRef.current) return;
+          const current = gridRef.current.api.getFilterModel();
+          gridRef.current.api.setFilterModel({ ...current, [contextMenu.col]: model });
+        };
+        return (
+          <div
+            className="fixed z-[60] min-w-[200px] py-1 bg-card border border-border rounded-lg shadow-xl animate-menu-in"
+            style={{
+              left: Math.min(contextMenu.x, window.innerWidth - 220),
+              top: Math.min(contextMenu.y, window.innerHeight - 400),
             }}
-            className="w-full px-3 py-2 text-sm text-foreground hover:bg-accent transition-colors text-left"
           >
-            {t("viewRowData")}
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              setContextMenu(null);
-              const confirmed = await confirmDialog(
-                t("confirmDeleteRow"),
-                t("deleteRow"),
-              );
-              if (confirmed) {
-                handleDeleteRow(contextMenu.rowData).catch(() => {});
-              }
-            }}
-            className="w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors text-left"
-          >
-            {t("deleteRow")}
-          </button>
-        </div>
-      )}
+            <MenuRow icon={Copy} label={t("copyValue")} onClick={() => { copyText(formatCellValue(menuValue)); setContextMenu(null); }} />
+            {parsedJson !== null && (
+              <MenuRow icon={Braces} label={t("copyAsJson")} onClick={() => { copyText(JSON.stringify(parsedJson, null, 2)); setContextMenu(null); }} />
+            )}
+            <MenuRow icon={Rows3} label={t("copyRow")} onClick={() => { copyText(cols.map((c) => `${c}: ${formatCellValue(contextMenu.rowData[c])}`).join("\n")); setContextMenu(null); }} />
+            <MenuRow icon={FileJson} label={t("copyRowJson")} onClick={() => { copyText(JSON.stringify(contextMenu.rowData, null, 2)); setContextMenu(null); }} />
+            {browse && (
+              <MenuRow
+                icon={Database}
+                label={t("copyAsInsert")}
+                onClick={() => { copyText(buildInsertStatements(browse.database, browse.table, cols, [contextMenu.rowData])); setContextMenu(null); }}
+              />
+            )}
+            <div className="my-1 border-t border-border" />
+            {numericOk && !valueIsNull && (
+              <MenuRow icon={Filter} label={t("filterByValue")} onClick={() => applyQuickFilter(eqNeModel(true))} />
+            )}
+            {numericOk && !valueIsNull && (
+              <MenuRow icon={FilterX} label={t("excludeValue")} onClick={() => applyQuickFilter(eqNeModel(false))} />
+            )}
+            <MenuRow icon={CircleSlash} label={t("filterBlank")} onClick={() => applyQuickFilter({ filterType: filterKind, type: "blank" })} />
+            <MenuRow icon={CircleDot} label={t("filterNotBlank")} onClick={() => applyQuickFilter({ filterType: filterKind, type: "notBlank" })} />
+            <div className="my-1 border-t border-border" />
+            <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col); setContextMenu(null); }} />
+            {browse && (
+              <MenuRow
+                icon={Trash2}
+                label={t("deleteRow")}
+                destructive
+                onClick={async () => {
+                  setContextMenu(null);
+                  const confirmed = await confirmDialog(t("confirmDeleteRow"), t("deleteRow"));
+                  if (confirmed) {
+                    handleDeleteRow(contextMenu.rowData).catch(() => {});
+                  }
+                }}
+              />
+            )}
+          </div>
+        );
+      })()}
 
       <CellDetailModal
         open={!!detailCell}
@@ -616,6 +708,44 @@ export function ResultGrid({ tab }: ResultGridProps) {
       />
     </div>
   );
+}
+
+/** One row of the grid context menu (icon + label, project menu style). */
+function MenuRow({
+  icon: Icon,
+  label,
+  onClick,
+  destructive,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full px-3 py-1.5 text-sm hover:bg-accent transition-colors text-left flex items-center gap-2 ${
+        destructive ? "text-destructive hover:bg-destructive/10" : "text-foreground"
+      }`}
+    >
+      <Icon size={14} className={`shrink-0 ${destructive ? "" : "text-muted-foreground"}`} />
+      {label}
+    </button>
+  );
+}
+
+/** Parse a string as a JSON object/array for the "copy as JSON" action. */
+function tryParseJson(s: string): unknown | null {
+  const trimmed = s.trim();
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return typeof parsed === "object" && parsed !== null ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function formatCellValue(value: unknown): string {
