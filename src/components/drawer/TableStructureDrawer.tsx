@@ -71,6 +71,29 @@ export function TableStructureDrawer({
     return () => window.removeEventListener("dbdog-schema-changed", handler);
   }, [drawer.type, connectionId, db, table]);
 
+  // Foreign-key/trigger tabs only earn their space when the table actually
+  // has them — most tables don't. While details are loading, show only the
+  // always-present tabs.
+  type StructureTab = "columns" | "indexes" | "foreignKeys" | "triggers" | "sql";
+  const visibleTabs: StructureTab[] = details
+    ? [
+        "columns",
+        "indexes",
+        ...(details.foreignKeys.length > 0 ? (["foreignKeys"] as StructureTab[]) : []),
+        ...(details.triggers.length > 0 ? (["triggers"] as StructureTab[]) : []),
+        "sql",
+      ]
+    : ["columns", "indexes", "sql"];
+  const visibleTabKey = visibleTabs.join(",");
+
+  // Drop out of a tab that no longer exists (e.g. switching between tables).
+  useEffect(() => {
+    if (!visibleTabs.includes(activeTab)) {
+      setActiveTab("columns");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to the tab set, not identity churn
+  }, [visibleTabKey]);
+
   if (drawer.type !== "tableStructure") return null;
 
   return (
@@ -94,9 +117,7 @@ export function TableStructureDrawer({
         </div>
       </div>
       <div className="flex border-b border-border">
-        {(
-          ["columns", "indexes", "foreignKeys", "triggers", "sql"] as const
-        ).map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab}
             className={`flex-1 px-2 py-1.5 text-xs ${activeTab === tab ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"}`}
