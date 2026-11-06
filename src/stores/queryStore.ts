@@ -557,7 +557,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   clearPendingChanges: (id) =>
     set((state) => ({
       tabs: state.tabs.map((t) =>
-        t.id === id ? { ...t, pendingChanges: [], lastAppliedRollbacks: undefined } : t,
+        t.id === id ? { ...t, pendingChanges: [] } : t,
       ),
     })),
 

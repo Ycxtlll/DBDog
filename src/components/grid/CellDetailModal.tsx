@@ -99,7 +99,11 @@ export function CellDetailModal({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (rowMenu) {
+        if (largeValue) {
+          // Drawer first — closing the whole modal out from under it would
+          // leave a floating orphan panel.
+          setLargeValue(null);
+        } else if (rowMenu) {
           setRowMenu(null);
         } else if (editingField) {
           setEditingField(null);
@@ -110,7 +114,7 @@ export function CellDetailModal({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, editingField, rowMenu]);
+  }, [onClose, editingField, rowMenu, largeValue]);
 
   // Close the row context menu on any left click
   useEffect(() => {

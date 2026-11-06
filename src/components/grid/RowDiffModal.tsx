@@ -36,21 +36,19 @@ export function RowDiffModal({ open, left, right, tableName, onClose }: RowDiffM
     if (open) setOnlyDiff(false);
   }, [open, left, right]);
 
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => {
     if (!left || !right) return [];
     const cols = [...new Set([...Object.keys(left), ...Object.keys(right)])];
-    return cols
-      .map((col) => {
-        const l = left[col];
-        const r = right[col];
-        return { col, l, r, diff: cellText(l) !== cellText(r) };
-      })
-      .filter((row) => (onlyDiff ? row.diff : true));
-  }, [left, right, onlyDiff]);
+    return cols.map((col) => {
+      const l = left[col];
+      const r = right[col];
+      return { col, l, r, diff: cellText(l) !== cellText(r) };
+    });
+  }, [left, right]);
+  const diffTotal = allRows.filter((r) => r.diff).length;
+  const rows = onlyDiff ? allRows.filter((r) => r.diff) : allRows;
 
   if (!show || !left || !right) return null;
-
-  const diffCount = rows.filter((r) => r.diff).length;
 
   return (
     <div
@@ -69,7 +67,7 @@ export function RowDiffModal({ open, left, right, tableName, onClose }: RowDiffM
               </span>
             )}
             <span className="text-xs text-muted-foreground">
-              {t("rowDiffSummary", { diff: diffCount, total: rows.length })}
+              {t("rowDiffSummary", { diff: diffTotal, total: allRows.length })}
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">

@@ -21,7 +21,7 @@ interface LargeValueDrawerProps {
 export function LargeValueDrawer({ open, columnName, tableName, value, onClose }: LargeValueDrawerProps) {
   const { t } = useTranslation("query");
   const panelRef = useRef<HTMLDivElement>(null);
-  useModalFocus(panelRef, { active: open });
+  useModalFocus(panelRef, { active: open, onEscape: onClose });
   const show = useDelayedUnmount(open);
   const closing = show && !open;
 

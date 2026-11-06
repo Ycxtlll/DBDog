@@ -190,4 +190,22 @@
   翻页不再重复轰炸生产库；③**FK 图标来源着色**（推断灰、声明/裁决主题色）+ 悬停
   title 带来源标签。11 个 Rust 单测全绿。**遗留**：大值抽屉（M1 欠账）、chips/多选行
   /统计条（M1 二批）、推断徽章候选展示、命中率实测、行详情内 FK 二级跳转。
+- **2026-11-06 M3+M4 实现（深检待做）**：
+  - **M3**：NULL/空串编辑分离（`onSave(col, string|null)`，修掉"清空即 SET NULL"
+    的正确性 bug）；编辑 textarea 化（长值 6 行、Enter/Ctrl+Enter 分场景、JSON
+    格式化按钮 + 语法无效提示）；大值抽屉 `LargeValueDrawer`（>120 字符出"查看
+    完整内容"，原文/格式化切换 + 全文复制）；无主键表唯一索引 fallback
+    （SHOW KEYS 全量解析，PRIMARY 优先，否则第一个 Non_unique=0）；行 diff
+    （右键钉住两行 → 并排对比弹窗，差异高亮，只看差异开关）。
+  - **M4**：变更集——改值/删行先进 staging（tab.pendingChanges），底部条
+    "N 处修改待应用"，审阅面板逐条查看/移除，`execute_transaction` 单事务
+    应用（Rust `engine::execute_transaction`：START TRANSACTION → 逐条 →
+    COMMIT，失败 ROLLBACK 并指明第几条），历史记录含逐条回滚语句；Ctrl+Z /
+    "撤销上次应用"用回滚语句反向执行；连接级只读开关（`read_only` 字段 +
+    `execute_update`/`execute_transaction` 引擎层拒绝）+ 连接表单复选框。
+  - **技术坑记录**：sqlx `raw_sql` + `&mut 连接` 与 `Transaction` API 在
+    tauri 宏包装下必触发 "Send/Executor is not general enough"（engine.rs
+    已有注释）；解法 = 每个执行调用独立小函数 + `query(..).persistent(false)`
+    文本协议（事务控制语句与 DDL 都能跑）+ 全所有权参数跨 await。
+  - **待深检**：见下一次自审。
 - **架构提醒**：新算法一律 Rust 优先（见 0.5 节），TS 迁移清单随里程碑执行。

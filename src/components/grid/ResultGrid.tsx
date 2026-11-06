@@ -20,6 +20,7 @@ import { confirmDialog } from "../../lib/confirm";
 import { generateId } from "../../lib/utils";
 import {
   escapeMysqlIdentifier,
+  escapeMysqlString,
   browseStateSelectSql,
   buildInsertStatements,
   buildTableSearchSql,
@@ -668,6 +669,19 @@ export function ResultGrid({ tab }: ResultGridProps) {
               groups.get("PRIMARY") ?? (groups.size > 0 ? groups.values().next().value : undefined);
             if (chosen) {
               pkCols = [...chosen].sort((a, b) => a.seq - b.seq).map((c) => c.col);
+              // A nullable unique index cannot key a row safely (multiple
+              // NULL rows all match `col IS NULL`) — require NOT NULL.
+              if (!groups.has("PRIMARY")) {
+                const nullable = await queryService.executeQuery(
+                  activeConnectionId!,
+                  `SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ${escapeMysqlString(database)} AND TABLE_NAME = ${escapeMysqlString(table)} AND COLUMN_NAME IN (${pkCols.map((c) => escapeMysqlString(c)).join(", ")}) AND IS_NULLABLE = 'YES'`,
+                  undefined,
+                  database,
+                );
+                if (nullable.rows.length > 0) {
+                  pkCols = [];
+                }
+              }
             }
           }
           useQueryStore.getState().setTabTableBrowse(tab.id, { database, table, primaryKeyColumns: pkCols, pageSize: tab.tableBrowse?.pageSize ?? 50, page: tab.tableBrowse?.page ?? 1, totalRows: tab.tableBrowse?.totalRows, filterSql: tab.tableBrowse?.filterSql });
@@ -1003,7 +1017,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
                 </button>
                 <button
                   onClick={() => void applyChanges()}
-                  disabled={applyingChanges}
+                  disabled={applyingChanges || tab.isExecuting}
                   className="px-2 py-0.5 font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
                 >
                   {t("changesetApply")}
@@ -1019,7 +1033,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
             {!!tab.lastAppliedRollbacks?.length && (
               <button
                 onClick={() => void undoLastApplied()}
-                disabled={applyingChanges}
+                disabled={applyingChanges || tab.isExecuting}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-50"
                 title="Ctrl+Z"
               >
