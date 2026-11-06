@@ -13,10 +13,62 @@ interface LargeValueDrawerProps {
   onClose: () => void;
 }
 
+/** Format kind detected from the raw text. */
+type FormatKind = "json" | "xml" | null;
+
+function detectJson(trimmed: string): unknown | null {
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null;
+  try {
+    const v: unknown = JSON.parse(trimmed);
+    return typeof v === "object" && v !== null ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeXml(trimmed: string): boolean {
+  return /^<\s*(\?xml|!DOCTYPE|!--|[\w:-]+)/.test(trimmed) && trimmed.endsWith(">");
+}
+
 /**
- * Full-content viewer for LONGTEXT/JSON cells: raw vs formatted (pretty
- * JSON) toggle, complete copy, scrollable monospace body. Read-only —
- * editing happens in the row modal.
+ * Minimal XML pretty-printer for display: compacts whitespace between
+ * lines, splits adjacent tags onto separate lines and indents by nesting
+ * depth. Declarations/comments/self-closing tags never change depth. Text
+ * nodes stay inline with their element (`<a>text</a>` remains one line).
+ * Imperfect by design — the raw view is always one click away.
+ */
+function formatXml(xml: string): string {
+  const compact = xml
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "")
+    .join("");
+  const tokens = compact.replace(/></g, ">\n<").split("\n");
+  let depth = 0;
+  const out: string[] = [];
+  for (const token of tokens) {
+    if (/^<\//.test(token)) {
+      depth = Math.max(0, depth - 1);
+      out.push("  ".repeat(depth) + token);
+      continue;
+    }
+    out.push("  ".repeat(depth) + token);
+    const selfClosing = /\/>$/.test(token);
+    const declaration = /^<(\?|!)/.test(token);
+    // `<a>text</a>` stays one token and must not open a level.
+    const closesInline = /<\/[\w:-]+>$/.test(token);
+    if (!selfClosing && !declaration && !closesInline && /^<[\w:-]/.test(token)) {
+      depth++;
+    }
+  }
+  return out.join("\n");
+}
+
+/**
+ * Full-content viewer for LONGTEXT/JSON/XML cells: auto-detects the format,
+ * renders pretty JSON / indented XML, keeps a raw toggle — and copying
+ * ALWAYS yields the original value regardless of the current view.
  */
 export function LargeValueDrawer({ open, columnName, tableName, value, onClose }: LargeValueDrawerProps) {
   const { t } = useTranslation("query");
@@ -25,35 +77,37 @@ export function LargeValueDrawer({ open, columnName, tableName, value, onClose }
   const show = useDelayedUnmount(open);
   const closing = show && !open;
 
+  // Raw text is the single source of truth — display modes are projections,
+  // and copy always takes from it.
   const raw = value === null || value === undefined ? "" : String(value);
-  const parsed = useMemo(() => {
-    const trimmed = raw.trim();
-    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null;
-    try {
-      const v = JSON.parse(trimmed);
-      return typeof v === "object" && v !== null ? v : null;
-    } catch {
-      return null;
-    }
-  }, [raw]);
+  const parsedJson = useMemo(() => detectJson(raw.trim()), [raw]);
+  const isXml = useMemo(() => parsedJson === null && looksLikeXml(raw.trim()), [raw]);
+  const formatKind: FormatKind = parsedJson !== null ? "json" : isXml ? "xml" : null;
+  const formattedText = useMemo(() => {
+    if (formatKind === "json" && parsedJson !== null) return JSON.stringify(parsedJson, null, 2);
+    if (formatKind === "xml") return formatXml(raw);
+    return raw;
+  }, [formatKind, parsedJson, raw]);
 
   const [formatted, setFormatted] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // Reset the view mode per opened value (JSON defaults to pretty).
+  // Reset the view mode per opened value (formatted defaults on when the
+  // content is detectable).
   useEffect(() => {
     if (open) {
-      setFormatted(parsed !== null);
+      setFormatted(formatKind !== null);
       setCopied(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset per value
   }, [open, raw]);
 
-  const text = formatted && parsed !== null ? JSON.stringify(parsed, null, 2) : raw;
+  const displayText = formatted ? formattedText : raw;
 
+  // Copy is ALWAYS the raw/original value — the formatted view is display-only.
   const handleCopy = () => {
     navigator.clipboard
-      .writeText(text)
+      .writeText(raw)
       .then(() => {
         setCopied(true);
         showSuccess(t("copiedToast"));
@@ -77,9 +131,12 @@ export function LargeValueDrawer({ open, columnName, tableName, value, onClose }
               {tableName}
             </span>
           )}
+          {formatKind && (
+            <span className="text-xs text-muted-foreground uppercase">{formatKind}</span>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {parsed !== null && (
+          {formatKind && (
             <div className="flex items-center rounded-md border border-border overflow-hidden mr-1">
               <button
                 onClick={() => setFormatted(false)}
@@ -98,7 +155,7 @@ export function LargeValueDrawer({ open, columnName, tableName, value, onClose }
           <button
             onClick={handleCopy}
             className={`p-1.5 rounded-md transition-colors ${copied ? "text-green-600" : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
-            title={t("copyFull")}
+            title={t("copyRawValue")}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
@@ -108,7 +165,7 @@ export function LargeValueDrawer({ open, columnName, tableName, value, onClose }
         </div>
       </div>
       <div className="flex-1 overflow-auto p-3">
-        <pre className="text-xs font-mono whitespace-pre-wrap break-all text-foreground leading-relaxed">{text}</pre>
+        <pre className="text-xs font-mono whitespace-pre-wrap break-all text-foreground leading-relaxed">{displayText}</pre>
       </div>
     </div>
   );

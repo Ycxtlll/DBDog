@@ -121,5 +121,6 @@
   "refresh": "Refresh",
   "confirmUnscopedDml": "This {{kind}} statement has no WHERE clause and will affect every row in the table. Execute anyway?",
   "dangerousOperation": "Dangerous operation",
-  "dmlCancelled": "Execution cancelled"
+  "dmlCancelled": "Execution cancelled",
+  "copyRawValue": "Copy raw value"
 }
