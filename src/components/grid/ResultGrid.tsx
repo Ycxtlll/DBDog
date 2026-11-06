@@ -382,13 +382,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
                       table: rel.parentTable,
                       confidence: Math.round(rel.confidence * 100),
                     })}`}
-                    className={`shrink-0 cursor-pointer ${
+                    className={`shrink-0 cursor-pointer rounded-md p-1 -m-1 transition-colors ${
                       rel.source === "inferred"
-                        ? "text-muted-foreground/50"
-                        : "text-primary/70"
-                    } hover:text-primary`}
+                        ? "text-muted-foreground/60"
+                        : "text-primary/80"
+                    } hover:text-primary hover:bg-primary/10`}
                   >
-                    <Link2 size={12} />
+                    <Link2 size={14} />
                   </span>
                 );
               })()}
