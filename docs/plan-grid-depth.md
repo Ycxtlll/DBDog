@@ -208,4 +208,30 @@
     已有注释）；解法 = 每个执行调用独立小函数 + `query(..).persistent(false)`
     文本协议（事务控制语句与 DDL 都能跑）+ 全所有权参数跨 await。
   - **待深检**：见下一次自审。
+- **2026-11-06 架构迁移完成（P0+P1+P2，审查整改）**：审查发现 sql.ts（633 行）
+  是活在 UI 层的 SQL 生成与守卫库，安全边界在前端——已全部下沉：
+  - **guard.rs**（9 单测）：`split_statements` / `has_top_level_where` /
+    `limit_guard` / `classify_statement`（USE/Query/Update 分类）；
+  - **`execute_script` 命令**：后端权威执行——切分 → 预扫守卫（只读拒绝 +
+    无 WHERE UPDATE/DELETE 拒绝，拒绝发生在任何语句执行之前 = 无半途副作用）
+    → 逐条执行；MySQL 走池连接（USE 会话生效），PostgreSQL 走 PgDriver
+    （schema 每查询钉定）；返回逐条 StatementOutcome + 末条结果；
+  - **changeset.rs**（5 单测）：变更集前向/回滚 SQL 生成（`changeset_prepare`），
+    回滚语句是数据安全网，必须 Rust+测试；**filter_translate.rs**（4 单测）：
+    AG Grid 过滤模型 → 全表搜索 SQL（`filter_search_sql_command`）；
+  - **execute_update / execute_transaction** 增加 `assume_yes` 后端权威 WHERE
+    守卫 + `UnscopedDml` 结构化错误（前端按 code 驱动确认框）；
+  - **P2**：`tableBrowse.browseMode`（browse/filterSearch/custom）替代三处
+    "executedSql === 生成 SQL" 的逐字节比较；
+  - **TS 变薄**：store.execute 变 UI 壳（历史/确认流/DDL 事件保留）；ResultGrid
+    暂存/筛选/refreshGrid 全部走服务；exportTableToCsv 死代码删除；
+    sql.ts 633→424 行（剩余：编辑器光标语句定位、UI 复制格式化、ALTER 预览）；
+  - **深检抓到并修复**：PG 分支绕过预扫（守卫顺序错误）；纯注释脚本误报错；
+    searchTable 的 browseMode 覆盖链；resolvePkColumns 丢 browseMode/sort；
+    WITH 语句此前在前端被当 UPDATE 执行（顺带修复——现在正确走查询路径带 LIMIT 包裹）。
+  - **技术坑**：sqlx `raw_sql` + `&mut 连接` 与 Transaction API 在 tauri 宏下
+    "Send/Executor not general enough"；engine.rs 的独立小函数 + `persistent(false)`
+    模式已复用。46 个 Rust 单测全绿。
 - **架构提醒**：新算法一律 Rust 优先（见 0.5 节），TS 迁移清单随里程碑执行。
+  迁移清单状态：limitGuardSql ✅ hasTopLevelWhere ✅ splitSqlStatements ✅
+  buildTableSearchSql ✅ 变更集 diff/回滚 ✅（M2 关系分析器从一开始就是 Rust）。
