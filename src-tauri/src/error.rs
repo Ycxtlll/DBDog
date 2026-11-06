@@ -21,6 +21,10 @@ pub enum AppError {
     MemcachedProtocolError(String),
     #[error("ZooKeeper 操作失败: {0}")]
     ZookeeperError(String),
+    /// An UPDATE/DELETE without a top-level WHERE needs explicit user
+    /// confirmation — carries the statement's first word (UPDATE/DELETE).
+    #[error("无 WHERE 条件的 {0} 语句需要确认")]
+    UnscopedDml(String),
     #[error("需要密码")]
     PasswordRequired,
 }

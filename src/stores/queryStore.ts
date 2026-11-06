@@ -8,9 +8,9 @@ import type {
   UpdateResult,
 } from "../types";
 import { generateId } from "../lib/utils";
-import { buildCountSql, buildTableSelect, escapeMysqlIdentifier, hasTopLevelWhere, splitSqlStatements } from "../lib/sql";
+import { buildCountSql, buildTableSelect, escapeMysqlIdentifier } from "../lib/sql";
 import * as queryService from "../services/queryService";
-import { parseTauriError } from "../lib/error";
+import { parseTauriError, parseTauriErrorCode } from "../lib/error";
 import { confirmDialog } from "../lib/confirm";
 import i18n from "../lib/i18n";
 import { showError } from "./toastStore";
@@ -26,15 +26,6 @@ const BROWSE_PAGE_SIZE = 50;
  * Statements that already carry a LIMIT (or FOR UPDATE / locking clauses)
  * pass through untouched; detection errs on the side of not wrapping.
  */
-export function limitGuardSql(stmt: string, limit?: number): string {
-  const n = limit ?? 1000;
-  const head = stmt.split(/\s+/)[0]?.toUpperCase() ?? "";
-  if (head !== "SELECT" && head !== "WITH") return stmt;
-  if (/\blimit\b/i.test(stmt)) return stmt;
-  if (/\bfor\s+(update|share)\b/i.test(stmt)) return stmt;
-  return `SELECT * FROM (\n${stmt.replace(/;\s*$/, "")}\n) _dbdog_limited LIMIT ${n}`;
-}
-
 interface QueryState {
   tabs: QueryTab[];
   activeTabId: string | null;
@@ -153,14 +144,27 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
     // All early returns must stay inside try/finally — leaving isExecuting
     // stuck true permanently disables the Execute button for the tab.
+    // Guarding (split / WHERE check / LIMIT wrap / USE routing) is the
+    // backend's job now (execute_script); this shell only manages UI state
+    // and history.
+    const runScript = (assumeYes: boolean) => {
+      const tab = get().tabs.find((t) => t.id === id);
+      if (!tab) return Promise.reject(new Error("tab gone"));
+      const rawSql = (selectedSql ?? tab.sql).trim();
+      return queryService.executeScript(
+        connectionId,
+        rawSql,
+        limit,
+        tab.selectedDatabase,
+        assumeYes,
+      );
+    };
+
     try {
       const tab = get().tabs.find((t) => t.id === id);
       if (!tab) return;
       const rawSql = (selectedSql ?? tab.sql).trim();
       if (!rawSql) return;
-
-      const statements = splitSqlStatements(rawSql);
-      if (statements.length === 0) return;
 
       // Remember the exact query (and limit) that produced the next result,
       // so the grid can refresh without re-running whatever the user has
@@ -173,92 +177,63 @@ export const useQueryStore = create<QueryState>((set, get) => ({
           if (t.id !== id) return t;
           const tableBrowse =
             t.tableBrowse && !opts?.fromGridFilter
-              ? { ...t.tableBrowse, filterSql: undefined }
+              ? { ...t.tableBrowse, filterSql: undefined, browseMode: "custom" as const }
               : t.tableBrowse;
           return { ...t, executedSql: rawSql, executedLimit: limit, tableBrowse };
         }),
       }));
 
       const startTime = performance.now();
-      let currentDatabase = tab.selectedDatabase;
-      let finalResult: QueryResult | UpdateResult | undefined;
-      let finalIsQuery = false;
-      let totalRowsCount = 0;
-
-      for (let i = 0; i < statements.length; i++) {
-        const stmt = statements[i];
-        const isLast = i === statements.length - 1;
-
-        const useMatch = stmt.match(/^USE\s+`?([^`\s]+)`?$/i);
-        if (useMatch) {
-          currentDatabase = useMatch[1];
-          set((state) => ({
-            tabs: state.tabs.map((t) =>
-              t.id === id ? { ...t, selectedDatabase: currentDatabase } : t,
-            ),
-          }));
-          if (isLast) {
-            finalResult = { rowsAffected: 0, elapsedMs: 0 } as UpdateResult;
-            finalIsQuery = false;
-          }
-          continue;
-        }
-
-        const firstWord = stmt.split(/\s+/)[0]?.toUpperCase() ?? "";
-        const isQuery = ["SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN"].includes(
-          firstWord,
+      let script;
+      try {
+        script = await runScript(false);
+      } catch (err) {
+        // The backend pre-scan rejects unscoped UPDATE/DELETE before running
+        // anything — confirm and retry (no partial side effects happened).
+        if (parseTauriErrorCode(err) !== "UnscopedDml") throw err;
+        const kind =
+          typeof err === "object" && err !== null
+            ? String((err as Record<string, unknown>).message ?? "DML")
+            : "DML";
+        const ok = await confirmDialog(
+          i18n.t("query:confirmUnscopedDml", { kind }),
+          i18n.t("query:dangerousOperation"),
         );
-
-        if (isQuery) {
-          const sent = limitGuardSql(stmt, limit);
-          const result = await queryService.executeQuery(
-            connectionId,
-            sent,
-            limit,
-            currentDatabase,
-          );
-          totalRowsCount += result.totalCount ?? 0;
-          if (isLast) {
-            finalResult = result;
-            finalIsQuery = true;
-          }
-        } else {
-          // An UPDATE/DELETE without a top-level WHERE hits every row —
-          // confirm before letting it through (subquery/string/comment
-          // WHEREs don't count, see hasTopLevelWhere).
-          if (
-            (firstWord === "UPDATE" || firstWord === "DELETE") &&
-            !hasTopLevelWhere(stmt)
-          ) {
-            const ok = await confirmDialog(
-              i18n.t("query:confirmUnscopedDml", { kind: firstWord }),
-              i18n.t("query:dangerousOperation"),
-            );
-            if (!ok) {
-              get().addHistory({
-                sql: stmt,
-                status: "error",
-                error: i18n.t("query:dmlCancelled"),
-                elapsedMs: 0,
-              });
-              return;
-            }
-          }
-          const result = await queryService.executeUpdate(
-            connectionId,
-            stmt,
-            currentDatabase,
-          );
-          totalRowsCount += result.rowsAffected ?? 0;
-          if (isLast) {
-            finalResult = result;
-            finalIsQuery = false;
-          }
+        if (!ok) {
+          get().addHistory({
+            sql: rawSql,
+            status: "error",
+            error: i18n.t("query:dmlCancelled"),
+            elapsedMs: 0,
+          });
+          return;
         }
+        script = await runScript(true);
       }
 
-      if (finalResult) {
-        get().setTabResult(id, finalResult, finalIsQuery);
+      // Comment-only script: nothing ran, leave the tab's result untouched
+      // (matches the old silent return).
+      if (script.statements.length === 0) return;
+
+      if (script.lastDatabase) {
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            t.id === id ? { ...t, selectedDatabase: script.lastDatabase! } : t,
+          ),
+        }));
+      }
+
+      if (script.finalIsQuery && script.finalResult) {
+        get().setTabResult(id, script.finalResult, true);
+      } else {
+        get().setTabResult(
+          id,
+          {
+            rowsAffected: script.finalRowsAffected,
+            elapsedMs: script.elapsedMs,
+          } as UpdateResult,
+          false,
+        );
       }
 
       const elapsedMs = Math.round(performance.now() - startTime);
@@ -266,15 +241,15 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         sql: rawSql,
         status: "success",
         elapsedMs,
-        rowsCount: totalRowsCount,
+        rowsCount: script.totalRows,
       });
 
       // Editor-side DDL: let the completion cache, schema tree and structure
       // drawer know the schema changed (same event the visual designer uses).
-      if (/^\s*(alter|create|drop|rename|truncate)\b/i.test(rawSql)) {
+      if (/^\s*(alter|create|drop|rename|truncate)/i.test(rawSql)) {
         window.dispatchEvent(
           new CustomEvent("dbdog-schema-changed", {
-            detail: { database: currentDatabase },
+            detail: { database: script.lastDatabase ?? tab.selectedDatabase },
           }),
         );
       }
@@ -360,7 +335,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
               name: browse.table,
               executedSql: sql,
               executedLimit: size,
-              tableBrowse: { ...browse, page: targetPage, pageSize: size },
+              tableBrowse: { ...browse, page: targetPage, pageSize: size, browseMode: "browse" },
             }
           : t,
       ),
@@ -430,7 +405,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === id
-          ? { ...t, sql, tableBrowse: { ...browse, filterSql: sql } }
+          ? { ...t, sql, tableBrowse: { ...browse, filterSql: sql, browseMode: "filterSearch" } }
           : t,
       ),
     }));

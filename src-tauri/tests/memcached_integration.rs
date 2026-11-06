@@ -22,6 +22,7 @@ fn test_config() -> ConnectionConfig {
         ssh_port: None,
         ssh_user: None,
         ssh_key_path: None,
+        read_only: None,
     }
 }
 

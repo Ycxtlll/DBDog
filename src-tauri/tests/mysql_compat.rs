@@ -63,6 +63,7 @@ fn parse_targets() -> Vec<(String, ConnectionConfig)> {
                     ssh_port: None,
                     ssh_user: None,
                     ssh_key_path: None,
+        read_only: None,
                 },
             ))
         })

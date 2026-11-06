@@ -21,14 +21,9 @@ import { generateId } from "../../lib/utils";
 import {
   escapeMysqlIdentifier,
   escapeMysqlString,
-  browseStateSelectSql,
   buildInsertStatements,
-  buildTableSearchSql,
-  buildRollbackForUpdate,
-  buildRollbackForDelete,
   formatSqlValue,
 } from "../../lib/sql";
-import { limitGuardSql } from "../../stores/queryStore";
 
 interface DetailCellInfo {
   columnName: string;
@@ -71,7 +66,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const browse = tab.tableBrowse;
   // The pager only makes sense while the grid actually shows browse data —
   // hide it once the user runs their own SQL in the tab.
-  const showBrowsePager = !!browse && tab.executedSql === browseStateSelectSql(browse);
+  const showBrowsePager = !!browse && browse.browseMode === "browse";
 
   // Sample values of the relationship-editor column from the loaded page —
   // live probe fuel for the manual link editor.
@@ -184,9 +179,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
     if (!browse || !activeConnectionId || !result || !isQueryResult) return;
     const current = useQueryStore.getState().tabs.find((tt) => tt.id === tab.id);
     if (!current) return;
-    const plainBrowse =
-      current.executedSql === browseStateSelectSql(browse) ||
-      (!!browse.filterSql && current.executedSql === browse.filterSql);
+    const plainBrowse = browse.browseMode !== "custom";
     if (!plainBrowse) return;
     const qr = result as QueryResult;
     const tableKey = `${browse.database}|${browse.table}`;
@@ -257,9 +250,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
     if (!browse || !activeConnectionId || !result || !isQueryResult) return;
     const current = useQueryStore.getState().tabs.find((tt) => tt.id === tab.id);
     if (!current) return;
-    const plainBrowse =
-      current.executedSql === browseStateSelectSql(browse) ||
-      (!!browse.filterSql && current.executedSql === browse.filterSql);
+    const plainBrowse = browse.browseMode !== "custom";
     if (!plainBrowse) return;
     const pkCol = browse.primaryKeyColumns[0];
     if (!pkCol) return;
@@ -565,9 +556,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
       if (!activeConnectionId || !browse) return;
       const current = useQueryStore.getState().tabs.find((t) => t.id === tab.id);
       if (!current || current.isExecuting) return;
-      const plainBrowse =
-        current.executedSql === browseStateSelectSql(browse) ||
-        (!!browse.filterSql && current.executedSql === browse.filterSql);
+      const plainBrowse = browse.browseMode !== "custom";
       if (!plainBrowse) return;
       const first = event.api.getColumnState().find((c) => c.sort);
       const next =
@@ -595,15 +584,24 @@ export function ResultGrid({ tab }: ResultGridProps) {
     const sql = current?.executedSql?.trim();
     if (!activeConnectionId || !sql) return;
     try {
-      // Same unbounded-SELECT guard as the normal execute path — the grid
+      // Re-run through the backend guard (LIMIT wrap included) — the grid
       // refresh must not bypass it and rescan a whole table.
-      const freshResult = await queryService.executeQuery(
+      const script = await queryService.executeScript(
         activeConnectionId,
-        limitGuardSql(sql, current?.executedLimit),
+        sql,
         current?.executedLimit,
         current?.selectedDatabase,
+        true,
       );
-      useQueryStore.getState().setTabResult(tab.id, freshResult, true);
+      if (script.finalIsQuery && script.finalResult) {
+        useQueryStore.getState().setTabResult(tab.id, script.finalResult, true);
+      } else {
+        useQueryStore.getState().setTabResult(
+          tab.id,
+          { rowsAffected: script.finalRowsAffected, elapsedMs: script.elapsedMs } as UpdateResult,
+          false,
+        );
+      }
     } catch {
       // Grid refresh failed — the edit itself already succeeded.
     }
@@ -617,17 +615,19 @@ export function ResultGrid({ tab }: ResultGridProps) {
    * drop the generated search and go back to browsing.
    */
   const handleFilterChanged = useCallback(
-    (event: FilterChangedEvent) => {
+    async (event: FilterChangedEvent) => {
       if (!activeConnectionId) return;
       const current = useQueryStore.getState().tabs.find((t) => t.id === tab.id);
       const browse = current?.tableBrowse;
       if (!current || !browse || current.isExecuting) return;
-      const plainBrowse =
-        current.executedSql === browseStateSelectSql(browse) ||
-        (!!browse.filterSql && current.executedSql === browse.filterSql);
+      const plainBrowse = browse.browseMode !== "custom";
       if (!plainBrowse) return;
       const store = useQueryStore.getState();
-      const sql = buildTableSearchSql(browse.database, browse.table, event.api.getFilterModel());
+      const sql = await queryService.filterSearchSql(
+        browse.database,
+        browse.table,
+        event.api.getFilterModel() as Record<string, unknown>,
+      );
       if (sql) {
         void store.searchTable(activeConnectionId, tab.id, sql);
       } else if (browse.filterSql) {
@@ -684,7 +684,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
               }
             }
           }
-          useQueryStore.getState().setTabTableBrowse(tab.id, { database, table, primaryKeyColumns: pkCols, pageSize: tab.tableBrowse?.pageSize ?? 50, page: tab.tableBrowse?.page ?? 1, totalRows: tab.tableBrowse?.totalRows, filterSql: tab.tableBrowse?.filterSql });
+          useQueryStore.getState().setTabTableBrowse(tab.id, { database, table, primaryKeyColumns: pkCols, pageSize: tab.tableBrowse?.pageSize ?? 50, page: tab.tableBrowse?.page ?? 1, totalRows: tab.tableBrowse?.totalRows, filterSql: tab.tableBrowse?.filterSql, sort: tab.tableBrowse?.sort, browseMode: tab.tableBrowse?.browseMode });
         } catch {
           return [];
         }
@@ -726,22 +726,17 @@ export function ResultGrid({ tab }: ResultGridProps) {
         );
       }
 
-      const setClause =
-        newValue === null
-          ? `${escapeMysqlIdentifier(colName)} = NULL`
-          : `${escapeMysqlIdentifier(colName)} = ${formatSqlValue(newValue)}`;
-
-      const sql = `UPDATE ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} SET ${setClause} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
-
-      // Reverse statement from the pre-edit row snapshot — recorded in
-      // history as a rollback entry when the batch applies.
-      const rollbackSql = buildRollbackForUpdate(
+      // SQL generation (forward + rollback) lives in Rust — the rollback
+      // statements are the changeset's safety net.
+      const { sql, rollbackSql } = await queryService.changesetPrepare({
         database,
         table,
-        pkCols,
-        detailCell.rowData,
-        colName,
-      );
+        pkColumns: pkCols,
+        kind: "update",
+        row: detailCell.rowData,
+        column: colName,
+        newValue: newValue === null ? null : newValue,
+      });
 
       // Stage instead of applying immediately (M4 changeset): the batch goes
       // to the server as ONE transaction from the pending-changes bar.
@@ -782,15 +777,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
         );
       }
 
-      const sql = `DELETE FROM ${escapeMysqlIdentifier(database)}.${escapeMysqlIdentifier(table)} WHERE ${wheres.join(" AND ")} LIMIT 1;`;
-
-      // Full-row INSERT that restores the deleted row (primary key included).
-      const rollbackSql = buildRollbackForDelete(
+      const { sql, rollbackSql } = await queryService.changesetPrepare({
         database,
         table,
-        (result as QueryResult).columns.map((c) => c.name),
+        pkColumns: pkCols,
+        kind: "delete",
         row,
-      );
+      });
 
       // Stage the delete (M4 changeset) — applied with the batch.
       useQueryStore.getState().stageChange(tab.id, {

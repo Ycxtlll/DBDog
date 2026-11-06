@@ -67,6 +67,26 @@ export interface UpdateResult {
   elapsedMs: number;
 }
 
+/** Per-statement execution report from `execute_script`. */
+export interface StatementOutcome {
+  kind: string;
+  sql: string;
+  rowsAffected: number;
+  elapsedMs: number;
+}
+
+/** Result of backend-guarded script execution (MySQL). */
+export interface ScriptExecutionResult {
+  statements: StatementOutcome[];
+  finalResult?: QueryResult;
+  finalIsQuery: boolean;
+  finalRowsAffected: number;
+  totalRows: number;
+  /** Effective database after any USE statements in the script. */
+  lastDatabase?: string;
+  elapsedMs: number;
+}
+
 /** Logical foreign key sources, highest confidence first. */
 export type RelationshipSource = "declared" | "imported" | "adjudicated" | "inferred";
 
@@ -209,6 +229,11 @@ export interface TableBrowseState {
   totalRows?: number;
   /** Server-side sort for browsing (header click). Null/undefined = primary-key order. */
   sort?: { col: string; dir: "asc" | "desc" } | null;
+  /** What the grid is currently showing. Structured replacement for the old
+   *  "executedSql === generated select" string comparison:
+   *  browse = paged plain SELECT (pager visible, filters/sort can search);
+   *  filterSearch = the generated filter SQL; custom = arbitrary user SQL. */
+  browseMode?: "browse" | "filterSearch" | "custom";
   /** Full-table search SQL generated from the grid's column filters,
    *  while that search is what the tab is showing. */
   filterSql?: string;
