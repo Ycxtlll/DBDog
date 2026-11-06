@@ -70,6 +70,27 @@ export function ResultGrid({ tab }: ResultGridProps) {
   // hide it once the user runs their own SQL in the tab.
   const showBrowsePager = !!browse && tab.executedSql === browseStateSelectSql(browse);
 
+  // Sample values of the relationship-editor column from the loaded page —
+  // live probe fuel for the manual link editor.
+  const relModalSamples = useMemo(() => {
+    if (!relModalCol || !result || !isQueryResult) return [];
+    const qr = result as QueryResult;
+    const idx = qr.columns.findIndex((c) => c.name === relModalCol);
+    if (idx < 0) return [];
+    const vals: unknown[] = [];
+    const seen = new Set<string>();
+    for (const row of qr.rows) {
+      const v = row[idx];
+      if (v === null || v === undefined || v === "") continue;
+      const key = String(v);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      vals.push(v);
+      if (vals.length >= 50) break;
+    }
+    return vals;
+  }, [relModalCol, result, isQueryResult]);
+
   const agGridLocaleText = useMemo(
     () => ({
       pageSizeSelectorLabel: t("agPageSize"),
@@ -956,6 +977,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         childTable={browse?.table}
         childColumn={relModalCol ?? undefined}
         existing={relModalCol ? fkByColumn.get(relModalCol) ?? null : null}
+        samples={relModalSamples}
         onChanged={() => {
           // Reload persisted links, keeping inferred ones that were neither
           // confirmed nor vetoed (they are not part of the stored overview).

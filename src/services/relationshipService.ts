@@ -45,3 +45,20 @@ export async function adjudicateRelationship(
 ): Promise<void> {
   return invoke("relationships_adjudicate", { connectionId, ...link, confirm });
 }
+
+/** Live probe: hit rate of the sampled child values in the parent column. */
+export async function probeRelationship(
+  connectionId: string,
+  database: string,
+  parentTable: string,
+  parentColumn: string,
+  samples: unknown[],
+): Promise<number | null> {
+  return invoke("relationships_probe", {
+    connectionId,
+    database,
+    parentTable,
+    parentColumn,
+    samples,
+  });
+}

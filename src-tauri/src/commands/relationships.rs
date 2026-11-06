@@ -6,7 +6,7 @@ use crate::connection::model::DatabaseType;
 use crate::drivers::mysql::decode;
 use crate::error::AppError;
 use crate::relationships::infer::{
-    infer_relationships, looks_like_fk_column, ColumnSchema, TableSchema,
+    infer_relationships, looks_like_fk_column, validate_candidate, ColumnSchema, TableSchema,
 };
 use crate::relationships::model::{
     Relationship, RelationshipSource, ReverseReference, StoredRelationship,
@@ -292,4 +292,20 @@ pub async fn relationships_infer(
         &stored.vetoed,
     )
     .await)
+}
+
+/// Live hit-rate probe for the manual relationship editor: share of the
+/// sampled child values found in the chosen parent column. `None` = the
+/// probe could not run (parent not readable, no samples).
+#[tauri::command]
+pub async fn relationships_probe(
+    state: tauri::State<'_, AppState>,
+    connection_id: Uuid,
+    database: String,
+    parent_table: String,
+    parent_column: String,
+    samples: Vec<serde_json::Value>,
+) -> Result<Option<f64>, AppError> {
+    let pool = require_mysql_pool(&state, &connection_id).await?;
+    Ok(validate_candidate(&pool, &database, &parent_table, &parent_column, &samples).await)
 }

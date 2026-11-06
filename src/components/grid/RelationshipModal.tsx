@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import * as schemaService from "../../services/schemaService";
 import * as relationshipService from "../../services/relationshipService";
 import { useModalFocus } from "../../lib/useModalFocus";
@@ -17,6 +17,9 @@ interface RelationshipModalProps {
   childColumn?: string;
   /** Current link on this column (declared/adjudicated/inferred), if any. */
   existing?: TableRelationship | null;
+  /** Sample values of the child column from the loaded page — powers the
+   *  live hit-rate probe (≤50 distinct non-null values). */
+  samples?: unknown[];
   /** Called after a link is saved or removed so the grid reloads. */
   onChanged?: () => void;
   onClose: () => void;
@@ -25,10 +28,15 @@ interface RelationshipModalProps {
 const selectClass =
   "w-full bg-background border border-border rounded-md px-1.5 py-1 text-xs outline-none hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/30 transition-colors disabled:opacity-50";
 
+interface ProbeState {
+  state: "idle" | "probing" | "done" | "fail";
+  rate?: number;
+}
+
 /**
- * Manual relationship editor for one column: pick a parent table + column
- * and pin the link (adjudication), remove/veto the current one, or bulk
- * import a bitanswer-style relationship list.
+ * Manual relationship editor for one column: searchable parent-table picker,
+ * auto-selected parent primary key, and a live value-probe badge that tells
+ * the user whether the chosen link is real before they save it.
  */
 export function RelationshipModal({
   open,
@@ -37,6 +45,7 @@ export function RelationshipModal({
   childTable,
   childColumn,
   existing,
+  samples,
   onChanged,
   onClose,
 }: RelationshipModalProps) {
@@ -47,25 +56,24 @@ export function RelationshipModal({
   const closing = show && !open;
 
   const [tables, setTables] = useState<Table[]>([]);
+  const [tableFilter, setTableFilter] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [parentTable, setParentTable] = useState("");
   const [columns, setColumns] = useState<Column[]>([]);
   const [parentColumn, setParentColumn] = useState("");
   const [loadingCols, setLoadingCols] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importText, setImportText] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<string | null>(null);
+  const [probe, setProbe] = useState<ProbeState>({ state: "idle" });
 
   // Reset transient state and preload the table list on (re)open.
   useEffect(() => {
     if (!open) return;
     setParentTable(existing?.parentTable ?? "");
+    setTableFilter(existing?.parentTable ?? "");
     setParentColumn(existing?.parentColumn ?? "");
     setColumns([]);
-    setImportOpen(false);
-    setImportText("");
-    setImportResult(null);
+    setPickerOpen(false);
+    setProbe({ state: "idle" });
     if (connectionId && database) {
       schemaService
         .getTables(connectionId, database)
@@ -97,6 +105,52 @@ export function RelationshipModal({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- follow table choice only
   }, [parentTable]);
+
+  // Smart default: with a single primary key, pick it — the overwhelmingly
+  // common case needs zero clicks on the column dropdown.
+  useEffect(() => {
+    if (parentColumn || loadingCols || columns.length === 0) return;
+    const pks = columns.filter((c) => c.isPrimaryKey);
+    if (pks.length === 1) setParentColumn(pks[0].name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- default only when empty
+  }, [columns, loadingCols]);
+
+  // Live probe: whatever the user picked is verified against the sampled
+  // child values before they commit to it.
+  useEffect(() => {
+    if (!open || !connectionId || !database || !parentTable || !parentColumn) {
+      setProbe({ state: "idle" });
+      return;
+    }
+    if (!samples || samples.length === 0) {
+      setProbe({ state: "idle" });
+      return;
+    }
+    let stale = false;
+    setProbe({ state: "probing" });
+    const timer = setTimeout(() => {
+      relationshipService
+        .probeRelationship(connectionId, database, parentTable, parentColumn, samples)
+        .then((rate) => {
+          if (!stale) setProbe({ state: rate === null ? "fail" : "done", rate: rate ?? undefined });
+        })
+        .catch(() => {
+          if (!stale) setProbe({ state: "fail" });
+        });
+    }, 350);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-probe on pick changes
+  }, [parentTable, parentColumn, samples, open]);
+
+  const chooseTable = (name: string) => {
+    setParentTable(name);
+    setTableFilter(name);
+    setParentColumn("");
+    setPickerOpen(false);
+  };
 
   const handleSave = async () => {
     if (!connectionId || !childTable || !childColumn || !parentTable || !parentColumn || saving) return;
@@ -143,26 +197,50 @@ export function RelationshipModal({
     }
   };
 
-  const handleImport = async () => {
-    if (!connectionId || !importText.trim() || importing) return;
-    setImporting(true);
-    setImportResult(null);
-    try {
-      const r = await relationshipService.importRelationships(connectionId, importText);
-      let msg = t("relImportDone", { imported: r.imported, skipped: r.skipped });
-      if (r.errors.length > 0) msg += ` · ${t("relImportErrors", { count: r.errors.length })}`;
-      setImportResult(msg);
-      onChanged?.();
-    } catch (err) {
-      showError(parseTauriError(err));
-    } finally {
-      setImporting(false);
-    }
-  };
-
   if (!show) return null;
 
   const canRemove = !!existing || (!!parentTable && !!parentColumn);
+  const needle = tableFilter.trim().toLowerCase();
+  const filteredTables = needle
+    ? tables.filter((tb) => tb.name.toLowerCase().includes(needle))
+    : tables;
+  const probeBadge = (() => {
+    if (probe.state === "probing") {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <Loader2 size={11} className="animate-spin" />
+          {t("relProbing")}
+        </span>
+      );
+    }
+    if (probe.state === "idle") return null;
+    if (probe.state === "fail") {
+      return <span className="text-xs text-muted-foreground">{t("relProbeFail")}</span>;
+    }
+    const percent = Math.round((probe.rate ?? 0) * 100);
+    const matched = Math.round((probe.rate ?? 0) * (samples?.length ?? 0));
+    const total = samples?.length ?? 0;
+    if (percent >= 80) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-green-600">
+          <Check size={12} />
+          {t("relProbeHit", { matched, total, percent })}
+        </span>
+      );
+    }
+    if (percent >= 20) {
+      return (
+        <span className="text-xs text-amber-500">
+          {t("relProbePartial", { matched, total, percent })}
+        </span>
+      );
+    }
+    return (
+      <span className="text-xs text-destructive">
+        {t("relProbeMiss", { matched, total, percent })}
+      </span>
+    );
+  })();
 
   return (
     <div
@@ -203,21 +281,40 @@ export function RelationshipModal({
 
           <div>
             <div className="text-xs text-muted-foreground mb-1">{t("relParentTable")}</div>
-            <select
-              className={selectClass}
-              value={parentTable}
-              onChange={(e) => {
-                setParentTable(e.target.value);
-                setParentColumn("");
-              }}
-            >
-              <option value="">{t("relSelectTable")}</option>
-              {tables.map((tb) => (
-                <option key={tb.name} value={tb.name}>
-                  {tb.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                className={selectClass}
+                placeholder={t("relSelectTable")}
+                value={tableFilter}
+                onChange={(e) => {
+                  setTableFilter(e.target.value);
+                  setPickerOpen(true);
+                }}
+                onFocus={() => setPickerOpen(true)}
+                onBlur={() => setPickerOpen(false)}
+              />
+              {pickerOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto bg-card border border-border rounded-md shadow-xl z-10">
+                  {filteredTables.length === 0 && (
+                    <div className="px-2 py-2 text-xs text-muted-foreground">{t("relNoTables")}</div>
+                  )}
+                  {filteredTables.map((tb) => (
+                    <div
+                      key={tb.name}
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // beat the input blur
+                        chooseTable(tb.name);
+                      }}
+                      className={`px-2 py-1.5 text-xs font-mono cursor-pointer hover:bg-accent transition-colors ${
+                        tb.name === parentTable ? "text-primary" : "text-foreground"
+                      }`}
+                    >
+                      {tb.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -240,6 +337,9 @@ export function RelationshipModal({
             </select>
           </div>
 
+          {/* Live value validation */}
+          <div className="min-h-[20px] flex items-center">{probeBadge}</div>
+
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
@@ -257,39 +357,6 @@ export function RelationshipModal({
             >
               {existing ? t("relRemove") : t("relVetoInfer")}
             </button>
-          </div>
-
-          {/* Bulk import */}
-          <div className="border-t border-border pt-3">
-            <button
-              type="button"
-              onClick={() => setImportOpen((v) => !v)}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-            >
-              {importOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              {t("relImport")}
-            </button>
-            {importOpen && (
-              <div className="mt-2 space-y-2">
-                <textarea
-                  className="w-full h-28 bg-background border border-border rounded-md px-2 py-1.5 text-xs font-mono outline-none hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/30 transition-colors resize-y"
-                  placeholder={t("relImportPlaceholder")}
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                />
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleImport}
-                    disabled={!importText.trim() || importing}
-                    className="px-3 py-1 text-xs font-medium rounded-md border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50 flex items-center gap-1"
-                  >
-                    {importing && <Loader2 size={11} className="animate-spin" />}
-                    {t("relImportBtn")}
-                  </button>
-                  {importResult && <span className="text-xs text-muted-foreground">{importResult}</span>}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

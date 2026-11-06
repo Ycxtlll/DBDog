@@ -175,7 +175,7 @@ fn is_vetoed(
 
 /// Share of `samples` found in the parent column. `None` = probe failed or
 /// nothing to compare (caller treats as "no evidence", not an error).
-async fn validate_candidate(
+pub async fn validate_candidate(
     pool: &MySqlPool,
     database: &str,
     table: &str,
