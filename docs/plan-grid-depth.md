@@ -173,4 +173,13 @@
   "点单元格开详情"冲突，需一起设计，倾向加复选框选择列 + 点击行为不变）+ 选区统计条
   （选中行/当前页 count/sum/avg/distinct/null）；chips 需在 `tableBrowse` 增加结构化
   筛选状态（现只有 filterSql 字符串）。
+- **2026-11-06 M2 核心完成**：Rust `relationships/` 模块（model/parse/infer/store，
+  9 个单测覆盖 bitanswer 格式解析与候选生成）+ `commands/relationships.rs` 四命令
+  （get/import/adjudicate/infer）已注册；前端 `relationshipService` + ResultGrid 集成：
+  FK 列渲染 Link2 图标（悬停显示置信度）→ 点击拉取父行进行详情弹窗；浏览页加载时
+  自动采样（≤50 值/列，取自已加载页零额外查询）跑推断（每列 ≤4 候选、全局 ≤60 探测、
+  命中率 ≥80% 成链）；右键"查看 {{table}} 中引用此行"（声明的反向引用，子查询 200 行
+  走本 tab 执行）；推断链接右键可 确认/否决（按连接持久化到
+  `relationships/<connectionId>.json`）。**待做**：关系清单导入 UI（命令已就绪）、
+  推断候选（<80%）展示与手动改指向、bitanswer 库实测命中率、chips/统计条（M1 二批）。
 - **架构提醒**：新算法一律 Rust 优先（见 0.5 节），TS 迁移清单随里程碑执行。
