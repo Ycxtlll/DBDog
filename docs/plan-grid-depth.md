@@ -232,6 +232,26 @@
   - **技术坑**：sqlx `raw_sql` + `&mut 连接` 与 Transaction API 在 tauri 宏下
     "Send/Executor not general enough"；engine.rs 的独立小函数 + `persistent(false)`
     模式已复用。46 个 Rust 单测全绿。
+- **2026-11-06 "再想想"第二轮：上一轮审查漏掉的头**：
+  - **tableDesign.ts（329 行）整体漏审**——可视化设计器的 ALTER diff 生成全在
+    UI 层；compare 的 buildAlterStatements（sql.ts ~90 行）同样漏掉。已全部移植
+    `schema/alter_gen.rs`（8 单测，54 全绿）：`compare_alter_statements` /
+    `designer_alter_statement` / `designer_validate`，三个命令
+    （compare_alter_statements_command / designer_prepare_alter /
+    designer_validate_command）。**移植时测试抓到一个真 bug**：DEFAULT 子句
+    双重引号（escape_string_literal 自带外引号又包一层）——单测的价值当场兑现。
+  - **设计器切换为异步生成的防呆**：防丢弃确认在 200ms 防抖窗口内可能被绕过，
+    增加 `dirty`（结构快照对比）作为 hasEdits 的保守兜底——宁可多弹确认。
+  - **死守卫删除**：splitSqlStatements / hasTopLevelWhere 前端实现零调用后仍
+    导出（双实现漂移风险），已删。
+  - **最终行数**：sql.ts 633→176（statementRangeAt 编辑器 UX + UI 复制格式化 +
+    browse SELECT 生成），tableDesign.ts 329→69（仅 UI 状态形状 + 解析）。
+  - **仍在 UI 层的（有意的）**：ResultGrid 的 FK 跳转单行 SELECT 构造
+    （有界只读，LIMIT 1，不走守卫路径可接受）；剪贴板 TSV/JSON 拼装；
+    采样指纹构建。
 - **架构提醒**：新算法一律 Rust 优先（见 0.5 节），TS 迁移清单随里程碑执行。
+  迁移清单状态：limitGuardSql ✅ hasTopLevelWhere ✅ splitSqlStatements ✅
+  buildTableSearchSql ✅ 变更集 diff/回滚 ✅ buildAlterStatements（compare）✅
+  设计器 ALTER/校验 ✅（M2 关系分析器从一开始就是 Rust）。
   迁移清单状态：limitGuardSql ✅ hasTopLevelWhere ✅ splitSqlStatements ✅
   buildTableSearchSql ✅ 变更集 diff/回滚 ✅（M2 关系分析器从一开始就是 Rust）。

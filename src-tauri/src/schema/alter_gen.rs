@@ -198,10 +198,6 @@ pub struct DesignerIndex {
 pub struct DesignerIndexOrig {
     #[serde(default)]
     pub columns: Vec<String>,
-    #[serde(default)]
-    pub unique: bool,
-    #[serde(default)]
-    pub name: Option<String>,
 }
 
 fn designer_type_text(c: &DesignerColumn) -> String {
