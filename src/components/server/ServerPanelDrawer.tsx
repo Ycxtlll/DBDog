@@ -40,11 +40,18 @@ export function ServerPanelDrawer({ connectionId }: ServerPanelDrawerProps) {
         setStatus(await serverService.getServerStatus(connectionId));
       }
     } catch (err) {
-      setError(parseTauriError(err));
+      // Variables/status can legitimately be unavailable (account without
+      // privileges, managed/limited server) — show a friendly hint with the
+      // raw reason as secondary detail instead of a bare database error.
+      if (tab === "processes") {
+        setError(parseTauriError(err));
+      } else {
+        setError(`${t("kvUnavailable")}\n${parseTauriError(err)}`);
+      }
     } finally {
       setLoading(false);
     }
-  }, [connectionId, tab]);
+  }, [connectionId, tab, t]);
 
   useEffect(() => {
     if (open) void load();
@@ -134,7 +141,7 @@ export function ServerPanelDrawer({ connectionId }: ServerPanelDrawerProps) {
       </div>
 
       {error && (
-        <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border-b border-border">
+        <div className="px-3 py-2 text-xs text-destructive bg-destructive/10 border-b border-border whitespace-pre-wrap break-all">
           {error}
         </div>
       )}

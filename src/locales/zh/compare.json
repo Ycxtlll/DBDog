@@ -4,6 +4,7 @@
   "target": "目标",
   "selectConnection": "选择连接",
   "selectDatabase": "选择数据库",
+  "databaseLoadFailed": "库列表加载失败——请先在左侧连接",
   "compare": "对比",
   "hint": "选择两个数据库后点对比——对比表存在性、列、索引和行数估计。生成的 ALTER 语句把目标库调整到与源一致。",
   "identicalCount": "{{count}} 张一致",

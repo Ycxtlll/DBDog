@@ -259,18 +259,26 @@ export function ResultGrid({ tab }: ResultGridProps) {
                   <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
                 </svg>
               )}
-              {fkByColumn.get(col.name) && (
-                <span
-                  data-fk-jump="1"
-                  title={t("fkJumpTitle", {
-                    table: fkByColumn.get(col.name)!.parentTable,
-                    confidence: Math.round(fkByColumn.get(col.name)!.confidence * 100),
-                  })}
-                  className="shrink-0 text-muted-foreground/70 hover:text-primary cursor-pointer"
-                >
-                  <Link2 size={12} />
-                </span>
-              )}
+              {(() => {
+                // 0 / empty string are the schema convention for "no
+                // reference" — no link icon, so no dead-end jumps.
+                const v = params.value;
+                if (v === 0 || v === "0" || v === "" || v === null || v === undefined) return null;
+                const rel = fkByColumn.get(col.name);
+                if (!rel) return null;
+                return (
+                  <span
+                    data-fk-jump="1"
+                    title={t("fkJumpTitle", {
+                      table: rel.parentTable,
+                      confidence: Math.round(rel.confidence * 100),
+                    })}
+                    className="shrink-0 text-muted-foreground/70 hover:text-primary cursor-pointer"
+                  >
+                    <Link2 size={12} />
+                  </span>
+                );
+              })()}
             </span>
           );
         },

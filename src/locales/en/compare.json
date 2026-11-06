@@ -4,6 +4,7 @@
   "target": "Target",
   "selectConnection": "Select connection",
   "selectDatabase": "Select database",
+  "databaseLoadFailed": "Failed to load databases — connect on the left first",
   "compare": "Compare",
   "hint": "Pick two databases and hit Compare — table existence, columns, indexes and estimated row counts are diffed. ALTER statements reshape the target to match the source.",
   "identicalCount": "{{count}} identical",

@@ -17,5 +17,6 @@
   "colDb": "Database",
   "colName": "Name",
   "colValue": "Value",
-  "empty": "No rows"
+  "empty": "No rows",
+  "kvUnavailable": "Cannot read server variables/status — the account may lack privileges, or the server restricts access."
 }

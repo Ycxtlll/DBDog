@@ -27,6 +27,7 @@ export function CompareDrawer({ connectionId }: { connectionId: string | null })
   const [source, setSource] = useState<Side>({ connId: "", db: "" });
   const [target, setTarget] = useState<Side>({ connId: "", db: "" });
   const [dbOptions, setDbOptions] = useState<Record<string, string[]>>({});
+  const [dbLoadError, setDbLoadError] = useState<Record<string, boolean>>({});
   const [report, setReport] = useState<StructureDiffReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,14 +45,28 @@ export function CompareDrawer({ connectionId }: { connectionId: string | null })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, connectionId]);
 
-  // Load the database list whenever either side's connection changes.
+  // Load the database list whenever either side's connection changes. The
+  // schema API needs a live pool — connect silently first when the side was
+  // never connected (e.g. a pure comparison target); failures surface as a
+  // hint on the dropdown instead of a silently empty list.
   useEffect(() => {
     for (const connId of [source.connId, target.connId]) {
-      if (!connId || dbOptions[connId]) continue;
-      schemaService
-        .getDatabases(connId)
-        .then((dbs) => setDbOptions((prev) => ({ ...prev, [connId]: dbs.map((d) => d.name) })))
-        .catch(() => setDbOptions((prev) => ({ ...prev, [connId]: [] })));
+      if (!connId || dbOptions[connId] !== undefined) continue;
+      const key = connId;
+      (async () => {
+        try {
+          const status = useConnectionStore.getState().statusMap[key];
+          if (status !== "connected") {
+            await useConnectionStore.getState().connect(key);
+          }
+          const dbs = await schemaService.getDatabases(key);
+          setDbOptions((prev) => ({ ...prev, [key]: dbs.map((d) => d.name) }));
+          setDbLoadError((prev) => ({ ...prev, [key]: false }));
+        } catch {
+          setDbOptions((prev) => ({ ...prev, [key]: [] }));
+          setDbLoadError((prev) => ({ ...prev, [key]: true }));
+        }
+      })();
     }
   }, [source.connId, target.connId, dbOptions]);
 
@@ -129,7 +144,9 @@ export function CompareDrawer({ connectionId }: { connectionId: string | null })
           disabled={!side.connId}
           onChange={(e) => onChange({ ...side, db: e.target.value })}
         >
-          <option value="">{t("selectDatabase")}</option>
+          <option value="">
+            {side.connId && dbLoadError[side.connId] ? t("databaseLoadFailed") : t("selectDatabase")}
+          </option>
           {(dbOptions[side.connId] ?? []).map((db) => (
             <option key={db} value={db}>
               {db}

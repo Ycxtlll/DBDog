@@ -74,10 +74,10 @@ pub async fn get_server_variables(
         .get(&connection_id)
         .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
 
-    let rows =
-        sqlx::query("SELECT variable_name, variable_value FROM information_schema.global_variables ORDER BY variable_name")
-            .fetch_all(&pool)
-            .await?;
+    // SHOW works on MySQL 5.7/8.x and MariaDB alike — the
+    // information_schema.global_variables table was removed in MySQL 8.0
+    // (error 1109). Column names are decoded case-insensitively.
+    let rows = sqlx::query("SHOW GLOBAL VARIABLES").fetch_all(&pool).await?;
 
     Ok(rows
         .iter()
@@ -101,10 +101,9 @@ pub async fn get_server_status(
         .get(&connection_id)
         .ok_or_else(|| AppError::ConnectionNotFound(connection_id.to_string()))?;
 
-    let rows =
-        sqlx::query("SELECT variable_name, variable_value FROM information_schema.global_status ORDER BY variable_name")
-            .fetch_all(&pool)
-            .await?;
+    // See get_server_variables: SHOW instead of the 8.0-removed
+    // information_schema.global_status (error 1109).
+    let rows = sqlx::query("SHOW GLOBAL STATUS").fetch_all(&pool).await?;
 
     Ok(rows
         .iter()

@@ -79,7 +79,7 @@ pub async fn relationships_get(
     let pool = require_mysql_pool(&state, &connection_id).await?;
 
     let mut relationships: Vec<Relationship> = Vec::new();
-    let mut push_unique = |rel: Relationship, out: &mut Vec<Relationship>| {
+    let push_unique = |rel: Relationship, out: &mut Vec<Relationship>| {
         let dup = out.iter().any(|r| {
             r.child_column.eq_ignore_ascii_case(&rel.child_column)
                 && r.parent_table.eq_ignore_ascii_case(&rel.parent_table)
