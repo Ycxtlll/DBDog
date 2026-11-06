@@ -249,6 +249,16 @@
   - **仍在 UI 层的（有意的）**：ResultGrid 的 FK 跳转单行 SELECT 构造
     （有界只读，LIMIT 1，不走守卫路径可接受）；剪贴板 TSV/JSON 拼装；
     采样指纹构建。
+- **2026-11-06 性能审查**：热路径逐个过——已有的缓冲盘点（history 上限 100、
+  推断负缓存、反向扫描每表一次、补全 schema 5 分钟 TTL、rowData/columnDefs
+  memo、抽屉检测 memo）。**修了两处**：①正向推断负缓存改列级——此前按
+  "列+页值指纹"存，翻页=新指纹=照旧重探，"翻页不重探"是假的；现在按列名
+  缓存（候选集来自 schema 与页值无关），`dbdog-schema-changed` 事件重置；
+  ②大值抽屉检测上限 1MB（超限直接原值视图，不再全串 trim/parse 卡开抽屉），
+  顺带修 JSON 列对象值显示 `[object Object]` 的 bug（改 JSON.stringify）。
+  **有意不做的缓存**：关系 overview 不按表缓存（一条轻量 information_schema
+  查询 + 裁决失效语义复杂化，收益不抵）；AG Grid rowData 不做增量 diff
+  （结果集本就整页替换）。
 - **架构提醒**：新算法一律 Rust 优先（见 0.5 节），TS 迁移清单随里程碑执行。
   迁移清单状态：limitGuardSql ✅ hasTopLevelWhere ✅ splitSqlStatements ✅
   buildTableSearchSql ✅ 变更集 diff/回滚 ✅ buildAlterStatements（compare）✅

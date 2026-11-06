@@ -78,10 +78,27 @@ export function LargeValueDrawer({ open, columnName, tableName, value, onClose }
   const closing = show && !open;
 
   // Raw text is the single source of truth — display modes are projections,
-  // and copy always takes from it.
-  const raw = value === null || value === undefined ? "" : String(value);
-  const parsedJson = useMemo(() => detectJson(raw.trim()), [raw]);
-  const isXml = useMemo(() => parsedJson === null && looksLikeXml(raw.trim()), [raw]);
+  // and copy always takes from it. JSON columns decode to JS objects; the
+  // grid and row modal render them as JSON text and so does the drawer.
+  const raw =
+    value === null || value === undefined
+      ? ""
+      : typeof value === "object"
+        ? JSON.stringify(value)
+        : String(value);
+  // Detection is O(n) with full-string copies (parse/indent) — capped so a
+  // multi-MB TEXT value opens instantly as raw instead of freezing the
+  // drawer; the toggle still lets the user opt in.
+  const DETECT_CAP = 1_000_000;
+  const detectable = raw.length <= DETECT_CAP;
+  const parsedJson = useMemo(
+    () => (detectable ? detectJson(raw.trim()) : null),
+    [raw, detectable],
+  );
+  const isXml = useMemo(
+    () => detectable && parsedJson === null && looksLikeXml(raw.trim()),
+    [raw, detectable, parsedJson],
+  );
   const formatKind: FormatKind = parsedJson !== null ? "json" : isXml ? "xml" : null;
   const formattedText = useMemo(() => {
     if (formatKind === "json" && parsedJson !== null) return JSON.stringify(parsedJson, null, 2);

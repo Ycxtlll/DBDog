@@ -139,10 +139,21 @@ export function ResultGrid({ tab }: ResultGridProps) {
   }, [relationships]);
   const fkByColumnRef = useRef(fkByColumn);
   fkByColumnRef.current = fkByColumn;
-  // Forward negative cache (tableKey → probed-without-hit fingerprints) and
-  // the once-per-table reverse scan guard.
+  // Forward negative cache (tableKey → probed-without-hit column names) and
+  // the once-per-table reverse scan guard. Column-keyed, NOT value-keyed:
+  // the candidate set comes from the schema, so a column that missed on one
+  // page misses on every page — per-fingerprint caching would re-probe on
+  // each flip. DDL events clear both (a column may become a real FK).
   const fwdNegativeRef = useRef<Map<string, Set<string>>>(new Map());
   const revRanRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const reset = () => {
+      fwdNegativeRef.current.clear();
+      revRanRef.current.clear();
+    };
+    window.addEventListener("dbdog-schema-changed", reset);
+    return () => window.removeEventListener("dbdog-schema-changed", reset);
+  }, []);
 
   // Declared/adjudicated links load once per browsed table (cheap — no
   // probing); re-browsing the same table keeps what inference has merged.
@@ -185,9 +196,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
     const tableKey = `${browse.database}|${browse.table}`;
     const negative = fwdNegativeRef.current.get(tableKey) ?? new Set<string>();
     const samples: Record<string, unknown[]> = {};
-    const fingerprints: Record<string, string> = {};
+    const sampledColumns: string[] = [];
     qr.columns.forEach((col, colIdx) => {
       if (fkByColumnRef.current.has(col.name)) return;
+      if (negative.has(col.name)) return;
       const vals: unknown[] = [];
       const seen = new Set<string>();
       for (const row of qr.rows) {
@@ -200,12 +212,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         if (vals.length >= 50) break;
       }
       if (vals.length === 0) return;
-      const fp = `${col.name}|${vals.length}:${vals
-        .slice(0, 3)
-        .map((v) => String(v))
-        .join(",")}`;
-      if (negative.has(fp)) return;
-      fingerprints[col.name] = fp;
+      sampledColumns.push(col.name);
       samples[col.name] = vals;
     });
     if (Object.keys(samples).length === 0) return;
@@ -215,8 +222,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
       .then((inferred) => {
         if (stale) return;
         const linked = new Set(inferred.map((r) => r.childColumn));
-        for (const [colName, fp] of Object.entries(fingerprints)) {
-          if (!linked.has(colName)) negative.add(fp);
+        for (const colName of sampledColumns) {
+          if (!linked.has(colName)) negative.add(colName);
         }
         fwdNegativeRef.current.set(tableKey, negative);
         if (inferred.length === 0) return;
