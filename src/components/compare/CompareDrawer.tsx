@@ -6,7 +6,6 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useQueryStore } from "../../stores/queryStore";
 import * as compareService from "../../services/compareService";
 import * as schemaService from "../../services/schemaService";
-import { buildAlterStatements } from "../../lib/sql";
 import { parseTauriError } from "../../lib/error";
 import { showSuccess, showError } from "../../stores/toastStore";
 import type { CompareColumnDiff, CompareTableDiff, StructureDiffReport } from "../../types";
@@ -33,6 +32,8 @@ export function CompareDrawer({ connectionId }: { connectionId: string | null })
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  // ALTER generation runs in Rust (algorithm layer) — cache per table.
+  const [alterCache, setAlterCache] = useState<Record<string, string[]>>({});
 
   // Default the source side to the active connection once.
   useEffect(() => {
@@ -69,6 +70,22 @@ export function CompareDrawer({ connectionId }: { connectionId: string | null })
       })();
     }
   }, [source.connId, target.connId, dbOptions]);
+
+  // Recompute ALTER statements in the backend whenever a new report lands.
+  useEffect(() => {
+    if (!report) {
+      setAlterCache({});
+      return;
+    }
+    const db = report.targetDatabase ?? "";
+    for (const diff of report.changedTables) {
+      schemaService
+        .compareAlterStatements(db, diff)
+        .then((alters) => setAlterCache((prev) => ({ ...prev, [diff.table]: alters })))
+        .catch(() => setAlterCache((prev) => ({ ...prev, [diff.table]: [] })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- per report
+  }, [report]);
 
   const runCompare = useCallback(async () => {
     if (!source.connId || !source.db || !target.connId || !target.db) return;
@@ -172,7 +189,7 @@ export function CompareDrawer({ connectionId }: { connectionId: string | null })
 
   const renderChangedTable = (diff: CompareTableDiff) => {
     const isOpen = expanded.has(diff.table);
-    const alters = buildAlterStatements(report?.targetDatabase ?? "", diff);
+    const alters = alterCache[diff.table] ?? [];
     const copyKey = `table:${diff.table}`;
     return (
       <div key={diff.table} className="border-b border-border/50">

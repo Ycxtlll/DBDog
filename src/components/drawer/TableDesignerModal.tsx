@@ -26,12 +26,13 @@ import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 import {
   parseServerColumn,
   parseServerIndex,
-  buildAlterStatement,
-  validateDesign,
   type DesignColumn,
   type DesignIndex,
 } from "../../lib/tableDesign";
 import type { TableDetails } from "../../types";
+
+/** Matches the backend DesignError (i18n key + interpolation params). */
+type DesignError = { key: string; params?: Record<string, string> };
 
 const COMMON_TYPES = [
   "int", "bigint", "smallint", "tinyint", "decimal", "float", "double",
@@ -119,22 +120,36 @@ export function TableDesignerModal({ connectionId }: TableDesignerModalProps) {
     load();
   }, [drawer.type, connectionId, db, table, applyDetails]);
 
-  const { sql: alterSql } = useMemo(
-    () =>
-      buildAlterStatement(
-        ctx.db,
-        ctx.table,
-        origColumns,
-        columns,
-        origIndexes,
-        indexes,
-      ),
-    [ctx.db, ctx.table, origColumns, columns, origIndexes, indexes],
-  );
+  // ALTER generation + validation run in Rust (algorithm layer), debounced
+  // because every keystroke in the designer reshapes the inputs.
+  const [alterSql, setAlterSql] = useState<string | null>(null);
+  const [validation, setValidation] = useState<DesignError | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      schemaService
+        .designerPrepareAlter(ctx.db, ctx.table, origColumns, columns, origIndexes, indexes)
+        .then((r) => setAlterSql(r.sql))
+        .catch(() => setAlterSql(null));
+      schemaService
+        .designerValidate(columns, indexes)
+        .then(setValidation)
+        .catch(() => setValidation(null));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [ctx.db, ctx.table, origColumns, columns, origIndexes, indexes]);
 
-  const validation = useMemo(() => validateDesign(columns, indexes), [columns, indexes]);
+  // Safety net while the debounced result is in flight: treat the form as
+  // edited whenever it structurally differs from the server snapshot, so a
+  // fast close can never skip the discard confirmation.
+  const dirty =
+    useMemo(
+      () =>
+        JSON.stringify([columns, indexes]) !==
+        JSON.stringify([origColumns, origIndexes]),
+      [columns, indexes, origColumns, origIndexes],
+    );
 
-  const hasEdits = alterSql !== null;
+  const hasEdits = alterSql !== null || dirty;
 
   const handleClose = useCallback(async () => {
     if (hasEdits && !(await confirmDialog(t("confirmDiscard"), t("designTable")))) return;

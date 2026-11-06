@@ -97,3 +97,42 @@ pub async fn get_completion_schema(
         .fetch_completion_schema(database.as_deref())
         .await
 }
+
+/// Generate the target-reshaping ALTER statements for a structure diff
+/// (compare feature). Pure generation, no connection.
+#[tauri::command]
+pub async fn compare_alter_statements_command(
+    database: String,
+    diff: serde_json::Value,
+) -> Result<Vec<String>, AppError> {
+    crate::schema::alter_gen::compare_alter_statements(&database, &diff)
+}
+
+/// Generate a single multi-clause ALTER TABLE for the visual table designer.
+#[tauri::command]
+pub async fn designer_prepare_alter(
+    database: String,
+    table: String,
+    orig_columns: Vec<crate::schema::alter_gen::DesignerColumn>,
+    columns: Vec<crate::schema::alter_gen::DesignerColumn>,
+    orig_indexes: Vec<crate::schema::alter_gen::DesignerIndex>,
+    indexes: Vec<crate::schema::alter_gen::DesignerIndex>,
+) -> Result<crate::schema::alter_gen::AlterBuildResult, AppError> {
+    Ok(crate::schema::alter_gen::designer_alter_statement(
+        &database,
+        &table,
+        &orig_columns,
+        &columns,
+        &orig_indexes,
+        &indexes,
+    ))
+}
+
+/// Designer sanity checks (i18n key + params for the first problem).
+#[tauri::command]
+pub async fn designer_validate_command(
+    columns: Vec<crate::schema::alter_gen::DesignerColumn>,
+    indexes: Vec<crate::schema::alter_gen::DesignerIndex>,
+) -> Result<Option<crate::schema::alter_gen::DesignError>, AppError> {
+    Ok(crate::schema::alter_gen::designer_validate(&columns, &indexes))
+}
