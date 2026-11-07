@@ -1,5 +1,6 @@
 import { useLayoutStore } from "../stores/layoutStore";
 import { useUiStore } from "../stores/uiStore";
+import { useQueryStore } from "../stores/queryStore";
 import { showSuccess } from "../stores/toastStore";
 import { Dog, PawPrint } from "lucide-react";
 import { useRef, useState } from "react";
@@ -34,11 +35,42 @@ function DogFooter() {
   const setTheme = useUiStore((s) => s.setTheme);
   const petsRef = useRef(0);
   const [mood, setMood] = useState<string | null>(null);
+  const activeTab = useQueryStore((s) =>
+    s.tabs.find((tab) => tab.id === s.activeTabId),
+  );
+
+  // The dog mirrors real app state — the footer doubles as a status lamp.
+  // Petting overrides it for a moment (mood wins while set).
+  const zh = i18n.language === "zh";
+  const status = (() => {
+    if (!activeTab) return { text: t("borderCollieOnDuty"), working: false };
+    if (activeTab.isExecuting)
+      return { text: zh ? "追球中… 🎾" : "Chasing the ball… 🎾", working: true };
+    if (activeTab.error)
+      return { text: zh ? "呜…出错了（看状态栏）" : "Whimper… check the status bar", working: false };
+    const pending = activeTab.pendingChanges?.length ?? 0;
+    if (pending > 0)
+      return {
+        text: zh ? `嘴里叼着 ${pending} 处修改` : `Holding ${pending} changes in mouth`,
+        working: false,
+      };
+    if (activeTab.lastAppliedRollbacks?.length)
+      return { text: zh ? "刚叼来一根骨头 🦴" : "Just fetched a bone 🦴", working: false };
+    const rows = activeTab.isQueryResult
+      ? (activeTab.tableBrowse?.totalRows ??
+        (activeTab.result as { totalCount?: number } | undefined)?.totalCount)
+      : (activeTab.result as { rowsAffected?: number } | undefined)?.rowsAffected;
+    if (typeof rows === "number")
+      return {
+        text: zh ? `叼回来 ${rows.toLocaleString()} 行 🦴` : `Fetched ${rows.toLocaleString()} rows 🦴`,
+        working: false,
+      };
+    return { text: t("borderCollieOnDuty"), working: false };
+  })();
 
   const pet = () => {
     petsRef.current += 1;
     const n = petsRef.current;
-    const zh = i18n.language === "zh";
     const lines = zh
       ? ["汪！", "汪汪！🐾", "尾巴摇成风扇了", "（贴贴）", "边牧已就位，随时开工"]
       : ["Woof!", "Woof woof! 🐾", "Tail at maximum wag", "(leans on you)", "Border Collie ready to work"];
@@ -58,14 +90,16 @@ function DogFooter() {
         title={t("petTheDog")}
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-          <Dog size={15} className="text-muted-foreground" />
+          <Dog size={15} className={`text-muted-foreground ${activeTab?.isExecuting && !mood ? "animate-bounce" : ""}`} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-medium text-foreground leading-tight">
             DBDog
           </span>
-          <span className="block text-[10px] text-muted-foreground leading-tight truncate">
-            {mood ?? t("borderCollieOnDuty")}
+          <span className={`block text-[10px] leading-tight truncate ${
+            activeTab?.isExecuting && !mood ? "text-primary" : "text-muted-foreground"
+          }`}>
+            {mood ?? status.text}
           </span>
         </span>
         {mood && <PawPrint size={12} className="text-primary shrink-0" />}
