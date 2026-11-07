@@ -10,6 +10,9 @@ import {
   Monitor,
   Plug,
   Unplug,
+  Table2,
+  Database,
+  Clock,
 } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -18,6 +21,7 @@ import { useLayoutStore } from "../../stores/layoutStore";
 import { VirtualList } from "../virtual/VirtualList";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
+import * as schemaService from "../../services/schemaService";
 
 interface Command {
   id: string;
@@ -41,6 +45,8 @@ export function CommandPalette() {
   const layoutStore = useLayoutStore.getState();
   const [search, setSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [tables, setTables] = useState<{ database: string; name: string }[]>([]);
+  const [databases, setDatabases] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -67,6 +73,40 @@ export function CommandPalette() {
       setSelectedIndex(0);
     }
   }, [commandPaletteOpen]);
+
+  // Global jump: load databases + tables while connected (backend caches
+  // table lists, so repeat opens are cheap).
+  useEffect(() => {
+    if (!commandPaletteOpen || !activeId) {
+      setTables([]);
+      setDatabases([]);
+      return;
+    }
+    let stale = false;
+    schemaService
+      .getDatabases(activeId)
+      .then((dbs) => {
+        if (stale) return;
+        const names = dbs.map((d) => d.name);
+        setDatabases(names);
+        return Promise.all(
+          names.map((db) =>
+            schemaService
+              .getTables(activeId, db)
+              .then((ts) => ts.map((t) => ({ database: db, name: t.name })))
+              .catch(() => [] as { database: string; name: string }[]),
+          ),
+        );
+      })
+      .then((groups) => {
+        if (stale || !groups) return;
+        setTables(groups.flat());
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [commandPaletteOpen, activeId]);
 
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
@@ -160,6 +200,42 @@ export function CommandPalette() {
       }
     });
 
+    // Global jump: recently browsed tables first, then every table, then
+    // databases (switch the active tab's schema).
+    const qs = useQueryStore.getState();
+    const recents = qs.recentTables;
+    const openTableCmd = (database: string, name: string, recent: boolean) => ({
+      id: `table.${database}.${name}`,
+      title: `${database}.${name}`,
+      category: recent ? `⏱ ${t("recentTables")}` : "Table",
+      icon: recent ? <Clock size={14} /> : <Table2 size={14} />,
+      action: () => useQueryStore.getState().openTable(activeId!, database, name),
+    });
+    for (const r of recents) {
+      if (!activeId) break;
+      list.push(openTableCmd(r.database, r.table, true));
+    }
+    for (const t2 of tables) {
+      if (!activeId) break;
+      if (recents.some((r) => r.database === t2.database && r.table === t2.name)) continue;
+      list.push(openTableCmd(t2.database, t2.name, false));
+    }
+    if (activeId) {
+      for (const dbName of databases) {
+        list.push({
+          id: `db.${dbName}`,
+          title: dbName,
+          category: "Database",
+          icon: <Database size={14} />,
+          action: () =>
+            useQueryStore.getState().setTabSelectedDatabase(
+              useQueryStore.getState().activeTabId ?? useQueryStore.getState().newTab(),
+              dbName,
+            ),
+        });
+      }
+    }
+
     return list;
   }, [
     t,
@@ -169,6 +245,8 @@ export function CommandPalette() {
     setTheme,
     connect,
     disconnect,
+    tables,
+    databases,
   ]);
 
   const filtered = useMemo(() => {

@@ -126,5 +126,12 @@
   "newRow": "新增行",
   "stageNewRow": "暂存此新增行",
   "discardNewRow": "放弃此行",
-  "gridEmptyWoof": "汪！没有匹配的行"
+  "gridEmptyWoof": "汪！没有匹配的行",
+  "activeFilters": "筛选条件：",
+  "removeFilter": "移除",
+  "clearFilters": "清空全部",
+  "copySelectedTsv": "复制选中 {{n}} 行（TSV）",
+  "copySelectedJson": "复制选中行 JSON",
+  "copySelectedInsert": "复制选中行 INSERT",
+  "selectedRowsCount": "已选 {{n}} 行"
 }

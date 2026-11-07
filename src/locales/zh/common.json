@@ -29,5 +29,6 @@
   "selectConnection": "从左侧选择一个连接",
   "selectConnectionHint": "已有 {{count}} 个保存的连接，点击左侧任意一个即可连接",
   "petTheDog": "摸摸它",
-  "borderCollieOnDuty": "边牧值班中"
+  "borderCollieOnDuty": "边牧值班中",
+  "recentTables": "最近打开"
 }

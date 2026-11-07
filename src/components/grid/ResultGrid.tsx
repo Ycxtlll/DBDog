@@ -71,6 +71,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const pendingModalCellRef = useRef<{ row: Record<string, unknown>; col: string; value: unknown } | null>(null);
   // Rows being filled for a staged INSERT (grid editing loop).
   const [pendingNewRows, setPendingNewRows] = useState<Record<string, unknown>[]>([]);
+  /** Live AG Grid filter model → rendered as removable chips above the grid. */
+  const [filterModel, setFilterModelState] = useState<Record<string, unknown>>({});
+  /** Multi-row selection (checkbox column) for copy/stats. */
+  const [selectedRows, setSelectedRows] = useState<Record<string, unknown>[]>([]);
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
@@ -118,6 +122,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
     }),
     [t],
   );
+
 
   // Close context menu on any click outside
   useEffect(() => {
@@ -326,7 +331,21 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const columnDefs: ColDef[] = useMemo(() => {
     if (!isQueryResult || !result) return [];
     const qr = result as QueryResult;
-    return qr.columns.map(
+    return [
+      {
+        colId: "__select",
+        headerName: "",
+        checkboxSelection: true,
+        headerCheckboxSelection: true,
+        width: 44,
+        minWidth: 44,
+        maxWidth: 44,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        pinned: "left" as const,
+      },
+      ...qr.columns.map(
       (col): ColDef => ({
         field: col.name,
         headerName: col.name,
@@ -398,8 +417,9 @@ export function ResultGrid({ tab }: ResultGridProps) {
           );
         },
       }),
-    );
-  }, [isQueryResult, result, t, fkByColumn]);
+      ),
+    ];
+  }, [isQueryResult, result, t, fkByColumn, tab.tableBrowse]);
 
   const rowData = useMemo(() => {
     if (!isQueryResult || !result) return pendingNewRows;
@@ -536,6 +556,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
       event?: unknown;
     }) => {
       const col = String(event.colDef.field ?? event.colDef.headerName ?? "");
+      // Selection-column clicks toggle checkboxes only.
+      if (!event.colDef.field) return;
       // Click on the FK jump icon navigates to the parent row instead of
       // opening this row's detail.
       const mouse = event.event as MouseEvent | undefined;
@@ -671,6 +693,27 @@ export function ResultGrid({ tab }: ResultGridProps) {
     },
     [t],
   );
+  /** Multi-row copy: TSV (Excel-ready), JSON array, or INSERT statements. */
+  const copySelectedRows = useCallback(
+    (kind: "tsv" | "json" | "insert") => {
+      if (selectedRows.length === 0) return;
+      const qr = tab.isQueryResult ? (tab.result as QueryResult | undefined) : undefined;
+      if (!qr) return;
+      const cols = qr.columns.map((c) => c.name);
+      if (kind === "tsv") {
+        const esc = (x: string) => x.replace(/\t/g, " ").replace(/\r?\n/g, " ");
+        const body = selectedRows
+          .map((r) => cols.map((c) => esc(formatCellValue(r[c]))).join("	"))
+          .join("\n");
+        copyText(`${cols.join("\t")}\n${body}`);
+      } else if (kind === "json") {
+        copyText(JSON.stringify(selectedRows, null, 2));
+      } else if (browse) {
+        copyText(buildInsertStatements(browse.database, browse.table, cols, selectedRows));
+      }
+    },
+    [selectedRows, browse, copyText],
+  );
 
   /** Header-click sort: plain browse data sorts server-side (ORDER BY +
    *  re-fetch page 1); arbitrary SQL results keep their client-side page
@@ -748,11 +791,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
       if (!current || !browse || current.isExecuting) return;
       const plainBrowse = browse.browseMode !== "custom";
       if (!plainBrowse) return;
+      const model = event.api.getFilterModel() as Record<string, unknown>;
+      setFilterModelState(model);
       const store = useQueryStore.getState();
       const sql = await queryService.filterSearchSql(
         browse.database,
         browse.table,
-        event.api.getFilterModel() as Record<string, unknown>,
+        model,
       );
       if (sql) {
         void store.searchTable(activeConnectionId, tab.id, sql);
@@ -1131,6 +1176,61 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </span>
         <span>{queryResult.elapsedMs}ms</span>
       </div>
+      {/* Active filter chips — every condition visible, one click to drop */}
+      {Object.keys(filterModel).length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap px-3 py-1 text-xs border-b border-border bg-muted overflow-x-auto">
+          <span className="text-muted-foreground shrink-0 flex items-center gap-1">
+            <Filter size={11} />
+            {t("activeFilters")}
+          </span>
+          {Object.entries(filterModel).map(([col, entry]) => {
+            const o = (entry ?? {}) as Record<string, unknown>;
+            const type = o.type as string | undefined;
+            const v = o.filter ?? o.dateFrom ?? "";
+            const short =
+              type === "blank" ? "空值"
+                : type === "notBlank" ? "非空"
+                : type === "contains" ? `∋ ${v}`
+                : type === "notContains" ? `∌ ${v}`
+                : type === "startsWith" ? `${v}…`
+                : type === "endsWith" ? `…${v}`
+                : type === "equals" ? `= ${v}`
+                : type === "notEqual" ? `≠ ${v}`
+                : type === "lessThan" ? `< ${v}`
+                : type === "lessThanOrEqual" ? `≤ ${v}`
+                : type === "greaterThan" ? `> ${v}`
+                : type === "greaterThanOrEqual" ? `≥ ${v}`
+                : type === "inRange" ? `${v}~${o.filterTo ?? o.dateTo ?? ""}`
+                : String(type ?? "?");
+            return (
+              <span
+                key={col}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-background pl-2 pr-1 py-0.5 shrink-0"
+              >
+                <span className="font-mono text-foreground">{col}</span>
+                <span className="text-muted-foreground">{short}</span>
+                <button
+                  onClick={() => {
+                    const next = { ...filterModel };
+                    delete next[col];
+                    gridRef.current?.api.setFilterModel(next);
+                  }}
+                  className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  aria-label={`${col} ${t("removeFilter")}`}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            );
+          })}
+          <button
+            onClick={() => gridRef.current?.api.setFilterModel(null)}
+            className="shrink-0 text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+          >
+            {t("clearFilters")}
+          </button>
+        </div>
+      )}
       <div className={`relative flex-1 min-h-0 ${resolvedTheme === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
         {isQueryResult && queryResult.rows.length === 0 && !tab.isExecuting && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
@@ -1169,6 +1269,11 @@ export function ResultGrid({ tab }: ResultGridProps) {
           }}
           onFilterChanged={handleFilterChanged}
           onSortChanged={handleSortChanged}
+          rowSelection="multiple"
+          suppressRowClickSelection={true}
+          onSelectionChanged={(e: { api: { getSelectedRows: () => Record<string, unknown>[] } }) =>
+            setSelectedRows(e.api.getSelectedRows())
+          }
           onCellDoubleClicked={handleCellDoubleClicked}
           onCellValueChanged={handleInlineEdit}
           rowClassRules={{
@@ -1176,6 +1281,50 @@ export function ResultGrid({ tab }: ResultGridProps) {
           }}
         />
       </div>
+      {/* Selection stats — instant aggregates over the checked rows */}
+      {selectedRows.length > 0 && (() => {
+        const numeric: { col: string; sum: number; avg: number }[] = [];
+        for (const col of queryResult.columns) {
+          let sum = 0;
+          let n = 0;
+          let ok = true;
+          for (const r of selectedRows) {
+            const raw = r[col.name];
+            const v =
+              typeof raw === "number"
+                ? raw
+                : typeof raw === "string" && raw !== "" && Number.isFinite(Number(raw))
+                  ? Number(raw)
+                  : NaN;
+            if (Number.isFinite(v)) {
+              sum += v;
+              n++;
+            } else {
+              ok = false;
+              break;
+            }
+          }
+          if (ok && n > 0) numeric.push({ col: col.name, sum, avg: sum / n });
+        }
+        const fmt = (x: number) => (Number.isInteger(x) ? x.toLocaleString() : x.toFixed(2));
+        return (
+          <div className="flex items-center gap-1.5 px-3 py-1 text-xs border-t border-border bg-muted overflow-x-auto">
+            <span className="text-muted-foreground shrink-0">
+              {t("selectedRowsCount", { n: selectedRows.length })}
+            </span>
+            {numeric.slice(0, 6).map((st) => (
+              <span
+                key={st.col}
+                className="shrink-0 inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 font-mono"
+              >
+                <span className="text-muted-foreground">{st.col}</span>
+                <span>Σ {fmt(st.sum)}</span>
+                <span className="text-muted-foreground">μ {fmt(st.avg)}</span>
+              </span>
+            ))}
+          </div>
+        );
+      })()}
       {/* Pinned rows (row diff) */}
       {pinnedRows.length > 0 && (
         <div className="flex items-center gap-2 px-3 py-1 text-xs border-t border-border bg-muted">
@@ -1312,6 +1461,16 @@ export function ResultGrid({ tab }: ResultGridProps) {
               top: Math.min(contextMenu.y, window.innerHeight - 400),
             }}
           >
+            {selectedRows.length >= 2 && (
+              <>
+                <MenuRow icon={Copy} label={t("copySelectedTsv", { n: selectedRows.length })} onClick={() => { copySelectedRows("tsv"); setContextMenu(null); }} />
+                <MenuRow icon={FileJson} label={t("copySelectedJson")} onClick={() => { copySelectedRows("json"); setContextMenu(null); }} />
+                {browse && (
+                  <MenuRow icon={Database} label={t("copySelectedInsert")} onClick={() => { copySelectedRows("insert"); setContextMenu(null); }} />
+                )}
+                <div className="my-1 border-t border-border" />
+              </>
+            )}
             <MenuRow icon={Copy} label={t("copyValue")} onClick={() => { copyText(formatCellValue(menuValue)); setContextMenu(null); }} />
             {parsedJson !== null && (
               <MenuRow icon={Braces} label={t("copyAsJson")} onClick={() => { copyText(JSON.stringify(parsedJson, null, 2)); setContextMenu(null); }} />

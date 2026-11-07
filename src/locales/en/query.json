@@ -126,5 +126,12 @@
   "newRow": "Add row",
   "stageNewRow": "Stage this new row",
   "discardNewRow": "Discard this row",
-  "gridEmptyWoof": "Woof! No matching rows"
+  "gridEmptyWoof": "Woof! No matching rows",
+  "activeFilters": "Filters:",
+  "removeFilter": "Remove",
+  "clearFilters": "Clear all",
+  "copySelectedTsv": "Copy {{n}} selected rows (TSV)",
+  "copySelectedJson": "Copy selected as JSON",
+  "copySelectedInsert": "Copy selected as INSERT",
+  "selectedRowsCount": "{{n}} rows selected"
 }

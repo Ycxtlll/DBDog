@@ -31,6 +31,8 @@ interface QueryState {
   activeTabId: string | null;
   history: QueryHistoryItem[];
   historyExpanded: boolean;
+  /** Recently browsed tables (palette jump ordering), newest first. */
+  recentTables: { database: string; table: string }[];
   newTab: () => string;
   closeTab: (id: string) => void;
   setTabSql: (id: string, sql: string) => void;
@@ -94,6 +96,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   activeTabId: null,
   history: [],
   historyExpanded: false,
+  recentTables: [],
 
   newTab: () => {
     const tab: QueryTab = {
@@ -305,6 +308,14 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       pageSize: BROWSE_PAGE_SIZE,
       page: 1,
     });
+    set((state) => ({
+      recentTables: [
+        { database, table },
+        ...state.recentTables.filter(
+          (r) => !(r.database === database && r.table === table),
+        ),
+      ].slice(0, 12),
+    }));
     await get().browsePage(connectionId, tabId, 1, BROWSE_PAGE_SIZE);
     // Count may take a while on large InnoDB tables — update the pager when
     // it arrives instead of blocking the first page of data.
