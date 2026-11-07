@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import { X, Monitor, Sun, Moon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
+import { SKINS } from "../../lib/themes";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 
@@ -18,7 +19,7 @@ const segActive = "bg-primary text-primary-foreground border-primary";
 const segInactive = "bg-background border-border hover:border-primary/50 hover:bg-accent";
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { t } = useTranslation(["settings", "common"]);
+  const { t, i18n } = useTranslation(["settings", "common"]);
   const { theme, language, setTheme, setLanguage } = useUiStore();
   const [version, setVersion] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -90,6 +91,40 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <span className="whitespace-nowrap">{item.label}</span>
                 </button>
               ))}
+            </div>
+            {/* Skins — swatch cards; the active one shows a ring */}
+            <div className="grid grid-cols-4 gap-2 pt-1">
+              {SKINS.map((skin) => {
+                const active = theme === skin.id;
+                const name = i18n.language === "zh" ? skin.name : skin.nameEn;
+                return (
+                  <button
+                    key={skin.id}
+                    onClick={() => setTheme(skin.id)}
+                    title={name}
+                    className={`relative flex flex-col items-center gap-1.5 rounded-md border p-2 transition-colors ${
+                      active
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40 hover:bg-accent/30"
+                    }`}
+                  >
+                    <span
+                      className="flex h-7 w-14 overflow-hidden rounded-md border border-border/60"
+                      aria-hidden
+                    >
+                      <span className="h-full flex-[2]" style={{ background: skin.swatch[0] }} />
+                      <span className="h-full flex-1" style={{ background: skin.swatch[1] }} />
+                      <span className="h-full flex-1" style={{ background: skin.swatch[2] }} />
+                    </span>
+                    <span className={`text-[11px] leading-none ${active ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                      {name}
+                    </span>
+                    {active && (
+                      <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

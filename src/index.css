@@ -49,6 +49,168 @@
     --input: 215 14% 21%;
     --ring: 212 92% 58%;
   }
+
+  /* ── Skins (see src/lib/themes.ts) — full token sets; --ag-* inherit ── */
+
+  [data-theme='puppy'] {
+    /* DBDog brand: warm cream + dog orange */
+    --background: 36 60% 96%;
+    --foreground: 24 40% 18%;
+    --card: 38 55% 99%;
+    --card-foreground: 24 40% 18%;
+    --popover: 38 55% 99%;
+    --popover-foreground: 24 40% 18%;
+    --primary: 22 90% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 34 45% 93%;
+    --secondary-foreground: 24 40% 18%;
+    --muted: 34 40% 92%;
+    --muted-foreground: 24 12% 45%;
+    --accent: 30 85% 88%;
+    --accent-foreground: 22 80% 36%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 32 30% 85%;
+    --input: 32 30% 85%;
+    --ring: 22 90% 52%;
+  }
+
+  [data-theme='sakura'] {
+    /* Cherry blossom rose on soft pink */
+    --background: 340 45% 97%;
+    --foreground: 340 25% 20%;
+    --card: 340 40% 99%;
+    --card-foreground: 340 25% 20%;
+    --popover: 340 40% 99%;
+    --popover-foreground: 340 25% 20%;
+    --primary: 342 78% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 342 40% 94%;
+    --secondary-foreground: 340 25% 20%;
+    --muted: 342 35% 93%;
+    --muted-foreground: 340 12% 48%;
+    --accent: 345 70% 90%;
+    --accent-foreground: 342 78% 44%;
+    --destructive: 0 74% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 340 25% 87%;
+    --input: 340 25% 87%;
+    --ring: 342 78% 58%;
+  }
+
+  [data-theme='paper'] {
+    /* Aged paper + terracotta ink */
+    --background: 42 38% 94%;
+    --foreground: 30 15% 20%;
+    --card: 42 35% 97%;
+    --card-foreground: 30 15% 20%;
+    --popover: 42 35% 97%;
+    --popover-foreground: 30 15% 20%;
+    --primary: 20 55% 40%;
+    --primary-foreground: 42 40% 96%;
+    --secondary: 42 25% 89%;
+    --secondary-foreground: 30 15% 20%;
+    --muted: 42 25% 89%;
+    --muted-foreground: 30 10% 42%;
+    --accent: 40 50% 84%;
+    --accent-foreground: 20 55% 30%;
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 42 40% 96%;
+    --border: 40 20% 81%;
+    --input: 40 20% 81%;
+    --ring: 20 55% 40%;
+  }
+
+  [data-theme='nord'] {
+    /* Nord polar night + frost blue */
+    --background: 220 16% 16%;
+    --foreground: 218 24% 88%;
+    --card: 220 15% 20%;
+    --card-foreground: 218 24% 88%;
+    --popover: 220 15% 20%;
+    --popover-foreground: 218 24% 88%;
+    --primary: 193 43% 67%;
+    --primary-foreground: 220 16% 16%;
+    --secondary: 219 13% 26%;
+    --secondary-foreground: 218 24% 88%;
+    --muted: 219 13% 26%;
+    --muted-foreground: 215 14% 65%;
+    --accent: 193 35% 40%;
+    --accent-foreground: 218 24% 92%;
+    --destructive: 354 60% 60%;
+    --destructive-foreground: 220 16% 14%;
+    --border: 219 12% 28%;
+    --input: 219 12% 28%;
+    --ring: 193 43% 67%;
+  }
+
+  [data-theme='dracula'] {
+    --background: 231 15% 18%;
+    --foreground: 60 30% 96%;
+    --card: 231 13% 21%;
+    --card-foreground: 60 30% 96%;
+    --popover: 231 13% 21%;
+    --popover-foreground: 60 30% 96%;
+    --primary: 265 89% 78%;
+    --primary-foreground: 231 15% 18%;
+    --secondary: 232 12% 24%;
+    --secondary-foreground: 60 30% 96%;
+    --muted: 232 12% 24%;
+    --muted-foreground: 225 15% 65%;
+    --accent: 191 97% 40%;
+    --accent-foreground: 60 30% 96%;
+    --destructive: 0 92% 67%;
+    --destructive-foreground: 231 15% 18%;
+    --border: 232 12% 28%;
+    --input: 232 12% 28%;
+    --ring: 265 89% 78%;
+  }
+
+  [data-theme='catppuccin'] {
+    /* Catppuccin Mocha: mauve primary, sky accent */
+    --background: 240 21% 15%;
+    --foreground: 226 64% 88%;
+    --card: 240 23% 18%;
+    --card-foreground: 226 64% 88%;
+    --popover: 240 23% 18%;
+    --popover-foreground: 226 64% 88%;
+    --primary: 267 84% 81%;
+    --primary-foreground: 240 21% 15%;
+    --secondary: 240 16% 24%;
+    --secondary-foreground: 226 64% 88%;
+    --muted: 240 16% 24%;
+    --muted-foreground: 233 16% 68%;
+    --accent: 189 71% 40%;
+    --accent-foreground: 226 64% 90%;
+    --destructive: 343 74% 68%;
+    --destructive-foreground: 240 21% 15%;
+    --border: 240 16% 28%;
+    --input: 240 16% 28%;
+    --ring: 267 84% 81%;
+  }
+
+  [data-theme='terminal'] {
+    /* Phosphor green CRT — the programmer easter egg */
+    --background: 150 30% 6%;
+    --foreground: 120 80% 55%;
+    --card: 150 25% 9%;
+    --card-foreground: 120 60% 58%;
+    --popover: 150 25% 9%;
+    --popover-foreground: 120 60% 58%;
+    --primary: 120 85% 50%;
+    --primary-foreground: 150 30% 6%;
+    --secondary: 150 20% 13%;
+    --secondary-foreground: 120 60% 58%;
+    --muted: 150 20% 13%;
+    --muted-foreground: 120 25% 52%;
+    --accent: 120 40% 18%;
+    --accent-foreground: 120 85% 60%;
+    --destructive: 0 80% 55%;
+    --destructive-foreground: 150 30% 6%;
+    --border: 120 25% 20%;
+    --input: 120 25% 20%;
+    --ring: 120 85% 50%;
+  }
 }
 
 @layer base {

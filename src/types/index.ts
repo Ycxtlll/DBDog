@@ -251,7 +251,7 @@ export interface QueryHistoryItem {
 }
 
 export interface AppSettings {
-  theme: "light" | "dark" | "system";
+  theme: "light" | "dark" | "system" | import("../lib/themes").SkinId;
   language: "en" | "zh";
   editor: {
     tabSize: 2 | 4 | 8;

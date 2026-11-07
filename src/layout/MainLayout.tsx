@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useUiStore } from "../stores/uiStore";
+import { skinById } from "../lib/themes";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useLayoutStore } from "../stores/layoutStore";
 import { Sidebar } from "./Sidebar";
@@ -30,6 +31,14 @@ export function MainLayout() {
     // React to OS theme flips at runtime too — with theme === "system" the
     // app used to keep whatever was resolved at startup until relaunch.
     const apply = () => {
+      // Skins set their own data-theme block; resolvedTheme only carries the
+      // light/dark BASE so AG Grid / CodeMirror pick the right variant.
+      const skin = skinById(theme);
+      if (skin) {
+        root.setAttribute("data-theme", skin.id);
+        useUiStore.getState().setResolvedTheme(skin.dark ? "dark" : "light");
+        return;
+      }
       const dark = theme === "dark" || (theme === "system" && media.matches);
       const resolved = dark ? "dark" : "light";
       root.setAttribute("data-theme", resolved);
