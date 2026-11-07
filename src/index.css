@@ -245,3 +245,9 @@
     animation: none;
   }
 }
+
+/* Grid: rows being filled for a staged INSERT (new-row loop). */
+.ag-theme-quartz .dbdog-new-row,
+.ag-theme-quartz-dark .dbdog-new-row {
+  background: color-mix(in srgb, #f59e0b 8%, transparent);
+}

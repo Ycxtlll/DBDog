@@ -1,8 +1,8 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, SortChangedEvent } from "ag-grid-community";
-import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
+import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellDoubleClickedEvent, CellKeyDownEvent, FilterChangedEvent, RowClassParams, SortChangedEvent } from "ag-grid-community";
+import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -65,6 +65,12 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const [modalRels, setModalRels] = useState<TableRelationship[]>([]);
   /** Column whose relationship editor is open (manual link management). */
   const [relModalCol, setRelModalCol] = useState<string | null>(null);
+  // Single-click opens the row modal AFTER a short delay so a double-click
+  // (inline edit) can cancel it; the FK button bypasses the delay.
+  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingModalCellRef = useRef<{ row: Record<string, unknown>; col: string; value: unknown } | null>(null);
+  // Rows being filled for a staged INSERT (grid editing loop).
+  const [pendingNewRows, setPendingNewRows] = useState<Record<string, unknown>[]>([]);
 
   const isQueryResult = tab.isQueryResult;
   const result = tab.result;
@@ -334,6 +340,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         // keystroke.
         filterParams: { buttons: ["apply", "reset"] },
         sortable: true,
+        editable: !!tab.tableBrowse,
         valueFormatter: (params) => {
           if (params.value === null || params.value === undefined) return "NULL";
           if (typeof params.value === "boolean") return params.value ? "true" : "false";
@@ -395,9 +402,9 @@ export function ResultGrid({ tab }: ResultGridProps) {
   }, [isQueryResult, result, t, fkByColumn]);
 
   const rowData = useMemo(() => {
-    if (!isQueryResult || !result) return [];
+    if (!isQueryResult || !result) return pendingNewRows;
     const qr = result as QueryResult;
-    return qr.rows.map((row) => {
+    const rows = qr.rows.map((row) => {
       const obj: Record<string, unknown> = {};
       qr.columns.forEach((col, i) => {
         if (i < row.length) {
@@ -408,7 +415,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
       });
       return obj;
     });
-  }, [isQueryResult, result]);
+    return [...rows, ...pendingNewRows];
+  }, [isQueryResult, result, pendingNewRows]);
 
   const openRowDetail = useCallback(
     (row: Record<string, unknown>, focusColumn?: string, tableName?: string) => {
@@ -533,6 +541,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
       const mouse = event.event as MouseEvent | undefined;
       const fkEl = (mouse?.target as HTMLElement | null | undefined)?.closest?.("[data-fk-jump]");
       if (fkEl) {
+        if (modalTimerRef.current) {
+          clearTimeout(modalTimerRef.current);
+          modalTimerRef.current = null;
+        }
         const rel = fkByColumnRef.current.get(col);
         if (rel && event.value !== null && event.value !== undefined) {
           void handleFkJump(rel, event.value);
@@ -540,15 +552,88 @@ export function ResultGrid({ tab }: ResultGridProps) {
         return;
       }
       const row = (event.data as Record<string, unknown>) ?? {};
-      setDetailCell({
-        columnName: col,
-        value: event.value,
-        rowData: row,
-        tableName: browse?.table,
-      });
+      // Delay the modal so a double-click (inline edit) can cancel it —
+      // the FK jump above stays immediate.
+      pendingModalCellRef.current = { row, col, value: event.value };
+      if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
+      modalTimerRef.current = setTimeout(() => {
+        modalTimerRef.current = null;
+        const cell = pendingModalCellRef.current;
+        if (!cell || cell.row.__dbdogNew) return;
+        setDetailCell({
+          columnName: cell.col,
+          value: cell.value,
+          rowData: cell.row,
+          tableName: browse?.table,
+        });
+      }, 260);
     },
     [handleFkJump, browse],
   );
+
+  /** Double-click → cancel the pending modal and edit the cell inline. */
+  const handleCellDoubleClicked = useCallback(
+    (event: CellDoubleClickedEvent) => {
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
+        modalTimerRef.current = null;
+      }
+      if (!tab.tableBrowse || !event.api || event.rowIndex == null || !event.colDef?.field) return;
+      event.api.startEditingCell({ rowIndex: event.rowIndex, colKey: event.colDef.field });
+    },
+    [tab.tableBrowse],
+  );
+
+  /** Append an empty placeholder row for a staged INSERT. */
+  const addNewRow = useCallback(() => {
+    if (!browse || !isQueryResult || !result) return;
+    const qr = result as QueryResult;
+    if (qr.columns.length === 0) return;
+    const row: Record<string, unknown> = { __dbdogNew: true, __dbdogRowId: generateId() };
+    for (const c of qr.columns) row[c.name] = null;
+    setPendingNewRows((prev) => [...prev, row]);
+  }, [browse, isQueryResult, result]);
+
+  /** Stage a filled placeholder row as an INSERT change. */
+  const stageNewRow = useCallback(
+    (row: Record<string, unknown>) => {
+      if (!browse || !activeConnectionId) return;
+      const { database, table } = browse;
+      void (async () => {
+        try {
+          const data: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(row)) {
+            if (k === "__dbdogNew" || k === "__dbdogRowId") continue;
+            data[k] = v;
+          }
+          const { sql, rollbackSql } = await queryService.changesetPrepare({
+            database,
+            table,
+            pkColumns: [],
+            kind: "insert",
+            row: data,
+          });
+          useQueryStore.getState().stageChange(tab.id, {
+            id: generateId(),
+            kind: "insert",
+            sql,
+            rollbackSql,
+            table,
+            database,
+          });
+          setPendingNewRows((prev) => prev.filter((r) => r.__dbdogRowId !== row.__dbdogRowId));
+          showSuccess(t("stagedToast"));
+        } catch (err) {
+          showError(parseTauriError(err));
+        }
+      })();
+    },
+    [browse, activeConnectionId, tab.id, t],
+  );
+
+  const discardNewRow = useCallback((row: Record<string, unknown>) => {
+    setPendingNewRows((prev) => prev.filter((r) => r.__dbdogRowId !== row.__dbdogRowId));
+  }, []);
 
   const handleCellContextMenu = useCallback(
     (event: CellContextMenuEvent) => {
@@ -733,6 +818,55 @@ export function ResultGrid({ tab }: ResultGridProps) {
     [activeConnectionId, tab.id, isQueryResult, result],
   );
 
+  /** Inline edit committed → stage an UPDATE via the Rust generator. */
+  const handleInlineEdit = useCallback(
+    (event: { data: Record<string, unknown>; colDef: { field?: string }; oldValue: unknown; newValue: unknown; api?: { stopEditing?: () => void } }) => {
+      const colName = event.colDef.field ?? "";
+      const row = event.data;
+      if (!colName || !row) return;
+      // New-row placeholders accumulate locally; staged via the row context
+      // menu ("暂存此新增行").
+      if (row.__dbdogNew) return;
+      if (event.newValue === event.oldValue) return;
+      if (!activeConnectionId || !tab.tableBrowse || !isQueryResult) return;
+      const { database, table } = tab.tableBrowse;
+      void (async () => {
+        try {
+          const pkCols = await resolvePkColumns(database, table, tab.tableBrowse!.primaryKeyColumns);
+          if (pkCols.length === 0) {
+            showError(t("noPrimaryKey"));
+            return;
+          }
+          // row_before: the current data carries the NEW value in place —
+          // put the old value back for the WHERE clause (matters when
+          // editing a primary-key column).
+          const rowBefore: Record<string, unknown> = { ...row, [colName]: event.oldValue };
+          const { sql, rollbackSql } = await queryService.changesetPrepare({
+            database,
+            table,
+            pkColumns: pkCols,
+            kind: "update",
+            row: rowBefore,
+            column: colName,
+            newValue: event.newValue === undefined ? null : event.newValue,
+          });
+          useQueryStore.getState().stageChange(tab.id, {
+            id: generateId(),
+            kind: "update",
+            sql,
+            rollbackSql,
+            table,
+            database,
+          });
+          showSuccess(t("stagedToast"));
+        } catch (err) {
+          showError(parseTauriError(err));
+        }
+      })();
+    },
+    [activeConnectionId, tab.id, tab.tableBrowse, isQueryResult, t, resolvePkColumns],
+  );
+
   const handleSave = useCallback(
     async (colName: string, newValue: string | null) => {
       if (!detailCell || !tab.tableBrowse || !activeConnectionId || !isQueryResult || !result) return;
@@ -861,6 +995,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
       useQueryStore.getState().setLastAppliedRollbacks(tab.id, changes.map((c) => c.rollbackSql));
       useQueryStore.getState().clearPendingChanges(tab.id);
       setChangesetOpen(false);
+      setPendingNewRows([]);
       await refreshGrid();
     } catch (err) {
       // The backend rolled the whole batch back; staged changes stay so the
@@ -996,6 +1131,11 @@ export function ResultGrid({ tab }: ResultGridProps) {
           }}
           onFilterChanged={handleFilterChanged}
           onSortChanged={handleSortChanged}
+          onCellDoubleClicked={handleCellDoubleClicked}
+          onCellValueChanged={handleInlineEdit}
+          rowClassRules={{
+            "dbdog-new-row": (params: RowClassParams) => !!params.data?.__dbdogNew,
+          }}
         />
       </div>
       {/* Pinned rows (row diff) */}
@@ -1045,7 +1185,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
                   {t("changesetApply")}
                 </button>
                 <button
-                  onClick={() => useQueryStore.getState().clearPendingChanges(tab.id)}
+                  onClick={() => {
+                    useQueryStore.getState().clearPendingChanges(tab.id);
+                    setPendingNewRows([]);
+                    // Inline edits live in the grid display only — refresh
+                    // so the view matches the database again.
+                    void refreshGrid();
+                  }}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   {t("changesetDiscard")}
@@ -1066,16 +1212,26 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </div>
       )}
       {showBrowsePager && browse && (
-        <BrowsePagination
-          page={browse.page}
-          pageSize={browse.pageSize}
-          totalRows={browse.totalRows}
-          rowsOnPage={queryResult.rows.length}
-          loading={tab.isExecuting}
-          onPage={handleBrowsePage}
-          onPageSize={handleBrowsePageSize}
-          onRefresh={handleBrowseRefresh}
-        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={addNewRow}
+            disabled={tab.isExecuting}
+            className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50 shrink-0"
+          >
+            <FilePlus2 size={12} className="text-muted-foreground" />
+            {t("newRow")}
+          </button>
+          <BrowsePagination
+            page={browse.page}
+            pageSize={browse.pageSize}
+            totalRows={browse.totalRows}
+            rowsOnPage={queryResult.rows.length}
+            loading={tab.isExecuting}
+            onPage={handleBrowsePage}
+            onPageSize={handleBrowsePageSize}
+            onRefresh={handleBrowseRefresh}
+          />
+        </div>
       )}
 
       {/* Right-click context menu — copy / quick filter / row ops,
@@ -1176,9 +1332,16 @@ export function ResultGrid({ tab }: ResultGridProps) {
               />
             )}
             <div className="my-1 border-t border-border" />
-            <MenuRow icon={Pin} label={t("pinRow")} onClick={() => { pinRow(contextMenu.rowData); setContextMenu(null); }} />
+            {contextMenu.rowData.__dbdogNew ? (
+              <>
+                <MenuRow icon={Check} label={t("stageNewRow")} onClick={() => { stageNewRow(contextMenu.rowData); setContextMenu(null); }} />
+                <MenuRow icon={Trash2} label={t("discardNewRow")} destructive onClick={() => { discardNewRow(contextMenu.rowData); setContextMenu(null); }} />
+              </>
+            ) : (
+              <MenuRow icon={Pin} label={t("pinRow")} onClick={() => { pinRow(contextMenu.rowData); setContextMenu(null); }} />
+            )}
             <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col, browse?.table); setContextMenu(null); }} />
-            {browse && (
+            {browse && !contextMenu.rowData.__dbdogNew && (
               <MenuRow
                 icon={Trash2}
                 label={t("deleteRow")}

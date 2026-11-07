@@ -106,6 +106,66 @@ pub fn delete_statement(
     )
 }
 
+/// Forward statement for a newly filled row: only the non-null columns are
+/// listed (auto-increment PKs stay absent so the server assigns them).
+/// `row` keys are columns; JSON null values are skipped entirely.
+pub fn insert_statement(
+    database: &str,
+    table: &str,
+    row: &serde_json::Map<String, Value>,
+) -> String {
+    let mut cols: Vec<String> = Vec::new();
+    let mut values: Vec<String> = Vec::new();
+    for (col, v) in row {
+        if v.is_null() {
+            continue;
+        }
+        cols.push(escape_mysql_identifier(col));
+        values.push(format_sql_value(v));
+    }
+    if cols.is_empty() {
+        // A fully-null row is meaningless but must not generate broken SQL.
+        return String::new();
+    }
+    format!(
+        "INSERT INTO {}.{} ({}) VALUES ({});",
+        escape_mysql_identifier(database),
+        escape_mysql_identifier(table),
+        cols.join(", "),
+        values.join(", ")
+    )
+}
+
+/// Reverse statement for an inserted row: delete by its full non-null
+/// content, LIMIT 1. The auto-generated PK is unknown at staging time, so
+/// the match is content-based — visible SQL review is part of the contract.
+pub fn rollback_for_insert(
+    database: &str,
+    table: &str,
+    row: &serde_json::Map<String, Value>,
+) -> String {
+    let conds: Vec<String> = row
+        .iter()
+        .filter(|(_, v)| !v.is_null())
+        .map(|(col, v)| {
+            format!(
+                "{} = {}",
+                escape_mysql_identifier(col),
+                format_sql_value(v)
+            )
+        })
+        .collect();
+    if conds.is_empty() {
+        return String::new();
+    }
+    format!(
+        "DELETE FROM {}.{} WHERE {} LIMIT 1;",
+        escape_mysql_identifier(database),
+        escape_mysql_identifier(table),
+        conds.join(" AND ")
+    )
+}
+
 /// Reverse statement for a row delete: re-insert the full row (primary key
 /// included) with the values as they were BEFORE the delete.
 pub fn rollback_for_delete(
@@ -203,6 +263,22 @@ pub fn prepare(request: ChangesetPrepareRequest) -> Result<PreparedChange, AppEr
                 ),
             })
         }
+        "insert" => {
+            let sql = insert_statement(&request.database, &request.table, &request.row);
+            if sql.is_empty() {
+                return Err(AppError::QueryFailed(
+                    "新增行没有任何非空列，无法生成 INSERT".to_string(),
+                ));
+            }
+            let rollback_sql =
+                rollback_for_insert(&request.database, &request.table, &request.row);
+            if rollback_sql.is_empty() {
+                return Err(AppError::QueryFailed(
+                    "新增行没有任何非空列，无法生成回滚".to_string(),
+                ));
+            }
+            Ok(PreparedChange { sql, rollback_sql })
+        }
         other => Err(AppError::QueryFailed(format!(
             "未知变更类型: {other}"
         ))),
@@ -291,5 +367,41 @@ mod tests {
         let r = row();
         let sql = update_statement("db", "t", &["id".to_string()], &r, "name", None);
         assert!(sql.contains("SET `name` = NULL WHERE"));
+    }
+}
+
+#[cfg(test)]
+mod insert_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn insert_skips_nulls_and_rollback_matches_content() {
+        let mut r = json!({"id": 3, "name": "ann", "note": Value::Null});
+        let obj = r.as_object_mut().unwrap();
+        let sql = insert_statement("db", "t_user", obj);
+        assert_eq!(
+            sql,
+            "INSERT INTO `db`.`t_user` (`id`, `name`) VALUES (3, 'ann');"
+        );
+        let rollback = rollback_for_insert("db", "t_user", obj);
+        assert_eq!(
+            rollback,
+            "DELETE FROM `db`.`t_user` WHERE `id` = 3 AND `name` = 'ann' LIMIT 1;"
+        );
+    }
+
+    #[test]
+    fn insert_prepare_rejects_fully_null_row() {
+        let req = ChangesetPrepareRequest {
+            database: "db".to_string(),
+            table: "t".to_string(),
+            pk_columns: vec![],
+            kind: "insert".to_string(),
+            row: serde_json::Map::new(),
+            column: None,
+            new_value: None,
+        };
+        assert!(prepare(req).is_err());
     }
 }

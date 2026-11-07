@@ -122,5 +122,8 @@
   "confirmUnscopedDml": "This {{kind}} statement has no WHERE clause and will affect every row in the table. Execute anyway?",
   "dangerousOperation": "Dangerous operation",
   "dmlCancelled": "Execution cancelled",
-  "copyRawValue": "Copy raw value"
+  "copyRawValue": "Copy raw value",
+  "newRow": "Add row",
+  "stageNewRow": "Stage this new row",
+  "discardNewRow": "Discard this row"
 }

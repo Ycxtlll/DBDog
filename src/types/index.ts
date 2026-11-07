@@ -27,7 +27,7 @@ export interface ConnectionConfig {
 /** One staged grid modification, applied later in a single transaction. */
 export interface PendingChange {
   id: string;
-  kind: "update" | "delete";
+  kind: "update" | "delete" | "insert";
   sql: string;
   /** Reverse statement (recorded to history when the batch applies). */
   rollbackSql: string;

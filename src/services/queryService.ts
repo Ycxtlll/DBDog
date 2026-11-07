@@ -79,7 +79,7 @@ export async function changesetPrepare(request: {
   database: string;
   table: string;
   pkColumns: string[];
-  kind: "update" | "delete";
+  kind: "update" | "delete" | "insert";
   row: Record<string, unknown>;
   column?: string;
   newValue?: unknown;
