@@ -1,0 +1,21 @@
+{
+  "title": "帮助",
+  "shortcuts": "快捷键",
+  "scRunStatement": "执行当前语句（有选区则执行选区）",
+  "scRunAll": "执行全部语句",
+  "scPalette": "命令面板",
+  "scSidebar": "收起 / 展开侧栏",
+  "scCopyCell": "复制聚焦单元格",
+  "scUndoChangeset": "撤销上次变更集应用",
+  "grid": "网格",
+  "gridInlineEdit": "双击单元格直接编辑，Enter 提交（改动先暂存，审阅后单事务应用）",
+  "gridContextMenu": "右键单元格：复制（值 / JSON / 整行 / INSERT）、快捷筛选、删除行",
+  "gridFkJump": "关联列的胶囊按钮可跳转到父表对应行，在关系图里连续行走",
+  "gridChangeset": "底部\"N 处修改待应用\"：审阅每条 SQL，全部应用为单事务，失败整体回滚",
+  "gridNewRow": "分页条\"新增行\"：琥珀色占位行内填写，右键暂存即生成 INSERT",
+  "skins": "皮肤",
+  "skinsHint": "设置 → 主题卡片墙：边牧黑白、奶油橙、樱花粉、Nord、Dracula、终端绿等 9 款",
+  "eggs": "彩蛋",
+  "eggDog": "侧栏底部有只边牧值班，多摸摸它——摸爽了会有惊喜",
+  "about": "关于"
+}

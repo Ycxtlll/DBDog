@@ -24,6 +24,8 @@ import enServer from "../locales/en/server.json";
 import zhServer from "../locales/zh/server.json";
 import enCompare from "../locales/en/compare.json";
 import zhCompare from "../locales/zh/compare.json";
+import enHelp from "../locales/en/help.json";
+import zhHelp from "../locales/zh/help.json";
 const resources = {
   en: {
     common: enCommon,
@@ -37,6 +39,7 @@ const resources = {
     export: enExport,
     server: enServer,
     compare: enCompare,
+    help: enHelp,
   },
   zh: {
     common: zhCommon,
@@ -50,6 +53,7 @@ const resources = {
     export: zhExport,
     server: zhServer,
     compare: zhCompare,
+    help: zhHelp,
   },
 };
 

@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Settings } from "lucide-react";
+import { CircleHelp, Settings } from "lucide-react";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useQueryStore } from "../stores/queryStore";
 import { SettingsModal } from "../components/settings/SettingsModal";
+import { HelpModal } from "../components/help/HelpModal";
 
 const TYPE_LABEL: Record<string, string> = {
   mysql: "MySQL",
@@ -14,6 +15,7 @@ const TYPE_LABEL: Record<string, string> = {
 export function StatusBar() {
   const { t } = useTranslation("query");
   const [showSettings, setShowSettings] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const activeId = useConnectionStore((s) => s.activeId);
   const configs = useConnectionStore((s) => s.configs);
   const serverInfoMap = useConnectionStore((s) => s.serverInfoMap);
@@ -66,12 +68,20 @@ export function StatusBar() {
         <div className="flex-1" />
         <button
           className="p-0.5 rounded-md hover:bg-accent hover:text-foreground transition-colors"
+          onClick={() => setShowHelp(true)}
+          title={t("help:title", { ns: "help" })}
+        >
+          <CircleHelp size={14} />
+        </button>
+        <button
+          className="p-0.5 rounded-md hover:bg-accent hover:text-foreground transition-colors"
           onClick={() => setShowSettings(true)}
           title={t("settings:settings", { ns: "settings" })}
         >
           <Settings size={14} />
         </button>
       </div>
+      <HelpModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </>
   );
