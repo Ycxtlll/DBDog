@@ -44,8 +44,9 @@ export async function cancelQuery(
 export async function executeTransaction(
   connectionId: string,
   statements: string[],
+  assumeYes?: boolean,
 ): Promise<number> {
-  return invoke("execute_transaction", { connectionId, statements });
+  return invoke("execute_transaction", { connectionId, statements, assumeYes });
 }
 
 /** Backend-guarded script execution: split, pre-scan guards, run (MySQL). */

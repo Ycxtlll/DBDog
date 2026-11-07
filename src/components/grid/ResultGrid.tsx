@@ -571,6 +571,16 @@ export function ResultGrid({ tab }: ResultGridProps) {
     [handleFkJump, browse],
   );
 
+  // Cancel a pending delayed-modal when the grid goes away (tab close).
+  useEffect(() => {
+    return () => {
+      if (modalTimerRef.current) {
+        clearTimeout(modalTimerRef.current);
+        modalTimerRef.current = null;
+      }
+    };
+  }, []);
+
   /** Double-click → cancel the pending modal and edit the cell inline. */
   const handleCellDoubleClicked = useCallback(
     (event: CellDoubleClickedEvent) => {
@@ -707,6 +717,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
         current?.selectedDatabase,
         true,
       );
+      // Comment-only script: nothing ran, keep the current grid untouched.
+      if (script.statements.length === 0) return;
       if (script.finalIsQuery && script.finalResult) {
         useQueryStore.getState().setTabResult(tab.id, script.finalResult, true);
       } else {
@@ -818,9 +830,17 @@ export function ResultGrid({ tab }: ResultGridProps) {
     [activeConnectionId, tab.id, isQueryResult, result],
   );
 
-  /** Inline edit committed → stage an UPDATE via the Rust generator. */
+  /** Inline edit committed → stage an UPDATE via the Rust generator. On
+   *  any failure the cell is reverted in place — the grid must never keep
+   *  a value the database never received. */
   const handleInlineEdit = useCallback(
-    (event: { data: Record<string, unknown>; colDef: { field?: string }; oldValue: unknown; newValue: unknown; api?: { stopEditing?: () => void } }) => {
+    (event: {
+      data: Record<string, unknown>;
+      colDef: { field?: string };
+      oldValue: unknown;
+      newValue: unknown;
+      api?: { applyTransaction: (t: { update: Record<string, unknown>[] }) => void };
+    }) => {
       const colName = event.colDef.field ?? "";
       const row = event.data;
       if (!colName || !row) return;
@@ -828,13 +848,22 @@ export function ResultGrid({ tab }: ResultGridProps) {
       // menu ("暂存此新增行").
       if (row.__dbdogNew) return;
       if (event.newValue === event.oldValue) return;
-      if (!activeConnectionId || !tab.tableBrowse || !isQueryResult) return;
+      const revert = () => {
+        event.api?.applyTransaction({
+          update: [{ ...row, [colName]: event.oldValue }],
+        });
+      };
+      if (!activeConnectionId || !tab.tableBrowse || !isQueryResult) {
+        revert();
+        return;
+      }
       const { database, table } = tab.tableBrowse;
       void (async () => {
         try {
           const pkCols = await resolvePkColumns(database, table, tab.tableBrowse!.primaryKeyColumns);
           if (pkCols.length === 0) {
             showError(t("noPrimaryKey"));
+            revert();
             return;
           }
           // row_before: the current data carries the NEW value in place —
@@ -861,6 +890,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
           showSuccess(t("stagedToast"));
         } catch (err) {
           showError(parseTauriError(err));
+          revert();
         }
       })();
     },
@@ -1011,7 +1041,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
     if (!activeConnectionId || rollbacks.length === 0 || applyingChanges) return;
     setApplyingChanges(true);
     try {
-      await queryService.executeTransaction(activeConnectionId, [...rollbacks].reverse());
+      await queryService.executeTransaction(activeConnectionId, [...rollbacks].reverse(), true);
       for (const sql of rollbacks) {
         useQueryStore.getState().addHistory({ sql, status: "success", elapsedMs: 0 });
       }
@@ -1348,7 +1378,9 @@ export function ResultGrid({ tab }: ResultGridProps) {
             ) : (
               <MenuRow icon={Pin} label={t("pinRow")} onClick={() => { pinRow(contextMenu.rowData); setContextMenu(null); }} />
             )}
-            <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col, browse?.table); setContextMenu(null); }} />
+            {!contextMenu.rowData.__dbdogNew && (
+              <MenuRow icon={Eye} label={t("viewRowData")} onClick={() => { openRowDetail(contextMenu.rowData, contextMenu.col, browse?.table); setContextMenu(null); }} />
+            )}
             {browse && !contextMenu.rowData.__dbdogNew && (
               <MenuRow
                 icon={Trash2}
