@@ -125,5 +125,6 @@
   "copyRawValue": "复制原值",
   "newRow": "新增行",
   "stageNewRow": "暂存此新增行",
-  "discardNewRow": "放弃此行"
+  "discardNewRow": "放弃此行",
+  "gridEmptyWoof": "汪！没有匹配的行"
 }

@@ -27,5 +27,7 @@
   "collapseSidebar": "Collapse sidebar",
   "expandSidebar": "Expand sidebar",
   "selectConnection": "Pick a connection on the left",
-  "selectConnectionHint": "{{count}} saved connection(s) — click one on the left to connect"
+  "selectConnectionHint": "{{count}} saved connection(s) — click one on the left to connect",
+  "petTheDog": "Pet the dog",
+  "borderCollieOnDuty": "Border Collie on duty"
 }

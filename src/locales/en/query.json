@@ -125,5 +125,6 @@
   "copyRawValue": "Copy raw value",
   "newRow": "Add row",
   "stageNewRow": "Stage this new row",
-  "discardNewRow": "Discard this row"
+  "discardNewRow": "Discard this row",
+  "gridEmptyWoof": "Woof! No matching rows"
 }

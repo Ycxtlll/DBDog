@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellDoubleClickedEvent, CellKeyDownEvent, FilterChangedEvent, RowClassParams, SortChangedEvent } from "ag-grid-community";
-import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
+import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, PawPrint, Pin, Rows3, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -1101,7 +1101,15 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </span>
         <span>{queryResult.elapsedMs}ms</span>
       </div>
-      <div className={`flex-1 min-h-0 ${resolvedTheme === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
+      <div className={`relative flex-1 min-h-0 ${resolvedTheme === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
+        {isQueryResult && queryResult.rows.length === 0 && !tab.isExecuting && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-2">
+              <PawPrint size={30} className="text-muted-foreground/40" />
+              <span className="text-xs text-muted-foreground/70">{t("gridEmptyWoof")}</span>
+            </div>
+          </div>
+        )}
         <AgGridReact
           ref={gridRef}
           columnDefs={columnDefs}

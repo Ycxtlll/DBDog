@@ -13,7 +13,9 @@ export type SkinId =
   | "nord"
   | "dracula"
   | "catppuccin"
-  | "terminal";
+  | "terminal"
+  | "collieNight"
+  | "collieDay";
 
 export interface SkinDef {
   id: SkinId;
@@ -74,6 +76,20 @@ export const SKINS: SkinDef[] = [
     nameEn: "Terminal",
     dark: true,
     swatch: ["hsl(150 30% 6%)", "hsl(120 85% 50%)", "hsl(120 40% 18%)"],
+  },
+  {
+    id: "collieNight",
+    name: "边牧·夜巡",
+    nameEn: "Collie Night",
+    dark: true,
+    swatch: ["hsl(0 0% 7%)", "hsl(38 95% 55%)", "hsl(0 0% 18%)"],
+  },
+  {
+    id: "collieDay",
+    name: "边牧·白天",
+    nameEn: "Collie Day",
+    dark: false,
+    swatch: ["hsl(0 0% 96%)", "hsl(30 85% 38%)", "hsl(0 0% 88%)"],
   },
 ];
 
