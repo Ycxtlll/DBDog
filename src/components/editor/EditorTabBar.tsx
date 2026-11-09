@@ -54,19 +54,29 @@ export function EditorTabBar({
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className={`group flex items-center gap-1 px-3 py-1.5 text-sm border-r border-border cursor-pointer select-none min-w-[100px] max-w-[200px] ${
+            className={`group relative flex items-center gap-1 px-3 py-1.5 text-sm border-r border-border cursor-pointer select-none min-w-[100px] max-w-[200px] transition-colors ${
               tab.id === activeTabId
-                ? "bg-background text-foreground"
-                : "text-muted-foreground hover:bg-accent/50"
+                ? "bg-background text-foreground font-medium"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             }`}
             onClick={() => setActiveTab(tab.id)}
+            onAuxClick={(e) => {
+              // Middle-click closes the tab (browser convention).
+              if (e.button === 1) {
+                e.preventDefault();
+                closeTab(tab.id);
+              }
+            }}
           >
+            {tab.id === activeTabId && (
+              <span className="absolute inset-x-0 top-0 h-0.5 bg-primary rounded-t" aria-hidden />
+            )}
             <span className="truncate flex-1">{tab.name || t("newQuery")}</span>
             {tab.isExecuting && (
               <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
             )}
             <button
-              className="p-0.5 rounded-md hover:bg-accent opacity-0 group-hover:opacity-100"
+              className="p-0.5 rounded-md hover:bg-accent hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation();
                 closeTab(tab.id);
@@ -76,7 +86,11 @@ export function EditorTabBar({
             </button>
           </div>
         ))}
-        <button className="p-1.5 hover:bg-accent" onClick={newTab}>
+        <button
+          className="p-1.5 rounded-md hover:bg-accent hover:text-foreground text-muted-foreground transition-colors"
+          onClick={newTab}
+          title={t("newQuery")}
+        >
           <Plus size={14} />
         </button>
       </div>

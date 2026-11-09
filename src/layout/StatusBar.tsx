@@ -32,16 +32,36 @@ export function StatusBar() {
     return config ? (TYPE_LABEL[config.type] ?? config.type) : "";
   }, [activeId, configs]);
 
+  const serverLabel = useMemo(() => {
+    if (!activeId) return "";
+    const config = configs.find((c) => c.id === activeId);
+    return config ? `${typeLabel} · ${config.name}` : "";
+  }, [activeId, configs, typeLabel]);
+
   return (
     <>
-      <div className="h-6 flex items-center px-3 text-xs border-t border-border bg-muted text-muted-foreground select-none gap-4">
+      <div className="h-6 flex items-center px-3 text-xs border-t border-border bg-muted text-muted-foreground select-none gap-3">
       {serverInfo && status === "connected" ? (
         <>
-          <span>{typeLabel} {serverInfo.version}</span>
-          <span>{serverInfo.connectionId}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            <span className="font-medium text-foreground/80">{serverLabel}</span>
+          </span>
+          {serverInfo.version && (
+            <span className="px-1.5 py-0.5 rounded-md border border-border bg-background/60">
+              {serverInfo.version}
+            </span>
+          )}
+          <span className="hidden md:inline">{serverInfo.connectionId}</span>
         </>
       ) : (
-        <span>{t("disconnected")}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+          {t("disconnected")}
+        </span>
       )}
       {activeTab?.result && (
         <>

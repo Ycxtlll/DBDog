@@ -242,14 +242,14 @@ function ConnectionRow({
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <span
-          className={`w-2 h-2 rounded-full ${
+          className={`w-2 h-2 rounded-full transition-colors ${
             status === "connected"
-              ? "bg-green-500"
+              ? "bg-emerald-500"
               : status === "connecting"
-                ? "bg-yellow-500"
+                ? "bg-yellow-500 animate-pulse"
                 : status === "error"
                   ? "bg-red-500"
-                  : "bg-gray-400"
+                  : "bg-muted-foreground/40"
           }`}
         />
         {status === "connected" ? (
