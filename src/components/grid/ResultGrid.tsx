@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellDoubleClickedEvent, CellKeyDownEvent, FilterChangedEvent, RowClassParams, SortChangedEvent } from "ag-grid-community";
-import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, PawPrint, Pin, Rows3, Trash2, X } from "lucide-react";
+import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -328,6 +328,25 @@ export function ResultGrid({ tab }: ResultGridProps) {
   }, [result, browse, activeConnectionId, isQueryResult, tab.id]);
 
   // All hooks must be called before any conditional returns (React Rules of Hooks)
+  // Single empty-state: AG Grid's own overlay carries the paw + woof text
+  // (the previous custom absolute layer stacked with this one).
+  const noRowsOverlay = useMemo(() => {
+    const paw =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="11" cy="4" r="2"/>' +
+      '<circle cx="18" cy="8" r="2"/>' +
+      '<circle cx="20" cy="16" r="2"/>' +
+      '<path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/>' +
+      '</svg>';
+    return (
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ag-header-icon-color, var(--muted-foreground));opacity:.65">' +
+      paw +
+      '<div style="font-size:12px">' +
+      t("gridEmptyWoof") +
+      "</div></div>"
+    );
+  }, [t]);
+
   const columnDefs: ColDef[] = useMemo(() => {
     if (!isQueryResult || !result) return [];
     const qr = result as QueryResult;
@@ -1232,14 +1251,6 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </div>
       )}
       <div className={`relative flex-1 min-h-0 ${resolvedTheme === "dark" ? "ag-theme-quartz-dark" : "ag-theme-quartz"}`}>
-        {isQueryResult && queryResult.rows.length === 0 && !tab.isExecuting && (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <PawPrint size={30} className="text-muted-foreground/40" />
-              <span className="text-xs text-muted-foreground/70">{t("gridEmptyWoof")}</span>
-            </div>
-          </div>
-        )}
         <AgGridReact
           ref={gridRef}
           columnDefs={columnDefs}
@@ -1267,7 +1278,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
               }
             }
           }}
-          overlayNoRowsTemplate=" "
+          overlayNoRowsTemplate={noRowsOverlay}
           overlayLoadingTemplate=" "
           onFilterChanged={handleFilterChanged}
           onSortChanged={handleSortChanged}
