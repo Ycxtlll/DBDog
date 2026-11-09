@@ -1,9 +1,10 @@
 import { useLayoutStore } from "../stores/layoutStore";
 import { useUiStore } from "../stores/uiStore";
 import { useQueryStore } from "../stores/queryStore";
+import { useLunaStore } from "../stores/lunaStore";
 import { showSuccess } from "../stores/toastStore";
-import { Dog, PawPrint } from "lucide-react";
-import { useRef, useState } from "react";
+import { BookOpen, Dog, PawPrint } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConnectionPanel } from "../components/sidebar/ConnectionPanel";
 import { SchemaTreePanel } from "../components/sidebar/SchemaTreePanel";
@@ -29,25 +30,48 @@ export function Sidebar() {
 }
 
 /** The resident Border Collie. Pet it for moral support; it has opinions
- *  about your skin choice after enough pets. */
+ *  about your skin choice after enough pets, and clicking toggles her
+ *  work diary — a session tally of what you and she did together. */
 function DogFooter() {
   const { t, i18n } = useTranslation("common");
   const setTheme = useUiStore((s) => s.setTheme);
   const petsRef = useRef(0);
   const [mood, setMood] = useState<string | null>(null);
+  const [showDiary, setShowDiary] = useState(false);
+  const [chewingLong, setChewingLong] = useState(false);
+  const bark = useLunaStore((s) => s.bark);
+  const diary = useLunaStore((s) => s.diary);
   const activeTab = useQueryStore((s) =>
     s.tabs.find((tab) => tab.id === s.activeTabId),
   );
+  const zh = i18n.language === "zh";
+
+  // Long query: swap the chase line after ~4s of continuous execution —
+  // a big table fetch deserves a different attitude.
+  const executing = !!activeTab?.isExecuting;
+  useEffect(() => {
+    if (!executing) {
+      setChewingLong(false);
+      return;
+    }
+    const timer = setTimeout(() => setChewingLong(true), 4000);
+    return () => clearTimeout(timer);
+  }, [executing]);
 
   // The dog mirrors real app state — the footer doubles as a status lamp.
-  // Petting overrides it for a moment (mood wins while set).
-  const zh = i18n.language === "zh";
+  // Petting and her speech channel override it for a moment.
   const status = (() => {
     if (!activeTab) return { text: t("borderCollieOnDuty"), working: false };
     if (activeTab.isExecuting)
-      return { text: zh ? "追球中… 🎾" : "Chasing the ball… 🎾", working: true };
-    if (activeTab.error)
-      return { text: zh ? "呜…出错了（看状态栏）" : "Whimper… check the status bar", working: false };
+      return chewingLong
+        ? { text: zh ? "这块骨头有点大，还在啃… 🦴" : "This bone is huge — still chewing… 🦴", working: true }
+        : { text: zh ? "追球中… 🎾" : "Chasing the ball… 🎾", working: true };
+    if (activeTab.error) {
+      const lines = zh
+        ? ["呜…出错了（看状态栏）", "呜…这根骨头咬不动（看状态栏）"]
+        : ["Whimper… check the status bar", "Whimper… this bone won't chew (status bar)"];
+      return { text: lines[activeTab.error.length % 2], working: false };
+    }
     const pending = activeTab.pendingChanges?.length ?? 0;
     if (pending > 0)
       return {
@@ -68,6 +92,19 @@ function DogFooter() {
     return { text: t("borderCollieOnDuty"), working: false };
   })();
 
+  const diaryText = (() => {
+    const { queries, rows, edits, blocked } = diary;
+    if (queries + edits + blocked === 0)
+      return zh ? "今天还没开工" : "No work logged yet today";
+    const fmtRows =
+      rows >= 1_000_000 ? `${(rows / 1_000_000).toFixed(1)}M`
+      : rows >= 1000 ? `${(rows / 1000).toFixed(1)}k`
+      : String(rows);
+    return zh
+      ? `日志：${queries} 查 · ${fmtRows} 行 · 改 ${edits} · 拦 ${blocked}`
+      : `Log: ${queries} queries · ${fmtRows} rows · ${edits} edits · ${blocked} blocked`;
+  })();
+
   const pet = () => {
     petsRef.current += 1;
     const n = petsRef.current;
@@ -80,14 +117,18 @@ function DogFooter() {
       showSuccess(zh ? "被摸爽了，给你换成奶油橙～" : "That hit the spot — Puppy skin on me~");
     }
     setTimeout(() => setMood(null), 2200);
+    setShowDiary((d) => !d);
   };
+
+  const line = bark ?? mood ?? (showDiary ? diaryText : status.text);
+  const working = !bark && !mood && !showDiary && status.working;
 
   return (
     <div className="border-t border-border px-3 py-2">
       <button
         onClick={pet}
         className="w-full flex items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-accent/40 transition-colors"
-        title={t("petTheDog")}
+        title={zh ? "摸摸露娜；再点一下切换工作日志" : "Pet Luna; click again to toggle her work log"}
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
           <Dog size={15} className="text-muted-foreground" />
@@ -97,12 +138,18 @@ function DogFooter() {
             {zh ? "露娜 Luna" : "Luna"}
           </span>
           <span className={`block text-[10px] leading-tight truncate ${
-            activeTab?.isExecuting && !mood ? "text-primary" : "text-muted-foreground"
+            working ? "text-primary" : "text-muted-foreground"
           }`}>
-            {mood ?? status.text}
+            {line}
           </span>
         </span>
-        {mood && <PawPrint size={12} className="text-primary shrink-0" />}
+        {bark ? (
+          <PawPrint size={12} className="text-primary shrink-0" />
+        ) : showDiary ? (
+          <BookOpen size={12} className="text-muted-foreground shrink-0" />
+        ) : mood ? (
+          <PawPrint size={12} className="text-primary shrink-0" />
+        ) : null}
       </button>
     </div>
   );

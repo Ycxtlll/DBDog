@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
-import { Dog, Github } from "lucide-react";
+import { Dog, Github, PawPrint } from "lucide-react";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 
@@ -108,6 +108,10 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
             <div className="flex items-start gap-1.5">
               <Dog size={13} className="mt-0.5 shrink-0 text-muted-foreground" />
               <span>{t("eggDog")}</span>
+            </div>
+            <div className="flex items-start gap-1.5 text-muted-foreground/80">
+              <PawPrint size={13} className="mt-0.5 shrink-0" />
+              <span>{t("lunaProfile")}</span>
             </div>
           </Section>
 

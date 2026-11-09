@@ -16,6 +16,8 @@ import { Checkbox } from "../ui/Checkbox";
 import * as queryService from "../../services/queryService";
 import * as relationshipService from "../../services/relationshipService";
 import { useQueryStore } from "../../stores/queryStore";
+import { useLunaStore } from "../../stores/lunaStore";
+import i18n from "../../lib/i18n";
 import { showSuccess, showError } from "../../stores/toastStore";
 import { parseTauriError } from "../../lib/error";
 import { confirmDialog } from "../../lib/confirm";
@@ -1001,6 +1003,14 @@ export function ResultGrid({ tab }: ResultGridProps) {
         });
       }
       showSuccess(t("changesetApplied", { count: changes.length }));
+      useLunaStore.getState().countEdits(changes.length);
+      useLunaStore
+        .getState()
+        .sayBark(
+          i18n.language === "zh"
+            ? "都改好了，骨头还是热的 🦴"
+            : "All applied — the bone is still warm 🦴",
+        );
       useQueryStore.getState().setLastAppliedRollbacks(tab.id, changes.map((c) => c.rollbackSql));
       useQueryStore.getState().clearPendingChanges(tab.id);
       setChangesetOpen(false);

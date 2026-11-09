@@ -14,6 +14,7 @@ import { parseTauriError, parseTauriErrorCode } from "../lib/error";
 import { confirmDialog } from "../lib/confirm";
 import i18n from "../lib/i18n";
 import { showError } from "./toastStore";
+import { useLunaStore } from "./lunaStore";
 
 /** Default rows per fetch for table browsing. */
 const BROWSE_PAGE_SIZE = 50;
@@ -203,6 +204,14 @@ export const useQueryStore = create<QueryState>((set, get) => ({
           typeof err === "object" && err !== null
             ? String((err as Record<string, unknown>).message ?? "DML")
             : "DML";
+        useLunaStore.getState().countBlocked();
+        useLunaStore
+          .getState()
+          .sayBark(
+            i18n.language === "zh"
+              ? `咬住一个没拴绳的 ${kind} 🐾`
+              : `Grabbed an unleashed ${kind} 🐾`,
+          );
         const ok = await confirmDialog(
           i18n.t("query:confirmUnscopedDml", { kind }),
           i18n.t("query:dangerousOperation"),
@@ -262,6 +271,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         elapsedMs,
         rowsCount: script.totalRows,
       });
+      useLunaStore.getState().countQuery(script.totalRows);
 
       // Editor-side DDL: let the completion cache, schema tree and structure
       // drawer know the schema changed (same event the visual designer uses).
@@ -370,6 +380,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
     try {
       const result = await queryService.executeQuery(connectionId, sql, size, browse.database);
+      useLunaStore.getState().countQuery(result.rows.length);
       let totalRows = browse.totalRows;
       // Count not arrived yet (or failed): a short page means we hit the end.
       if (totalRows === undefined && result.rows.length < size) {

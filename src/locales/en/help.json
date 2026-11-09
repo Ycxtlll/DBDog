@@ -14,8 +14,9 @@
   "gridChangeset": "The \"N changes pending\" bar: review every SQL, apply all as one transaction with full rollback on failure",
   "gridNewRow": "\"Add row\" in the pager: fill the amber placeholder inline, right-click to stage the INSERT",
   "skins": "Skins",
-  "skinsHint": "Settings → theme cards: Border Collie black/white, Puppy orange, Sakura, Nord, Dracula, Terminal green and more (9 total)",
+  "skinsHint": "Settings → theme cards: Collie Night / Collie Day, Puppy, Sakura, Nord, Catppuccin, Terminal green (7 total)",
   "eggs": "Easter eggs",
-  "eggDog": "A Border Collie named Luna sits at the bottom of the sidebar — pet her plenty, something nice happens",
+  "eggDog": "A Border Collie named Luna sits at the bottom of the sidebar — pet her plenty for a surprise, and click again to flip her work log",
+  "lunaProfile": "Luna · Border Collie (panda pattern) · Duty: data herder · Loves: balls, bones, clean WHERE clauses",
   "about": "About"
 }
