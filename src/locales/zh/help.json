@@ -8,7 +8,7 @@
   "scCopyCell": "复制聚焦单元格",
   "scUndoChangeset": "撤销上次变更集应用",
   "grid": "网格",
-  "gridInlineEdit": "双击单元格直接编辑，Enter 提交（改动先暂存，审阅后单事务应用）",
+  "gridInlineEdit": "点击单元格打开行编辑弹窗（Enter 保存、NULL/空串分离）；新增行的琥珀色占位行双击直接填写",
   "gridContextMenu": "右键单元格：复制（值 / JSON / 整行 / INSERT）、快捷筛选、删除行",
   "gridFkJump": "关联列的胶囊按钮可跳转到父表对应行，在关系图里连续行走",
   "gridChangeset": "底部\"N 处修改待应用\"：审阅每条 SQL，全部应用为单事务，失败整体回滚",

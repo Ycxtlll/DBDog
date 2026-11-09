@@ -8,7 +8,7 @@
   "scCopyCell": "Copy focused cell",
   "scUndoChangeset": "Undo last changeset apply",
   "grid": "Grid",
-  "gridInlineEdit": "Double-click a cell to edit inline; Enter commits (staged first, applied as one transaction)",
+  "gridInlineEdit": "Click a cell to open the row editor (Enter saves, NULL vs empty string are distinct); amber placeholder rows from \"Add row\" fill by double-click",
   "gridContextMenu": "Right-click a cell: copy (value / JSON / row / INSERT), quick filters, delete row",
   "gridFkJump": "The pill button on linked columns jumps to the parent row — walk the relationship graph",
   "gridChangeset": "The \"N changes pending\" bar: review every SQL, apply all as one transaction with full rollback on failure",

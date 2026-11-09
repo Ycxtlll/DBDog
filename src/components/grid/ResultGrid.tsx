@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellDoubleClickedEvent, CellKeyDownEvent, FilterChangedEvent, RowClassParams, SortChangedEvent } from "ag-grid-community";
+import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, RowClassParams, SortChangedEvent } from "ag-grid-community";
 import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
@@ -65,10 +65,6 @@ export function ResultGrid({ tab }: ResultGridProps) {
   const [modalRels, setModalRels] = useState<TableRelationship[]>([]);
   /** Column whose relationship editor is open (manual link management). */
   const [relModalCol, setRelModalCol] = useState<string | null>(null);
-  // Single-click opens the row modal AFTER a short delay so a double-click
-  // (inline edit) can cancel it; the FK button bypasses the delay.
-  const modalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingModalCellRef = useRef<{ row: Record<string, unknown>; col: string; value: unknown } | null>(null);
   // Rows being filled for a staged INSERT (grid editing loop).
   const [pendingNewRows, setPendingNewRows] = useState<Record<string, unknown>[]>([]);
   /** Live AG Grid filter model → rendered as removable chips above the grid. */
@@ -378,7 +374,10 @@ export function ResultGrid({ tab }: ResultGridProps) {
         // keystroke.
         filterParams: { buttons: ["apply", "reset"] },
         sortable: true,
-        editable: !!tab.tableBrowse,
+        // Only new-row placeholders are editable (double-click fills them);
+        // real rows edit via the row modal — single click opens instantly.
+        editable: (params: { data?: Record<string, unknown> }) =>
+          !!params.data?.__dbdogNew,
         valueFormatter: (params) => {
           if (params.value === null || params.value === undefined) return "NULL";
           if (typeof params.value === "boolean") return params.value ? "true" : "false";
@@ -582,10 +581,6 @@ export function ResultGrid({ tab }: ResultGridProps) {
       const mouse = event.event as MouseEvent | undefined;
       const fkEl = (mouse?.target as HTMLElement | null | undefined)?.closest?.("[data-fk-jump]");
       if (fkEl) {
-        if (modalTimerRef.current) {
-          clearTimeout(modalTimerRef.current);
-          modalTimerRef.current = null;
-        }
         const rel = fkByColumnRef.current.get(col);
         if (rel && event.value !== null && event.value !== undefined) {
           void handleFkJump(rel, event.value);
@@ -593,46 +588,15 @@ export function ResultGrid({ tab }: ResultGridProps) {
         return;
       }
       const row = (event.data as Record<string, unknown>) ?? {};
-      // Delay the modal so a double-click (inline edit) can cancel it —
-      // the FK jump above stays immediate.
-      pendingModalCellRef.current = { row, col, value: event.value };
-      if (modalTimerRef.current) clearTimeout(modalTimerRef.current);
-      modalTimerRef.current = setTimeout(() => {
-        modalTimerRef.current = null;
-        const cell = pendingModalCellRef.current;
-        if (!cell || cell.row.__dbdogNew) return;
-        setDetailCell({
-          columnName: cell.col,
-          value: cell.value,
-          rowData: cell.row,
-          tableName: browse?.table,
-        });
-      }, 260);
+      if (row.__dbdogNew) return; // placeholders fill by double-click only
+      setDetailCell({
+        columnName: col,
+        value: event.value,
+        rowData: row,
+        tableName: browse?.table,
+      });
     },
     [handleFkJump, browse],
-  );
-
-  // Cancel a pending delayed-modal when the grid goes away (tab close).
-  useEffect(() => {
-    return () => {
-      if (modalTimerRef.current) {
-        clearTimeout(modalTimerRef.current);
-        modalTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  /** Double-click → cancel the pending modal and edit the cell inline. */
-  const handleCellDoubleClicked = useCallback(
-    (event: CellDoubleClickedEvent) => {
-      if (modalTimerRef.current) {
-        clearTimeout(modalTimerRef.current);
-        modalTimerRef.current = null;
-      }
-      if (!tab.tableBrowse || !event.api || event.rowIndex == null || !event.colDef?.field) return;
-      event.api.startEditingCell({ rowIndex: event.rowIndex, colKey: event.colDef.field });
-    },
-    [tab.tableBrowse],
   );
 
   /** Append an empty placeholder row for a staged INSERT. */
@@ -892,73 +856,6 @@ export function ResultGrid({ tab }: ResultGridProps) {
       return pkCols;
     },
     [activeConnectionId, tab.id, isQueryResult, result],
-  );
-
-  /** Inline edit committed → stage an UPDATE via the Rust generator. On
-   *  any failure the cell is reverted in place — the grid must never keep
-   *  a value the database never received. */
-  const handleInlineEdit = useCallback(
-    (event: {
-      data: Record<string, unknown>;
-      colDef: { field?: string };
-      oldValue: unknown;
-      newValue: unknown;
-      api?: { applyTransaction: (t: { update: Record<string, unknown>[] }) => void };
-    }) => {
-      const colName = event.colDef.field ?? "";
-      const row = event.data;
-      if (!colName || !row) return;
-      // New-row placeholders accumulate locally; staged via the row context
-      // menu ("暂存此新增行").
-      if (row.__dbdogNew) return;
-      if (event.newValue === event.oldValue) return;
-      const revert = () => {
-        event.api?.applyTransaction({
-          update: [{ ...row, [colName]: event.oldValue }],
-        });
-      };
-      if (!activeConnectionId || !tab.tableBrowse || !isQueryResult) {
-        revert();
-        return;
-      }
-      const { database, table } = tab.tableBrowse;
-      void (async () => {
-        try {
-          const pkCols = await resolvePkColumns(database, table, tab.tableBrowse!.primaryKeyColumns);
-          if (pkCols.length === 0) {
-            showError(t("noPrimaryKey"));
-            revert();
-            return;
-          }
-          // row_before: the current data carries the NEW value in place —
-          // put the old value back for the WHERE clause (matters when
-          // editing a primary-key column).
-          const rowBefore: Record<string, unknown> = { ...row, [colName]: event.oldValue };
-          const { sql, rollbackSql } = await queryService.changesetPrepare({
-            database,
-            table,
-            pkColumns: pkCols,
-            kind: "update",
-            row: rowBefore,
-            column: colName,
-            newValue: event.newValue === undefined ? null : event.newValue,
-          });
-          useQueryStore.getState().stageChange(tab.id, {
-            id: generateId(),
-            kind: "update",
-            sql,
-            rollbackSql,
-            table,
-            database,
-          });
-          showSuccess(t("stagedToast"));
-        } catch (err) {
-          showError(parseTauriError(err));
-          revert();
-        }
-      })();
-    },
-    [activeConnectionId, tab.id, tab.tableBrowse, isQueryResult, t, resolvePkColumns],
   );
 
   const handleSave = useCallback(
@@ -1287,8 +1184,6 @@ export function ResultGrid({ tab }: ResultGridProps) {
           onSelectionChanged={(e: { api: { getSelectedRows: () => Record<string, unknown>[] } }) =>
             setSelectedRows(e.api.getSelectedRows())
           }
-          onCellDoubleClicked={handleCellDoubleClicked}
-          onCellValueChanged={handleInlineEdit}
           rowClassRules={{
             "dbdog-new-row": (params: RowClassParams) => !!params.data?.__dbdogNew,
           }}
