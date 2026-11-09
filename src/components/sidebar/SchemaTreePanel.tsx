@@ -266,6 +266,11 @@ export function SchemaTreePanel() {
       )}
 
       <div className="flex-1 overflow-hidden">
+        {search.trim() && filteredRoots.length === 0 && (
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+            {t("noMatch")}
+          </div>
+        )}
         <VirtualTree
           roots={filteredRoots}
           expandedKeys={expandedKeys}

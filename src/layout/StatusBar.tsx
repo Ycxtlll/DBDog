@@ -63,16 +63,7 @@ export function StatusBar() {
           {t("disconnected")}
         </span>
       )}
-      {activeTab?.result && (
-        <>
-          <span>
-            {activeTab.isQueryResult
-              ? `${activeTab.tableBrowse?.totalRows ?? (activeTab.result as { totalCount: number }).totalCount ?? 0} ${t("rows")}`
-              : `${(activeTab.result as { rowsAffected: number }).rowsAffected ?? 0} ${t("rowsAffected")}`}
-          </span>
-          <span>{activeTab.result.elapsedMs}ms</span>
-        </>
-      )}
+      {/* 行数与耗时由网格信息条展示（同屏重复），这里只保留执行/异常状态 */}
       {activeTab?.isExecuting && (
         <span className="text-primary animate-pulse">{t("executing")}</span>
       )}

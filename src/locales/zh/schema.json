@@ -50,5 +50,6 @@
   "errAutoIncPk": "自增字段必须为主键：{{name}}",
   "errIdxNameRequired": "索引名不能为空",
   "errIdxDuplicate": "索引名重复：{{name}}",
-  "errIdxColumnsRequired": "索引字段不能为空：{{name}}"
+  "errIdxColumnsRequired": "索引字段不能为空：{{name}}",
+  "noMatch": "无匹配结果"
 }

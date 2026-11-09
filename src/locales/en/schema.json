@@ -50,5 +50,6 @@
   "errAutoIncPk": "Auto-increment column must be the primary key: {{name}}",
   "errIdxNameRequired": "Index name cannot be empty",
   "errIdxDuplicate": "Duplicate index name: {{name}}",
-  "errIdxColumnsRequired": "Index columns cannot be empty: {{name}}"
+  "errIdxColumnsRequired": "Index columns cannot be empty: {{name}}",
+  "noMatch": "No matches"
 }
