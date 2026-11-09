@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
     pub columns: Vec<ColumnMeta>,
@@ -19,7 +19,7 @@ pub struct UpdateResult {
     pub elapsed_ms: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ColumnMeta {
     pub name: String,

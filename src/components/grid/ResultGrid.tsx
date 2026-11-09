@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams, ITooltipParams, CellContextMenuEvent, CellKeyDownEvent, FilterChangedEvent, RowClassParams, SortChangedEvent } from "ag-grid-community";
-import { Braces, Check, Ban, CircleDot, CircleSlash, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
+import { Braces, Check, Ban, CircleDot, CircleSlash, Columns3, CornerDownRight, Copy, Database, Eye, FileJson, Filter, FilterX, FilePlus2, GitFork, Loader2, Pin, Rows3, Trash2, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
@@ -12,6 +12,7 @@ import { FkJumpButton } from "./FkJumpButton";
 import { RelationshipModal } from "./RelationshipModal";
 import { RowDiffModal } from "./RowDiffModal";
 import { BrowsePagination } from "./BrowsePagination";
+import { Checkbox } from "../ui/Checkbox";
 import * as queryService from "../../services/queryService";
 import * as relationshipService from "../../services/relationshipService";
 import { useQueryStore } from "../../stores/queryStore";
@@ -25,6 +26,12 @@ import {
   buildInsertStatements,
   formatSqlValue,
 } from "../../lib/sql";
+import {
+  loadGridState,
+  saveGridState,
+  clearGridState,
+  reconcileGridState,
+} from "../../lib/gridState";
 
 interface DetailCellInfo {
   columnName: string;
@@ -754,6 +761,17 @@ export function ResultGrid({ tab }: ResultGridProps) {
           false,
         );
       }
+      // A refreshed script rebuilds its result-set tabs too (display falls
+      // back to the last set — re-running the whole script re-ordered nothing).
+      if (script.queryResults.length > 1) {
+        useQueryStore.getState().setTabResultSets(
+          tab.id,
+          script.queryResults,
+          script.finalIsQuery ? script.queryResults.length - 1 : -1,
+        );
+      } else {
+        useQueryStore.getState().setTabResultSets(tab.id, []);
+      }
     } catch {
       // Grid refresh failed — the edit itself already succeeded.
     }
@@ -1031,21 +1049,132 @@ export function ResultGrid({ tab }: ResultGridProps) {
     [browse],
   );
 
+  // ── Per-table column layout memory + visibility chooser ─────────────────
+  // Widths/order/visibility persist per connection+database+table (browse
+  // mode only) so a wide table opens the way the user left it.
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
+  const gridStateTimerRef = useRef<number | null>(null);
+
+  const scheduleGridStateSave = useCallback(() => {
+    if (!activeConnectionId || !browse) return;
+    if (gridStateTimerRef.current !== null) window.clearTimeout(gridStateTimerRef.current);
+    gridStateTimerRef.current = window.setTimeout(() => {
+      gridStateTimerRef.current = null;
+      const state = gridRef.current?.api?.getColumnState();
+      if (state && activeConnectionId && browse) {
+        saveGridState(activeConnectionId, browse.database, browse.table, state);
+      }
+    }, 400);
+  }, [activeConnectionId, browse]);
+
+  useEffect(
+    () => () => {
+      if (gridStateTimerRef.current !== null) window.clearTimeout(gridStateTimerRef.current);
+    },
+    [],
+  );
+
+  // Apply the remembered layout whenever the grid's columns (re)build —
+  // guarded to browse mode; custom SQL layouts are one-off.
+  const applySavedGridState = useCallback(() => {
+    if (!activeConnectionId || !browse) return;
+    const api = gridRef.current?.api;
+    if (!api) return;
+    const saved = loadGridState(activeConnectionId, browse.database, browse.table);
+    if (!saved) return;
+    const existing = api.getColumns()?.map((c) => c.getColId()) ?? [];
+    const state = reconcileGridState(saved, existing);
+    if (state) api.applyColumnState({ state, applyOrder: true });
+  }, [activeConnectionId, browse]);
+
+  // Chooser opens → read live visibility from the grid (skips the selection
+  // column — it is chrome, not data).
+  useEffect(() => {
+    if (!chooserOpen) return;
+    const api = gridRef.current?.api;
+    if (!api) return;
+    const hidden = new Set<string>();
+    for (const c of api.getColumns() ?? []) {
+      const id = c.getColId();
+      if (id !== "__select" && !c.isVisible()) hidden.add(id);
+    }
+    setHiddenCols(hidden);
+  }, [chooserOpen]);
+
+  const dataColumnIds = useCallback((): string[] => {
+    const api = gridRef.current?.api;
+    if (!api) return [];
+    return (api.getColumns() ?? [])
+      .map((c) => c.getColId())
+      .filter((id) => id !== "__select");
+  }, []);
+
+  const toggleColumn = useCallback(
+    (col: string) => {
+      const api = gridRef.current?.api;
+      const column = api?.getColumn(col);
+      if (!api || !column) return;
+      const nextVisible = !column.isVisible();
+      api.setColumnVisible(col, nextVisible);
+      setHiddenCols((prev) => {
+        const next = new Set(prev);
+        if (nextVisible) next.delete(col);
+        else next.add(col);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const showAllColumns = useCallback(() => {
+    const api = gridRef.current?.api;
+    if (!api) return;
+    for (const col of dataColumnIds()) api.setColumnVisible(col, true);
+    setHiddenCols(new Set());
+  }, [dataColumnIds]);
+
+  const resetColumnLayout = useCallback(() => {
+    if (!activeConnectionId || !browse) return;
+    clearGridState(activeConnectionId, browse.database, browse.table);
+    gridRef.current?.api?.resetColumnState();
+    setHiddenCols(new Set());
+    setChooserOpen(false);
+  }, [activeConnectionId, browse]);
+
   if (!result) return null;
 
   if (!isQueryResult) {
     const updateResult = result as UpdateResult;
+    const sets = tab.resultSets;
     return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-        <div className="text-lg font-medium">
-          {updateResult.rowsAffected} {t("rowsAffected")}
-        </div>
-        {updateResult.lastInsertId !== undefined && (
-          <div className="text-sm">
-            {t("lastInsertId")}: {updateResult.lastInsertId}
+      <div className="h-full flex flex-col">
+        {/* A script like `SELECT …; UPDATE …` still has its SELECT result
+            sets reachable — the affected-rows panel is not a dead end. */}
+        {sets && sets.length > 0 && (
+          <div className="flex items-center gap-1 px-2 py-1 text-xs border-b border-border bg-muted overflow-x-auto">
+            {sets.map((rs, i) => (
+              <button
+                key={i}
+                onClick={() => useQueryStore.getState().setActiveResultSet(tab.id, i)}
+                className="px-2 py-0.5 rounded-md whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              >
+                {t("resultSet", { n: i + 1 })} · {rs.rows.length}
+              </button>
+            ))}
           </div>
         )}
-        <div className="text-xs">{updateResult.elapsedMs}ms</div>
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+          <div className="text-lg font-medium">
+            {updateResult.rowsAffected} {t("rowsAffected")}
+          </div>
+          {updateResult.lastInsertId !== undefined && (
+            <div className="text-sm">
+              {t("lastInsertId")}: {updateResult.lastInsertId}
+            </div>
+          )}
+          <div className="text-xs">{updateResult.elapsedMs}ms</div>
+        </div>
       </div>
     );
   }
@@ -1090,8 +1219,72 @@ export function ResultGrid({ tab }: ResultGridProps) {
                 {queryResult.truncated && `(${t("truncated")})`}
               </>}
         </span>
-        <span>{queryResult.elapsedMs}ms</span>
+        <div className="flex items-center gap-2">
+          <span>{queryResult.elapsedMs}ms</span>
+          {/* Column visibility chooser — wide tables pick the columns they care about */}
+          {browse && (
+            <div className="relative">
+              <button
+                onClick={() => setChooserOpen((o) => !o)}
+                title={t("columns")}
+                className={`p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors ${chooserOpen ? "bg-accent text-foreground" : ""}`}
+              >
+                <Columns3 size={12} />
+              </button>
+              {chooserOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onMouseDown={() => setChooserOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] max-h-72 overflow-y-auto bg-card border border-border rounded-lg shadow-xl py-1 animate-menu-in">
+                    <div className="flex items-center justify-between px-2 py-1 border-b border-border">
+                      <span className="text-[11px] text-muted-foreground">{t("columns")}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={showAllColumns}
+                          className="text-[11px] text-primary hover:underline"
+                        >
+                          {t("showAllColumns")}
+                        </button>
+                        <button
+                          onClick={resetColumnLayout}
+                          className="text-[11px] text-muted-foreground hover:text-foreground"
+                          title={t("resetLayout")}
+                        >
+                          {t("resetLayout")}
+                        </button>
+                      </div>
+                    </div>
+                    {dataColumnIds().map((col) => (
+                      <div key={col} className="px-2 py-0.5">
+                        <Checkbox checked={!hiddenCols.has(col)} onChange={() => toggleColumn(col)}>
+                          <span className="text-xs font-mono">{col}</span>
+                        </Checkbox>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+      {/* Multi-SELECT scripts: switchable result-set tabs (custom SQL only) */}
+      {!browse && tab.resultSets && tab.resultSets.length > 1 && (
+        <div className="flex items-center gap-1 px-2 py-1 text-xs border-b border-border bg-muted overflow-x-auto">
+          {tab.resultSets.map((rs, i) => (
+            <button
+              key={i}
+              onClick={() => useQueryStore.getState().setActiveResultSet(tab.id, i)}
+              className={`px-2 py-0.5 rounded-md whitespace-nowrap transition-colors ${
+                (tab.activeResultSet ?? -1) === i
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              }`}
+            >
+              {t("resultSet", { n: i + 1 })} · {rs.rows.length}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Active filter chips — every condition visible, one click to drop */}
       {Object.keys(filterModel).length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap px-3 py-1 text-xs border-b border-border bg-muted overflow-x-auto">
@@ -1160,6 +1353,13 @@ export function ResultGrid({ tab }: ResultGridProps) {
           preventDefaultOnContextMenu={true}
           onCellClicked={handleCellClick}
           onCellContextMenu={handleCellContextMenu}
+          // Column layout memory: apply the remembered layout whenever the
+          // column set rebuilds; persist user-driven changes (debounced).
+          onColumnEverythingChanged={applySavedGridState}
+          onColumnMoved={scheduleGridStateSave}
+          onColumnResized={scheduleGridStateSave}
+          onColumnVisible={scheduleGridStateSave}
+          onColumnPinned={scheduleGridStateSave}
           onCellKeyDown={(e) => {
             const ke = e.event as KeyboardEvent | undefined;
             if (!ke) return;

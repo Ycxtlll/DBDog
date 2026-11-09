@@ -77,6 +77,11 @@ interface QueryState {
     result: QueryResult | UpdateResult,
     isQuery: boolean,
   ) => void;
+  /** Attach a multi-SELECT script's result sets to the tab (grid renders
+   *  switchable tabs); `active` defaults to the last set. */
+  setTabResultSets: (id: string, sets: QueryResult[], active?: number) => void;
+  /** Switch the displayed result set of a multi-SELECT script. */
+  setActiveResultSet: (id: string, index: number) => void;
   setTabError: (id: string, error: string) => void;
   setTabExecuting: (id: string, executing: boolean) => void;
   setTabCancelled: (id: string, cancelled: boolean) => void;
@@ -238,6 +243,17 @@ export const useQueryStore = create<QueryState>((set, get) => ({
           false,
         );
       }
+      // Multi-SELECT scripts keep every result set switchable; the last one
+      // stays the displayed default. Single-SELECT scripts store nothing.
+      if (script.queryResults.length > 1) {
+        get().setTabResultSets(
+          id,
+          script.queryResults,
+          script.finalIsQuery ? script.queryResults.length - 1 : -1,
+        );
+      } else {
+        get().setTabResultSets(id, []);
+      }
 
       const elapsedMs = Math.round(performance.now() - startTime);
       get().addHistory({
@@ -366,6 +382,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
                 ...t,
                 result,
                 isQueryResult: true,
+                // Browse replaces whatever custom-SQL result sets were showing.
+                resultSets: undefined,
+                activeResultSet: undefined,
                 tableBrowse: t.tableBrowse ? { ...t.tableBrowse, totalRows } : t.tableBrowse,
               }
             : t,
@@ -472,6 +491,33 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       tabs: state.tabs.map((t) =>
         t.id === id
           ? { ...t, result, isQueryResult: isQuery, error: undefined }
+          : t,
+      ),
+    }));
+  },
+
+  setTabResultSets: (id, sets, active) => {
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              resultSets: sets.length > 1 ? sets : undefined,
+              activeResultSet: sets.length > 1 ? (active ?? sets.length - 1) : undefined,
+            }
+          : t,
+      ),
+    }));
+  },
+
+  setActiveResultSet: (id, index) => {
+    const tab = get().tabs.find((t) => t.id === id);
+    const sets = tab?.resultSets;
+    if (!tab || !sets || index < 0 || index >= sets.length) return;
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id
+          ? { ...t, result: sets[index], isQueryResult: true, activeResultSet: index }
           : t,
       ),
     }));

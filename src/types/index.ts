@@ -79,6 +79,8 @@ export interface StatementOutcome {
 export interface ScriptExecutionResult {
   statements: StatementOutcome[];
   finalResult?: QueryResult;
+  /** Every query statement's result set, in statement order. */
+  queryResults: QueryResult[];
   finalIsQuery: boolean;
   finalRowsAffected: number;
   totalRows: number;
@@ -258,6 +260,11 @@ export interface QueryTab {
   /** When set, this tab is browsing a table with server-side pagination.
    *  Also enables inline cell editing for the browsed table. */
   tableBrowse?: TableBrowseState;
+  /** All result sets of the last multi-SELECT script — the grid renders
+   *  switchable tabs when there is more than one (custom SQL only). */
+  resultSets?: QueryResult[];
+  /** Which result set is displayed; -1 = none (last statement was DML). */
+  activeResultSet?: number;
 }
 
 export interface TableBrowseState {

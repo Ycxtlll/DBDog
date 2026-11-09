@@ -312,3 +312,25 @@
   ④PG 连接也会显示关系图入口。**联动修正**：EditorArea 根加 `relative` 后，
   三个既有侧抽屉 bottom-6 → bottom-0 保持原视觉位（原 bottom-6 相对视口
   = StatusBar 顶，改相对容器后需归零）。
+- **2026-11-09 多语句结果集 + 表格状态记忆**：
+  - **多结果集页签（修实际缺陷）**：此前 execute_script 只回传 final_result，
+    多 SELECT 脚本的中间结果集直接丢弃。Rust `ScriptResult` 新增
+    `query_results: Vec<QueryResult>`（每条 SELECT 的结果集按语句序返回，
+    final_result 与之共享克隆，三处构造点全改）；TS 侧 QueryTab 加
+    resultSets/activeResultSet，execute 与 refreshGrid 都回填；网格信息条
+    下方渲染"结果 N · 行数"页签（仅自定义 SQL 且 >1 组时出现），
+    setActiveResultSet 切换显示。**深检补漏**：`SELECT…; UPDATE…` 这类
+    末条为 DML 的脚本走 UpdateResult 分支——原本没有页签条，结果集成死路，
+    已在该分支顶部补页签。browse/searchTable 置结果时同步清 resultSets
+    （浏览态不残留自定义查询的页签）。
+  - **表格状态记忆**：`lib/gridState.ts` 按 连接+库+表 存 localStorage
+    （`dbdog.gridcols.*`）。**只存布局四要素（colId/hide/pinned/width），
+    sort/filter 明确不存**——browse 排序是服务端（browse.sort 管），
+    筛选驱动生成的搜索 SQL，从存档恢复会把表头显示和数据真实顺序搞拧。
+    应用点 = onColumnEverythingChanged（列集重建即恢复，含 gridReady），
+    经 reconcileGridState 处理 schema 漂移（删掉的列丢弃、新列追加在尾）；
+    保存点 = moved/resized/visible/pinned 四事件防抖 400ms，仅 browse 模式。
+    信息条新增列开关（Columns3）：勾选显隐 + 全部显示 + 重置布局
+    （清存档 + resetColumnState）。
+  - Rust 64 单测全绿（memcached_integration 曾在并行 cargo 抢端口时偶发
+    1 失败，独立复跑两次全过）；tsc/vite 构建通过。

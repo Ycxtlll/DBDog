@@ -261,6 +261,10 @@ pub struct ScriptResult {
     pub statements: Vec<StatementOutcome>,
     /// Result of the last SELECT-like statement, if any.
     pub final_result: Option<QueryResult>,
+    /// Every query statement's result set in statement order — the editor
+    /// shows them as switchable result tabs (multi-SELECT scripts used to
+    /// drop everything but the last).
+    pub query_results: Vec<QueryResult>,
     pub final_is_query: bool,
     pub final_rows_affected: u64,
     /// Sum of every query's total row count (matches the old frontend loop).
@@ -292,6 +296,7 @@ pub async fn execute_script(
         return Ok(ScriptResult {
             statements: vec![],
             final_result: None,
+            query_results: vec![],
             final_is_query: false,
             final_rows_affected: 0,
             total_rows: 0,
@@ -332,6 +337,7 @@ pub async fn execute_script(
         let mut outcomes: Vec<StatementOutcome> = Vec::new();
         let mut total_rows: u64 = 0;
         let mut final_result: Option<QueryResult> = None;
+        let mut query_results: Vec<QueryResult> = Vec::new();
         let mut final_is_query = false;
         let mut final_rows_affected: u64 = 0;
         let count = statements.len();
@@ -359,9 +365,10 @@ pub async fn execute_script(
                         .await?;
                     total_rows += result.total_count;
                     if is_last {
-                        final_result = Some(result);
+                        final_result = Some(result.clone());
                         final_is_query = true;
                     }
+                    query_results.push(result);
                     outcomes.push(StatementOutcome {
                         kind: "query".to_string(),
                         sql: stmt.clone(),
@@ -387,6 +394,7 @@ pub async fn execute_script(
         return Ok(ScriptResult {
             statements: outcomes,
             final_result,
+            query_results,
             final_is_query,
             final_rows_affected,
             total_rows,
@@ -421,6 +429,7 @@ pub async fn execute_script(
     let mut outcomes: Vec<StatementOutcome> = Vec::new();
     let mut total_rows: u64 = 0;
     let mut final_result: Option<QueryResult> = None;
+    let mut query_results: Vec<QueryResult> = Vec::new();
     let mut final_is_query = false;
     let mut final_rows_affected: u64 = 0;
     let count = statements.len();
@@ -445,9 +454,10 @@ pub async fn execute_script(
                 total_rows += result.total_count;
                 state.schema_cache.invalidate_on_ddl(&connection_id, stmt);
                 if is_last {
-                    final_result = Some(result);
+                    final_result = Some(result.clone());
                     final_is_query = true;
                 }
+                query_results.push(result);
                 outcomes.push(StatementOutcome {
                     kind: "query".to_string(),
                     sql: stmt.clone(),
@@ -475,6 +485,7 @@ pub async fn execute_script(
     Ok(ScriptResult {
         statements: outcomes,
         final_result,
+        query_results,
         final_is_query,
         final_rows_affected,
         total_rows,
