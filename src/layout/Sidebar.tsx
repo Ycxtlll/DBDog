@@ -10,6 +10,7 @@ import { ConnectionPanel } from "../components/sidebar/ConnectionPanel";
 import { SchemaTreePanel } from "../components/sidebar/SchemaTreePanel";
 import { MemcachedPanel } from "../components/memcached/MemcachedPanel";
 import { ZookeeperPanel } from "../components/zookeeper/ZookeeperPanel";
+import { TugOfWarModal } from "../components/luna/TugOfWarModal";
 
 export function Sidebar() {
   const { sidebarVisible, sidebarWidth } = useLayoutStore();
@@ -30,15 +31,23 @@ export function Sidebar() {
 }
 
 /** The resident Border Collie. Pet it for moral support; it has opinions
- *  about your skin choice after enough pets, and clicking toggles her
- *  work diary — a session tally of what you and she did together. */
+ *  about your skin choice after enough pets, clicking toggles her work
+ *  diary, and hovering reveals pure-play toys: throw a ball, tug-of-war.
+ *  Left alone for a few minutes she naps (never mid-query — that's work). */
 function DogFooter() {
   const { t, i18n } = useTranslation("common");
   const setTheme = useUiStore((s) => s.setTheme);
   const petsRef = useRef(0);
+  const milestonesRef = useRef<Set<number>>(new Set());
   const [mood, setMood] = useState<string | null>(null);
   const [showDiary, setShowDiary] = useState(false);
   const [chewingLong, setChewingLong] = useState(false);
+  const [sleeping, setSleeping] = useState(false);
+  const sleepingRef = useRef(false);
+  const [ball, setBall] = useState<{ x: number; y: number; out: boolean } | null>(null);
+  const ballStartRef = useRef({ x: 0, y: 0 });
+  const avatarRef = useRef<HTMLSpanElement>(null);
+  const [tugOpen, setTugOpen] = useState(false);
   const bark = useLunaStore((s) => s.bark);
   const diary = useLunaStore((s) => s.diary);
   const activeTab = useQueryStore((s) =>
@@ -57,6 +66,59 @@ function DogFooter() {
     const timer = setTimeout(() => setChewingLong(true), 4000);
     return () => clearTimeout(timer);
   }, [executing]);
+
+  // Nap after 4 quiet minutes; a long query counts as being busy, not idle.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const wake = () => {
+      window.clearTimeout(timer);
+      if (sleepingRef.current) {
+        sleepingRef.current = false;
+        setSleeping(false);
+        useLunaStore
+          .getState()
+          .sayBark(zh ? "汪！（醒了醒了）" : "Woof! (I'm up, I'm up)");
+      }
+      timer = setTimeout(() => {
+        const state = useQueryStore.getState();
+        const busy = state.tabs.find((tab) => tab.id === state.activeTabId)?.isExecuting;
+        if (!busy) {
+          sleepingRef.current = true;
+          setSleeping(true);
+        }
+      }, 4 * 60 * 1000);
+    };
+    wake();
+    window.addEventListener("mousemove", wake);
+    window.addEventListener("keydown", wake);
+    window.addEventListener("mousedown", wake);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("mousemove", wake);
+      window.removeEventListener("keydown", wake);
+      window.removeEventListener("mousedown", wake);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- zh is stable enough for a bark line
+  }, []);
+
+  // Fetch! The ball really flies to a random spot and comes right back.
+  const throwBall = () => {
+    if (ball) return;
+    const rect = avatarRef.current?.getBoundingClientRect();
+    ballStartRef.current = {
+      x: rect ? rect.left + rect.width / 2 : 120,
+      y: rect ? rect.top + rect.height / 2 : window.innerHeight - 40,
+    };
+    const x = 60 + Math.random() * Math.max(120, window.innerWidth - 120);
+    const y = 60 + Math.random() * Math.max(120, window.innerHeight * 0.55);
+    useLunaStore.getState().sayBark(zh ? "汪汪！去捡！🎾" : "Woof woof! On it! 🎾");
+    setBall({ x, y, out: true });
+    setTimeout(() => setBall({ x, y, out: false }), 520);
+    setTimeout(() => {
+      setBall(null);
+      useLunaStore.getState().sayBark(zh ? "叼回来了！好球！" : "Got it back! Nice throw!");
+    }, 1150);
+  };
 
   // The dog mirrors real app state — the footer doubles as a status lamp.
   // Petting and her speech channel override it for a moment.
@@ -111,7 +173,19 @@ function DogFooter() {
     const lines = zh
       ? ["汪！", "汪汪！🐾", "尾巴摇成风扇了", "（贴贴）", "Luna 已就位，随时开工"]
       : ["Woof!", "Woof woof! 🐾", "Tail at maximum wag", "(leans on you)", "Luna ready to work"];
-    setMood(lines[Math.min(n - 1, lines.length - 1)]);
+    let line = lines[Math.min(n - 1, lines.length - 1)];
+    // Rare petting milestones — one-time tricks for the persistent.
+    const milestones: Record<number, string> = {
+      15: zh ? "（原地转了一圈）🌀" : "(spins in a circle) 🌀",
+      30: zh ? "（打滚求表扬）" : "(rolls over for praise)",
+      50: zh ? "（把球轻轻放在你脚边）" : "(gently drops the ball at your feet)",
+    };
+    const milestone = milestones[n];
+    if (milestone && !milestonesRef.current.has(n)) {
+      milestonesRef.current.add(n);
+      line = milestone;
+    }
+    setMood(line);
     if (n === 7) {
       setTheme("puppy");
       showSuccess(zh ? "被摸爽了，给你换成奶油橙～" : "That hit the spot — Puppy skin on me~");
@@ -120,17 +194,17 @@ function DogFooter() {
     setShowDiary((d) => !d);
   };
 
-  const line = bark ?? mood ?? (showDiary ? diaryText : status.text);
-  const working = !bark && !mood && !showDiary && status.working;
+  const line = bark ?? mood ?? (sleeping ? (zh ? "Zzz…（打瞌睡中）💤" : "Zzz… (napping) 💤") : showDiary ? diaryText : status.text);
+  const working = !bark && !mood && !sleeping && !showDiary && status.working;
 
   return (
-    <div className="border-t border-border px-3 py-2">
+    <div className="relative border-t border-border px-3 py-2 group">
       <button
         onClick={pet}
         className="w-full flex items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-accent/40 transition-colors"
         title={zh ? "摸摸露娜；再点一下切换工作日志" : "Pet Luna; click again to toggle her work log"}
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
+        <span ref={avatarRef} className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
           <Dog size={15} className="text-muted-foreground" />
         </span>
         <span className="min-w-0 flex-1">
@@ -143,14 +217,48 @@ function DogFooter() {
             {line}
           </span>
         </span>
-        {bark ? (
+        {bark || mood ? (
           <PawPrint size={12} className="text-primary shrink-0" />
         ) : showDiary ? (
           <BookOpen size={12} className="text-muted-foreground shrink-0" />
-        ) : mood ? (
-          <PawPrint size={12} className="text-primary shrink-0" />
         ) : null}
       </button>
+      {/* Pure-play toys — hover the footer to reveal them */}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={throwBall}
+          title={zh ? "扔球给她" : "Throw her the ball"}
+          className="p-1 text-sm leading-none rounded-md hover:bg-accent transition-colors"
+        >
+          🎾
+        </button>
+        <button
+          onClick={() => setTugOpen(true)}
+          title={zh ? "和她拔河" : "Tug-of-war with her"}
+          className="p-1 text-sm leading-none rounded-md hover:bg-accent transition-colors"
+        >
+          🪢
+        </button>
+      </div>
+      {/* The ball in flight */}
+      {ball && (
+        <div
+          className="fixed z-[100] pointer-events-none text-xl select-none"
+          style={{
+            left: 0,
+            top: 0,
+            marginLeft: -12,
+            marginTop: -12,
+            transform: ball.out
+              ? `translate(${ball.x}px, ${ball.y}px)`
+              : `translate(${ballStartRef.current.x}px, ${ballStartRef.current.y}px)`,
+            transition: "transform 520ms cubic-bezier(0.35, 0.6, 0.4, 1)",
+          }}
+        >
+          🎾
+        </div>
+      )}
+      <TugOfWarModal open={tugOpen} onClose={() => setTugOpen(false)} />
     </div>
   );
 }
