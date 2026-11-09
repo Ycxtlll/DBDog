@@ -23,8 +23,6 @@ const CARD_PAD = 8;
 /** Cards collapse beyond this many column rows ("+N more" toggles). */
 const MAX_COLLAPSED = 14;
 const MAX_EXPANDED = 40;
-/** Above this count, heuristic candidate edges start off (noise guard). */
-const CANDIDATE_AUTO_LIMIT = 60;
 
 const visibleRows = (n: number, expanded: boolean) =>
   Math.min(n, expanded ? MAX_EXPANDED : MAX_COLLAPSED);
@@ -156,8 +154,9 @@ export function ERMapDrawer({ connectionId }: ErMapDrawerProps) {
       const saved = readPositions(connectionId, database);
       positionsRef.current = saved;
       setPositions(saved);
-      const candidates = m.edges.filter((e) => e.source === "inferred").length;
-      setShowCandidates(candidates <= CANDIDATE_AUTO_LIMIT);
+      // Heuristic edges stay ON by default — they are the map's raw
+      // suggestion power and the count is visible right on the toggle.
+      setShowCandidates(true);
       // Ask for a fit once the new layout has rendered.
       requestAnimationFrame(() => fitView(lay));
     } catch (err) {
@@ -170,8 +169,8 @@ export function ERMapDrawer({ connectionId }: ErMapDrawerProps) {
 
   useEffect(() => {
     if (open) void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reopen only
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reopen + database switch
+  }, [open, load]);
 
   // --- viewport ------------------------------------------------------------
 
@@ -480,6 +479,8 @@ export function ERMapDrawer({ connectionId }: ErMapDrawerProps) {
 
   if (!open || !database) return null;
 
+  const guessCount = map?.edges.filter((e) => e.source === "inferred").length ?? 0;
+
   const stats = (() => {
     if (!map) return null;
     const links = map.edges.filter((e) => e.source !== "inferred").length;
@@ -541,9 +542,14 @@ export function ERMapDrawer({ connectionId }: ErMapDrawerProps) {
           placeholder={t("searchPlaceholder")}
           className="w-44 bg-background border border-border rounded-md px-1.5 py-1 text-xs outline-none hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/30 transition-colors"
         />
-        <Checkbox checked={showCandidates} onChange={(e) => setShowCandidates(e.target.checked)}>
-          <span className="text-xs text-muted-foreground">{t("showCandidates")}</span>
-        </Checkbox>
+        <span title={t("legendHeuristic")}>
+          <Checkbox checked={showCandidates} onChange={(e) => setShowCandidates(e.target.checked)}>
+            <span className="text-xs text-muted-foreground">
+              {t("showCandidates")}
+              {guessCount > 0 && ` (${guessCount})`}
+            </span>
+          </Checkbox>
+        </span>
         <button
           onClick={() => fitView(layout)}
           title={t("fit")}

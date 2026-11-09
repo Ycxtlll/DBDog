@@ -19,7 +19,10 @@ const CARD_GAP_X: f64 = 36.0;
 const LAYER_GAP_Y: f64 = 56.0;
 const MARGIN: f64 = 40.0;
 const ISOLATED_PER_ROW: usize = 8;
+const ISOLATED_ROW_GAP: f64 = 24.0;
 const MIN_CARD_HEIGHT: f64 = 96.0;
+/// Barycenter sweep cycles (down + up each) — 2 cuts most crossings.
+const SWEEP_CYCLES: usize = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,7 +167,11 @@ pub fn er_layout(tables: &[LayoutTable], edges: &[LayoutEdge]) -> ErLayout {
         }
     }
 
-    // Two barycenter sweeps (down by parents, up by children).
+    // Alternating barycenter sweeps: down by parents, up by children, two
+    // full cycles. Each sweep re-orders layers by the mean position of the
+    // neighbors settled in the previous sweep — repetition pulls tangled
+    // graphs toward far fewer edge crossings while staying deterministic
+    // (every ordering decision falls back to the table name).
     let name_key = |i: usize| tables[i].name.to_ascii_lowercase();
     let sweep = |layers: &[Vec<usize>], neighbors: &[Vec<usize>], xs: &mut [f64]| {
         for layer in layers {
@@ -178,9 +185,11 @@ pub fn er_layout(tables: &[LayoutTable], edges: &[LayoutEdge]) -> ErLayout {
             }
         }
     };
-    sweep(&layers[1..], &parents_of, &mut xs);
-    if layer_count > 1 {
-        sweep(&layers[..layer_count - 1], &children_of, &mut xs);
+    for _ in 0..SWEEP_CYCLES {
+        sweep(&layers[1..], &parents_of, &mut xs);
+        if layer_count > 1 {
+            sweep(&layers[..layer_count - 1], &children_of, &mut xs);
+        }
     }
 
     // Y positions: each layer sits below the tallest card of the layer above.
@@ -203,23 +212,29 @@ pub fn er_layout(tables: &[LayoutTable], edges: &[LayoutEdge]) -> ErLayout {
         cursor += max_h + LAYER_GAP_Y;
     }
 
-    // Isolated zone: a grid below the main graph.
+    // Isolated zone: a grid below the main graph. Row height follows the
+    // tallest card in the row — fixed spacing would overlap tall cards.
     let isolated: Vec<usize> = (0..tables.len()).filter(|&i| !has_edge[i]).collect();
     let mut isolated_bottom = cursor;
     let mut isolated_width = 0.0f64;
     if !isolated.is_empty() {
         let zone_y = cursor + 40.0;
-        let rows = isolated.len().div_ceil(ISOLATED_PER_ROW);
-        for (k, &i) in isolated.iter().enumerate() {
-            let row = k / ISOLATED_PER_ROW;
-            let col = k % ISOLATED_PER_ROW;
-            xs[i] = MARGIN + col as f64 * (CARD_WIDTH + CARD_GAP_X);
-            ys[i] = zone_y + row as f64 * 200.0;
+        let mut row_y = zone_y;
+        for chunk in isolated.chunks(ISOLATED_PER_ROW) {
+            let row_h = chunk
+                .iter()
+                .map(|&i| tables[i].height.max(MIN_CARD_HEIGHT))
+                .fold(0.0f64, f64::max);
+            for (col, &i) in chunk.iter().enumerate() {
+                xs[i] = MARGIN + col as f64 * (CARD_WIDTH + CARD_GAP_X);
+                ys[i] = row_y;
+            }
+            row_y += row_h + ISOLATED_ROW_GAP;
         }
         isolated_width = MARGIN * 2.0
             + isolated.len().min(ISOLATED_PER_ROW) as f64 * CARD_WIDTH
             + (isolated.len().min(ISOLATED_PER_ROW) - 1) as f64 * CARD_GAP_X;
-        isolated_bottom = zone_y + rows as f64 * 200.0;
+        isolated_bottom = row_y;
     }
 
     let nodes = (0..tables.len())
@@ -381,6 +396,57 @@ mod tests {
             .fold(0.0f64, f64::max);
         assert!(node_of(&layout, "lonely").y > main_bottom);
         assert!(node_of(&layout, "lonelier").y >= node_of(&layout, "lonely").y);
+    }
+
+    #[test]
+    fn isolated_grid_rows_clear_tall_cards() {
+        // 9 isolated tables → two rows (8 + 1); a very tall card sits in
+        // row 1, so row 2 must start below its bottom edge.
+        let mut tables = vec![table("a1", 120.0)];
+        for i in 0..10 {
+            let h = if i == 0 { 700.0 } else { 120.0 };
+            tables.push(table(format!("lone{i}").as_str(), h));
+        }
+        let edges = vec![edge("lone9", "a1")];
+        let layout = er_layout(&tables, &edges);
+        let tall = node_of(&layout, "lone0");
+        assert!(tall.isolated);
+        let below = node_of(&layout, "lone8"); // lone8 is the 9th isolated → row 2
+        assert!(below.isolated);
+        assert!(
+            below.y >= tall.y + 700.0,
+            "row 2 starts at {}, tall card bottom at {}",
+            below.y,
+            tall.y + 700.0
+        );
+    }
+
+    #[test]
+    fn repeated_sweeps_stay_deterministic() {
+        // A tangled graph (hub + fan + mutual pair) exercised through the
+        // multi-cycle sweeps — layout must remain stable across runs.
+        let tables: Vec<LayoutTable> = (0..10)
+            .map(|i| table(format!("t{i}").as_str(), 160.0))
+            .collect();
+        let edges = vec![
+            edge("t1", "t0"),
+            edge("t2", "t0"),
+            edge("t3", "t1"),
+            edge("t4", "t1"),
+            edge("t5", "t2"),
+            edge("t6", "t2"),
+            edge("t7", "t5"),
+            edge("t8", "t6"),
+            edge("t8", "t7"),
+            edge("t9", "t3"),
+            edge("t9", "t4"),
+            edge("t9", "t8"),
+        ];
+        let first = er_layout(&tables, &edges);
+        let second = er_layout(&tables, &edges);
+        for (a, b) in first.nodes.iter().zip(&second.nodes) {
+            assert_eq!((a.x, a.y, a.layer), (b.x, b.y, b.layer));
+        }
     }
 
     #[test]
