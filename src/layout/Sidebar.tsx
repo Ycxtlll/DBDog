@@ -72,8 +72,8 @@ function DogFooter() {
     petsRef.current += 1;
     const n = petsRef.current;
     const lines = zh
-      ? ["汪！", "汪汪！🐾", "尾巴摇成风扇了", "（贴贴）", "边牧已就位，随时开工"]
-      : ["Woof!", "Woof woof! 🐾", "Tail at maximum wag", "(leans on you)", "Border Collie ready to work"];
+      ? ["汪！", "汪汪！🐾", "尾巴摇成风扇了", "（贴贴）", "Luna 已就位，随时开工"]
+      : ["Woof!", "Woof woof! 🐾", "Tail at maximum wag", "(leans on you)", "Luna ready to work"];
     setMood(lines[Math.min(n - 1, lines.length - 1)]);
     if (n === 7) {
       setTheme("puppy");
@@ -94,7 +94,7 @@ function DogFooter() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-medium text-foreground leading-tight">
-            DBDog
+            {zh ? "露娜 Luna" : "Luna"}
           </span>
           <span className={`block text-[10px] leading-tight truncate ${
             activeTab?.isExecuting && !mood ? "text-primary" : "text-muted-foreground"

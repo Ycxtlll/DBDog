@@ -190,14 +190,14 @@
   }
 
   [data-theme='collieNight'] {
-    /* Border Collie night patrol: black-white coat, amber eye accent */
+    /* Border Collie night patrol: strict panda black-white, no other hue */
     --background: 0 0% 7%;
     --foreground: 0 0% 93%;
     --card: 0 0% 11%;
     --card-foreground: 0 0% 93%;
     --popover: 0 0% 11%;
     --popover-foreground: 0 0% 93%;
-    --primary: 38 95% 55%;
+    --primary: 0 0% 92%;
     --primary-foreground: 0 0% 7%;
     --secondary: 0 0% 16%;
     --secondary-foreground: 0 0% 93%;
@@ -209,30 +209,30 @@
     --destructive-foreground: 0 0% 7%;
     --border: 0 0% 20%;
     --input: 0 0% 20%;
-    --ring: 38 95% 55%;
+    --ring: 0 0% 92%;
   }
 
   [data-theme='collieDay'] {
-    /* Border Collie daytime: crisp white coat, deep amber */
+    /* Border Collie daytime: crisp white coat, ink black */
     --background: 0 0% 96%;
     --foreground: 0 0% 10%;
     --card: 0 0% 99%;
     --card-foreground: 0 0% 10%;
     --popover: 0 0% 99%;
     --popover-foreground: 0 0% 10%;
-    --primary: 30 85% 38%;
-    --primary-foreground: 0 0% 99%;
+    --primary: 0 0% 12%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 90%;
     --secondary-foreground: 0 0% 10%;
     --muted: 0 0% 90%;
     --muted-foreground: 0 0% 42%;
-    --accent: 38 80% 86%;
-    --accent-foreground: 30 85% 30%;
+    --accent: 0 0% 86%;
+    --accent-foreground: 0 0% 10%;
     --destructive: 0 72% 46%;
     --destructive-foreground: 0 0% 99%;
     --border: 0 0% 84%;
     --input: 0 0% 84%;
-    --ring: 30 85% 38%;
+    --ring: 0 0% 12%;
   }
 
   [data-theme='terminal'] {

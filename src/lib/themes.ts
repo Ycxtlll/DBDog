@@ -82,14 +82,14 @@ export const SKINS: SkinDef[] = [
     name: "边牧·夜巡",
     nameEn: "Collie Night",
     dark: true,
-    swatch: ["hsl(0 0% 7%)", "hsl(38 95% 55%)", "hsl(0 0% 18%)"],
+    swatch: ["hsl(0 0% 7%)", "hsl(0 0% 92%)", "hsl(0 0% 18%)"],
   },
   {
     id: "collieDay",
     name: "边牧·白天",
     nameEn: "Collie Day",
     dark: false,
-    swatch: ["hsl(0 0% 96%)", "hsl(30 85% 38%)", "hsl(0 0% 88%)"],
+    swatch: ["hsl(0 0% 96%)", "hsl(0 0% 12%)", "hsl(0 0% 88%)"],
   },
 ];
 

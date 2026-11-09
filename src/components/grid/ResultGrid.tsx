@@ -1267,6 +1267,8 @@ export function ResultGrid({ tab }: ResultGridProps) {
               }
             }
           }}
+          overlayNoRowsTemplate=" "
+          overlayLoadingTemplate=" "
           onFilterChanged={handleFilterChanged}
           onSortChanged={handleSortChanged}
           rowSelection="multiple"
