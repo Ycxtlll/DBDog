@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ErLayout,
+  ErLayoutInputEdge,
+  ErLayoutInputTable,
   RelationshipImportResult,
+  RelationshipsMap,
   RelationshipsOverview,
   ReverseReference,
   TableRelationship,
@@ -79,4 +83,21 @@ export async function inferReverseReferences(
     pkColumn,
     samples,
   });
+}
+
+/** Whole-database graph for the ER map: tables + columns + all edges
+ *  (declared + adjudicated, plus dashed "?" name-heuristic candidates). */
+export async function getRelationshipsMap(
+  connectionId: string,
+  database: string,
+): Promise<RelationshipsMap> {
+  return invoke("relationships_map", { connectionId, database });
+}
+
+/** Pure layered layout — Rust owns the algorithm, the canvas only draws. */
+export async function computeErLayout(
+  tables: ErLayoutInputTable[],
+  edges: ErLayoutInputEdge[],
+): Promise<ErLayout> {
+  return invoke("er_layout_compute", { tables, edges });
 }

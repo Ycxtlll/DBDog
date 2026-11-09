@@ -124,6 +124,49 @@ export interface RelationshipImportResult {
   errors: { line: number; reason: string }[];
 }
 
+// --- ER relationship map (M-ER) -------------------------------------------
+
+export interface ErMapColumn {
+  name: string;
+  dataType: string;
+  primaryKey: boolean;
+}
+
+export interface ErMapTable {
+  name: string;
+  columns: ErMapColumn[];
+}
+
+export interface RelationshipsMap {
+  tables: ErMapTable[];
+  edges: TableRelationship[];
+}
+
+export interface ErLayoutNode {
+  table: string;
+  x: number;
+  y: number;
+  layer: number;
+  /** No relationships at all — parked in the isolated zone. */
+  isolated: boolean;
+}
+
+export interface ErLayout {
+  nodes: ErLayoutNode[];
+  width: number;
+  height: number;
+}
+
+export interface ErLayoutInputTable {
+  name: string;
+  height: number;
+}
+
+export interface ErLayoutInputEdge {
+  childTable: string;
+  parentTable: string;
+}
+
 export interface Database {
   name: string;
   charset?: string;

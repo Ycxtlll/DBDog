@@ -280,7 +280,7 @@ export function CompareDrawer({ connectionId }: { connectionId: string | null })
   };
 
   return (
-    <div className="absolute right-0 top-0 bottom-6 w-[520px] bg-card border-l border-border shadow-xl z-40 flex flex-col">
+    <div className="absolute right-0 top-0 bottom-0 w-[520px] bg-card border-l border-border shadow-xl z-40 flex flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="font-semibold text-sm">{t("title")}</div>
         <button className="p-1 rounded-md hover:bg-accent" onClick={closeDrawer}>

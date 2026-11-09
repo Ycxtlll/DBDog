@@ -18,6 +18,7 @@ import { TableStructureDrawer } from "../components/drawer/TableStructureDrawer"
 import { TableDesignerModal } from "../components/drawer/TableDesignerModal";
 import { ServerPanelDrawer } from "../components/server/ServerPanelDrawer";
 import { CompareDrawer } from "../components/compare/CompareDrawer";
+import { ERMapDrawer } from "../components/er/ERMapDrawer";
 import { QueryHistory } from "../components/QueryHistory";
 import { ZkNodeViewer } from "../components/zookeeper/ZkNodeViewer";
 import { MemoEntryViewer } from "../components/memcached/MemoEntryViewer";
@@ -58,7 +59,7 @@ export function EditorArea() {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-background">
+    <div className="relative flex-1 flex flex-col min-w-0 bg-background">
       {/* SQL connections (MySQL / PostgreSQL): tabs + editor + grid */}
       {(activeConfig?.type === "mysql" || activeConfig?.type === "postgresql") && (
         <>
@@ -181,6 +182,7 @@ export function EditorArea() {
       <TableDesignerModal connectionId={activeConnectionId} />
       <ServerPanelDrawer connectionId={activeConnectionId} />
       <CompareDrawer connectionId={activeConnectionId} />
+      <ERMapDrawer connectionId={activeConnectionId} />
     </div>
   );
 }

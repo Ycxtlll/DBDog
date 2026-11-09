@@ -131,6 +131,39 @@
 - **网格 Ctrl+Z**：撤销最近一次已应用改动（复用回滚语句生成）
 - **连接级只读开关**：连接配置新增 `readOnly`，查询引擎层拒绝 DML——安全开关本身就是易用性
 
+## M-ER 关系地图（关系分析器的可视化控制台）
+
+定位：**不是通用 ER 图工具**，是 M2 关系分析器的图形管理面——连线 = 分析器已知的
+关系，孤岛 = 还没补全的表。入口：侧栏数据库行上的关系图按钮，全区抽屉展示。
+
+### ER.1 数据与布局（Rust）
+
+- `relationships_map` 命令：整库一次取全——表清单 + 列（主键标记）+ 全部边
+  （物理外键 declared + 存储裁决 adjudicated，去否决），加 **命名启发候选边**
+  （dashed "推测"，未做值验证，confidence=0 显示"?"）——让分析器的原始推断力直接可见
+- `relationships/layout.rs`：分层布局算法（Sugiyama-lite）——按 FK 方向分层
+  （父表在上），层内 barycenter 排序两轮扫，确定性输出（同名表排序稳定，
+  重开图不变）；自环/互引边不参与分层；无任何关系的孤岛表单独归入底部网格区
+  （"走散的表"——补全工作的一眼目标）；纯函数 + 单测
+- 布局输入输出都是纯数据（表名 + 边列表 → 坐标），不碰连接
+
+### ER.2 画布交互（TS 只管渲染）
+
+- SVG 手绘渲染（不引第三方图库，保持安装包体量）：滚轮缩放（锚点跟随光标）、
+  空白处拖拽平移、卡片拖拽挪位（localStorage 按 连接+库 持久化，覆盖布局坐标）
+- 卡片 = 表名 + 列清单（主键 🔑 标记；外键列由边集推导），列行作为边的锚点
+- 边 = 三次贝塞尔，子表→父表方向，实线（declared/adjudicated）vs 虚线（推测候选）；
+  点击边弹 popover：来源/置信度 + 探测 / 确认 / 否决（复用现有命令）
+- 搜索框高亮命中表及其邻域，其余降透明；推测边可一键隐藏
+- 键鼠均为视口坐标变换，`fit` 按钮一键适配内容
+
+### ER.3 图上补关系
+
+- 卡片悬停出现连线手柄，拖到目标表松手 → RelationshipModal 预填
+  （childTable/parentTable），模式扩展：child 列可选（默认自动挑同名/PK 列），
+  探测样本从"SELECT DISTINCT child_col LIMIT 50"现取
+- 保存/否决后地图重载，仲裁结果直接落存储（与网格侧同一套 verdict）
+
 ## M5 后置池（按反馈排期）
 
 值追踪（一个值在全库足迹，演示必杀但成本高）· 关联展开浏览（行内联显示子表相关行）·
@@ -263,5 +296,19 @@
   迁移清单状态：limitGuardSql ✅ hasTopLevelWhere ✅ splitSqlStatements ✅
   buildTableSearchSql ✅ 变更集 diff/回滚 ✅ buildAlterStatements（compare）✅
   设计器 ALTER/校验 ✅（M2 关系分析器从一开始就是 Rust）。
-  迁移清单状态：limitGuardSql ✅ hasTopLevelWhere ✅ splitSqlStatements ✅
-  buildTableSearchSql ✅ 变更集 diff/回滚 ✅（M2 关系分析器从一开始就是 Rust）。
+- **2026-11-09 M-ER 关系地图（ER.1+ER.2+ER.3）**：侧栏数据库行新增关系图按钮
+  （仅 MySQL 连接显示），EditorArea 全区抽屉。**Rust 侧**：`relationships_map`
+  整库一次取全（表+列+主键标记、物理外键、存储裁决去否决、命名启发候选边
+  confidence=0 显示"?"，上限 300 条，被否决的候选不再复活）；`relationships/
+  layout.rs` 分层布局（父表在上、barycenter 两轮扫、确定性输出、自环/互引安全、
+  孤岛表归入底部网格区），8 个单测全绿（总 64）。**TS 侧**：`ERMapDrawer.tsx`
+  手绘 SVG 画布（滚轮锚点缩放、空白拖拽平移、卡片拖挪 localStorage 持久化、
+  卡片点击直接跳表浏览、列锚点贝塞尔边、搜索高亮邻域降透明、推测边开关、
+  fit/刷新/图例）；边 popover：探测（DISTINCT 采样 ≤50）+ 确认/否决/撤销确认；
+  卡片 hover 右上角手柄拖到目标表 → RelationshipModal 预填（新增
+  suggestedParent + childColumn 缺省时的列选择模式，样本从库现取）。
+  **深检修掉 4 个问题**：①候选边没查 veto 清单（否决后刷新复活）；
+  ②换库重开残留搜索词/popover/连线状态；③边热区未显式声明 pointerEvents；
+  ④PG 连接也会显示关系图入口。**联动修正**：EditorArea 根加 `relative` 后，
+  三个既有侧抽屉 bottom-6 → bottom-0 保持原视觉位（原 bottom-6 相对视口
+  = StatusBar 顶，改相对容器后需归零）。

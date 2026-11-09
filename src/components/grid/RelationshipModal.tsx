@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2 } from "lucide-react";
 import * as schemaService from "../../services/schemaService";
 import * as relationshipService from "../../services/relationshipService";
+import * as queryService from "../../services/queryService";
+import { escapeMysqlIdentifier } from "../../lib/sql";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
 import { showSuccess, showError } from "../../stores/toastStore";
@@ -14,7 +16,11 @@ interface RelationshipModalProps {
   connectionId: string | null;
   database?: string;
   childTable?: string;
+  /** Omit in "pick a column" mode (ER map drag): the modal renders a
+   *  child-column select and fetches probe samples from the database. */
   childColumn?: string;
+  /** Prefill the parent table (ER map drag-drop). */
+  suggestedParent?: string;
   /** Current link on this column (declared/adjudicated/inferred), if any. */
   existing?: TableRelationship | null;
   /** Sample values of the child column from the loaded page — powers the
@@ -44,6 +50,7 @@ export function RelationshipModal({
   database,
   childTable,
   childColumn,
+  suggestedParent,
   existing,
   samples,
   onChanged,
@@ -64,16 +71,25 @@ export function RelationshipModal({
   const [loadingCols, setLoadingCols] = useState(false);
   const [saving, setSaving] = useState(false);
   const [probe, setProbe] = useState<ProbeState>({ state: "idle" });
+  // Column-picker mode (no childColumn prop): pick the FK column, then
+  // samples are fetched from the database for the live probe.
+  const [childColumns, setChildColumns] = useState<Column[]>([]);
+  const [childColumnChoice, setChildColumnChoice] = useState("");
+  const [childSamples, setChildSamples] = useState<unknown[] | null>(null);
 
   // Reset transient state and preload the table list on (re)open.
   useEffect(() => {
     if (!open) return;
-    setParentTable(existing?.parentTable ?? "");
-    setTableFilter(existing?.parentTable ?? "");
+    const prefill = existing?.parentTable ?? suggestedParent ?? "";
+    setParentTable(prefill);
+    setTableFilter(prefill);
     setParentColumn(existing?.parentColumn ?? "");
     setColumns([]);
     setPickerOpen(false);
     setProbe({ state: "idle" });
+    setChildColumns([]);
+    setChildColumnChoice("");
+    setChildSamples(null);
     if (connectionId && database) {
       schemaService
         .getTables(connectionId, database)
@@ -82,6 +98,56 @@ export function RelationshipModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open only
   }, [open]);
+
+  const effectiveChildColumn = childColumn ?? childColumnChoice;
+  const effectiveSamples = useMemo(
+    () => samples ?? childSamples ?? [],
+    [samples, childSamples],
+  );
+
+  // Column-picker mode: load the child table's columns once.
+  useEffect(() => {
+    if (!open || childColumn || !childTable || !connectionId || !database) return;
+    let cancelled = false;
+    schemaService
+      .getTableDetails(connectionId, database, childTable)
+      .then((d) => {
+        if (!cancelled) setChildColumns(d.columns);
+      })
+      .catch((err) => showError(parseTauriError(err)));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follow open only
+  }, [open]);
+
+  // Column-picker mode: fetch probe samples for the chosen child column.
+  useEffect(() => {
+    if (!open || childColumn || !effectiveChildColumn || !childTable || !connectionId || !database) {
+      if (!childColumn) setChildSamples(null);
+      return;
+    }
+    let cancelled = false;
+    const col = escapeMysqlIdentifier(effectiveChildColumn);
+    const sql = `SELECT DISTINCT ${col} AS v FROM ${escapeMysqlIdentifier(childTable)} WHERE ${col} IS NOT NULL`;
+    queryService
+      .executeQuery(connectionId, sql, 200, database)
+      .then((res) => {
+        if (cancelled) return;
+        const values = res.rows
+          .map((r) => Object.values(r)[0])
+          .filter((v) => v !== null && String(v).trim() !== "")
+          .slice(0, 50);
+        setChildSamples(values);
+      })
+      .catch(() => {
+        if (!cancelled) setChildSamples([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follow column choice only
+  }, [open, effectiveChildColumn]);
 
   // Parent columns follow the parent table choice.
   useEffect(() => {
@@ -122,7 +188,7 @@ export function RelationshipModal({
       setProbe({ state: "idle" });
       return;
     }
-    if (!samples || samples.length === 0) {
+    if (effectiveSamples.length === 0) {
       setProbe({ state: "idle" });
       return;
     }
@@ -130,7 +196,7 @@ export function RelationshipModal({
     setProbe({ state: "probing" });
     const timer = setTimeout(() => {
       relationshipService
-        .probeRelationship(connectionId, database, parentTable, parentColumn, samples)
+        .probeRelationship(connectionId, database, parentTable, parentColumn, effectiveSamples)
         .then((rate) => {
           if (!stale) setProbe({ state: rate === null ? "fail" : "done", rate: rate ?? undefined });
         })
@@ -143,7 +209,7 @@ export function RelationshipModal({
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-probe on pick changes
-  }, [parentTable, parentColumn, samples, open]);
+  }, [parentTable, parentColumn, effectiveSamples, open]);
 
   const chooseTable = (name: string) => {
     setParentTable(name);
@@ -153,12 +219,13 @@ export function RelationshipModal({
   };
 
   const handleSave = async () => {
-    if (!connectionId || !childTable || !childColumn || !parentTable || !parentColumn || saving) return;
+    const col = effectiveChildColumn;
+    if (!connectionId || !childTable || !col || !parentTable || !parentColumn || saving) return;
     setSaving(true);
     try {
       await relationshipService.adjudicateRelationship(
         connectionId,
-        { childTable, childColumn, parentTable, parentColumn },
+        { childTable, childColumn: col, parentTable, parentColumn },
         true,
       );
       showSuccess(t("relSaved"));
@@ -172,8 +239,9 @@ export function RelationshipModal({
   };
 
   const handleRemove = async () => {
-    if (!connectionId || !childTable || !childColumn || saving) return;
-    const link = existing ?? { childTable, childColumn, parentTable, parentColumn };
+    const col = effectiveChildColumn;
+    if (!connectionId || !childTable || !col || saving) return;
+    const link = existing ?? { childTable, childColumn: col, parentTable, parentColumn };
     if (!link.parentTable || !link.parentColumn) return;
     setSaving(true);
     try {
@@ -218,8 +286,8 @@ export function RelationshipModal({
       return <span className="text-xs text-muted-foreground">{t("relProbeFail")}</span>;
     }
     const percent = Math.round((probe.rate ?? 0) * 100);
-    const matched = Math.round((probe.rate ?? 0) * (samples?.length ?? 0));
-    const total = samples?.length ?? 0;
+    const matched = Math.round((probe.rate ?? 0) * effectiveSamples.length);
+    const total = effectiveSamples.length;
     if (percent >= 80) {
       return (
         <span className="inline-flex items-center gap-1 text-xs text-green-600">
@@ -269,14 +337,31 @@ export function RelationshipModal({
         <div className="p-4 space-y-3">
           <div>
             <div className="text-xs text-muted-foreground mb-1">{t("relChildColumn")}</div>
-            <div className="text-xs font-mono bg-muted rounded-md px-2 py-1.5">
-              {childTable}.{childColumn}
-              {existing && (
-                <span className="ml-2 font-sans text-muted-foreground">
-                  ({t(`source_${existing.source}`)} · {Math.round(existing.confidence * 100)}%)
-                </span>
-              )}
-            </div>
+            {childColumn ? (
+              <div className="text-xs font-mono bg-muted rounded-md px-2 py-1.5">
+                {childTable}.{childColumn}
+                {existing && (
+                  <span className="ml-2 font-sans text-muted-foreground">
+                    ({t(`source_${existing.source}`)} · {Math.round(existing.confidence * 100)}%)
+                  </span>
+                )}
+              </div>
+            ) : (
+              <select
+                className={`${selectClass} font-mono`}
+                value={childColumnChoice}
+                disabled={!childTable || childColumns.length === 0}
+                onChange={(e) => setChildColumnChoice(e.target.value)}
+              >
+                <option value="">{t("relSelectColumn")}</option>
+                {childColumns.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                    {c.isPrimaryKey ? "（PK）" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>
@@ -343,7 +428,7 @@ export function RelationshipModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
-              disabled={!parentTable || !parentColumn || saving}
+              disabled={!parentTable || !parentColumn || !effectiveChildColumn || saving}
               className="px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1"
             >
               {saving && <Loader2 size={12} className="animate-spin" />}

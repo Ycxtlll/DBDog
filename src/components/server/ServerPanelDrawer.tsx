@@ -91,7 +91,7 @@ export function ServerPanelDrawer({ connectionId }: ServerPanelDrawerProps) {
   const tableCell = "px-2 py-1 text-xs border-b border-border/50 align-top";
 
   return (
-    <div className="absolute right-0 top-0 bottom-6 w-[440px] bg-card border-l border-border shadow-xl z-40 flex flex-col">
+    <div className="absolute right-0 top-0 bottom-0 w-[440px] bg-card border-l border-border shadow-xl z-40 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="font-semibold text-sm">{t("title")}</div>

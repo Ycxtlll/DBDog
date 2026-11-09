@@ -97,7 +97,7 @@ export function TableStructureDrawer({
   if (drawer.type !== "tableStructure") return null;
 
   return (
-    <div className="absolute right-0 top-0 bottom-6 w-[400px] bg-card border-l border-border shadow-xl z-40 flex flex-col">
+    <div className="absolute right-0 top-0 bottom-0 w-[400px] bg-card border-l border-border shadow-xl z-40 flex flex-col">
       <div className="flex items-center justify-between p-3 border-b border-border">
         <div>
           <div className="font-semibold">{table}</div>

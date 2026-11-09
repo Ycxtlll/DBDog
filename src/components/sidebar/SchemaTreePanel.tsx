@@ -7,6 +7,7 @@ import {
   Table,
   Database as DatabaseIcon,
   Columns3,
+  Network,
   PencilRuler,
   Download,
   Server,
@@ -42,6 +43,9 @@ export function SchemaTreePanel() {
   const { t } = useTranslation("schema");
   const activeId = useConnectionStore((s) => s.activeId);
   const statusMap = useConnectionStore((s) => s.statusMap);
+  // The relationship analyzer (and thus the ER map) is MySQL-only for now.
+  const isMysql =
+    useConnectionStore((s) => s.configs.find((c) => c.id === s.activeId)?.type) === "mysql";
   const setSidebarView = useLayoutStore((s) => s.setSidebarView);
   const [databases, setDatabases] = useState<Database[]>([]);
   const [tablesMap, setTablesMap] = useState<Record<string, TableType[]>>({});
@@ -286,13 +290,27 @@ export function SchemaTreePanel() {
             if (data.type === "database") {
               const isLoading = loadingKey === `db:${data.name}`;
               return (
-                <span className="text-sm font-medium truncate flex items-center gap-1">
+                <span className="text-sm font-medium truncate flex items-center gap-1 flex-1">
                   <DatabaseIcon size={12} className="text-muted-foreground" />
                   {data.name}
                   {isLoading && (
                     <span className="text-xs text-muted-foreground animate-pulse">
                       {t("loading")}
                     </span>
+                  )}
+                  {isMysql && (
+                    <button
+                      className="p-0.5 rounded-md hover:bg-accent opacity-0 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        useLayoutStore
+                          .getState()
+                          .openDrawer("erMap", { database: data.name });
+                      }}
+                      title={t("ermap:title")}
+                    >
+                      <Network size={12} />
+                    </button>
                   )}
                 </span>
               );
