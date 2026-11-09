@@ -1401,7 +1401,7 @@ export function ResultGrid({ tab }: ResultGridProps) {
         </div>
       )}
       {showBrowsePager && browse && (
-        <div className="flex items-center gap-3">
+        <div className="flex w-full items-center justify-between gap-3">
           <button
             onClick={addNewRow}
             disabled={tab.isExecuting}
