@@ -44,10 +44,7 @@ export function StatusBar() {
       {serverInfo && status === "connected" ? (
         <>
           <span className="flex items-center gap-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
+            <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
             <span className="font-medium text-foreground/80">{serverLabel}</span>
           </span>
           {serverInfo.version && (
@@ -65,7 +62,7 @@ export function StatusBar() {
       )}
       {/* 行数与耗时由网格信息条展示（同屏重复），这里只保留执行/异常状态 */}
       {activeTab?.isExecuting && (
-        <span className="text-primary animate-pulse">{t("executing")}</span>
+        <span className="text-primary">{t("executing")}</span>
       )}
       {activeTab?.isCancelled && (
         <span className="text-yellow-500">{t("cancelled")}</span>

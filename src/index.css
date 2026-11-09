@@ -98,29 +98,6 @@
     --ring: 342 78% 58%;
   }
 
-  [data-theme='paper'] {
-    /* Aged paper + terracotta ink */
-    --background: 42 38% 94%;
-    --foreground: 30 15% 20%;
-    --card: 42 35% 97%;
-    --card-foreground: 30 15% 20%;
-    --popover: 42 35% 97%;
-    --popover-foreground: 30 15% 20%;
-    --primary: 20 55% 40%;
-    --primary-foreground: 42 40% 96%;
-    --secondary: 42 25% 89%;
-    --secondary-foreground: 30 15% 20%;
-    --muted: 42 25% 89%;
-    --muted-foreground: 30 10% 42%;
-    --accent: 40 50% 84%;
-    --accent-foreground: 20 55% 30%;
-    --destructive: 0 65% 45%;
-    --destructive-foreground: 42 40% 96%;
-    --border: 40 20% 81%;
-    --input: 40 20% 81%;
-    --ring: 20 55% 40%;
-  }
-
   [data-theme='nord'] {
     /* Nord polar night + frost blue */
     --background: 220 16% 16%;
@@ -142,28 +119,6 @@
     --border: 219 12% 28%;
     --input: 219 12% 28%;
     --ring: 193 43% 67%;
-  }
-
-  [data-theme='dracula'] {
-    --background: 231 15% 18%;
-    --foreground: 60 30% 96%;
-    --card: 231 13% 21%;
-    --card-foreground: 60 30% 96%;
-    --popover: 231 13% 21%;
-    --popover-foreground: 60 30% 96%;
-    --primary: 265 89% 78%;
-    --primary-foreground: 231 15% 18%;
-    --secondary: 232 12% 24%;
-    --secondary-foreground: 60 30% 96%;
-    --muted: 232 12% 24%;
-    --muted-foreground: 225 15% 65%;
-    --accent: 191 97% 40%;
-    --accent-foreground: 60 30% 96%;
-    --destructive: 0 92% 67%;
-    --destructive-foreground: 231 15% 18%;
-    --border: 232 12% 28%;
-    --input: 232 12% 28%;
-    --ring: 265 89% 78%;
   }
 
   [data-theme='catppuccin'] {

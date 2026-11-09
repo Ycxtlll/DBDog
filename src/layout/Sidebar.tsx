@@ -90,7 +90,7 @@ function DogFooter() {
         title={t("petTheDog")}
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-          <Dog size={15} className={`text-muted-foreground ${activeTab?.isExecuting && !mood ? "animate-bounce" : ""}`} />
+          <Dog size={15} className="text-muted-foreground" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-medium text-foreground leading-tight">

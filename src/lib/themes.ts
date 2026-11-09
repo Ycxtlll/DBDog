@@ -9,9 +9,7 @@
 export type SkinId =
   | "puppy"
   | "sakura"
-  | "paper"
   | "nord"
-  | "dracula"
   | "catppuccin"
   | "terminal"
   | "collieNight"
@@ -43,25 +41,11 @@ export const SKINS: SkinDef[] = [
     swatch: ["hsl(340 45% 97%)", "hsl(342 78% 58%)", "hsl(345 70% 90%)"],
   },
   {
-    id: "paper",
-    name: "纸墨",
-    nameEn: "Paper",
-    dark: false,
-    swatch: ["hsl(42 38% 94%)", "hsl(20 55% 40%)", "hsl(40 50% 85%)"],
-  },
-  {
     id: "nord",
     name: "Nord",
     nameEn: "Nord",
     dark: true,
     swatch: ["hsl(220 16% 16%)", "hsl(193 43% 67%)", "hsl(219 13% 26%)"],
-  },
-  {
-    id: "dracula",
-    name: "Dracula",
-    nameEn: "Dracula",
-    dark: true,
-    swatch: ["hsl(231 15% 18%)", "hsl(265 89% 78%)", "hsl(191 97% 77%)"],
   },
   {
     id: "catppuccin",
