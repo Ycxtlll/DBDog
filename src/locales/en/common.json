@@ -30,5 +30,6 @@
   "selectConnectionHint": "{{count}} saved connection(s) — click one on the left to connect",
   "petTheDog": "Pet Luna",
   "borderCollieOnDuty": "Luna on duty",
-  "recentTables": "Recent"
+  "recentTables": "Recent",
+  "lunaName": "Luna"
 }

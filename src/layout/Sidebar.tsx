@@ -44,9 +44,7 @@ function DogFooter() {
   const [chewingLong, setChewingLong] = useState(false);
   const [sleeping, setSleeping] = useState(false);
   const sleepingRef = useRef(false);
-  const [ball, setBall] = useState<{ x: number; y: number; out: boolean } | null>(null);
-  const ballStartRef = useRef({ x: 0, y: 0 });
-  const avatarRef = useRef<HTMLSpanElement>(null);
+  const ballTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tugOpen, setTugOpen] = useState(false);
   const bark = useLunaStore((s) => s.bark);
   const diary = useLunaStore((s) => s.diary);
@@ -101,23 +99,14 @@ function DogFooter() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- zh is stable enough for a bark line
   }, []);
 
-  // Fetch! The ball really flies to a random spot and comes right back.
+  // Fetch! Text-only play — she chases in words, no flying icons.
   const throwBall = () => {
-    if (ball) return;
-    const rect = avatarRef.current?.getBoundingClientRect();
-    ballStartRef.current = {
-      x: rect ? rect.left + rect.width / 2 : 120,
-      y: rect ? rect.top + rect.height / 2 : window.innerHeight - 40,
-    };
-    const x = 60 + Math.random() * Math.max(120, window.innerWidth - 120);
-    const y = 60 + Math.random() * Math.max(120, window.innerHeight * 0.55);
+    if (ballTimerRef.current) return;
     useLunaStore.getState().sayBark(zh ? "汪汪！去捡！🎾" : "Woof woof! On it! 🎾");
-    setBall({ x, y, out: true });
-    setTimeout(() => setBall({ x, y, out: false }), 520);
-    setTimeout(() => {
-      setBall(null);
+    ballTimerRef.current = setTimeout(() => {
+      ballTimerRef.current = null;
       useLunaStore.getState().sayBark(zh ? "叼回来了！好球！" : "Got it back! Nice throw!");
-    }, 1150);
+    }, 1200);
   };
 
   // The dog mirrors real app state — the footer doubles as a status lamp.
@@ -202,14 +191,14 @@ function DogFooter() {
       <button
         onClick={pet}
         className="w-full flex items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-accent/40 transition-colors"
-        title={zh ? "摸摸露娜；再点一下切换工作日志" : "Pet Luna; click again to toggle her work log"}
+        title={zh ? "摸摸 Luna；再点一下切换工作日志" : "Pet Luna; click again to toggle her work log"}
       >
-        <span ref={avatarRef} className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
           <Dog size={15} className="text-muted-foreground" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-medium text-foreground leading-tight">
-            {zh ? "露娜 Luna" : "Luna"}
+            {t("lunaName")}
           </span>
           <span className={`block text-[10px] leading-tight truncate ${
             working ? "text-primary" : "text-muted-foreground"
@@ -240,24 +229,6 @@ function DogFooter() {
           🪢
         </button>
       </div>
-      {/* The ball in flight */}
-      {ball && (
-        <div
-          className="fixed z-[100] pointer-events-none text-xl select-none"
-          style={{
-            left: 0,
-            top: 0,
-            marginLeft: -12,
-            marginTop: -12,
-            transform: ball.out
-              ? `translate(${ball.x}px, ${ball.y}px)`
-              : `translate(${ballStartRef.current.x}px, ${ballStartRef.current.y}px)`,
-            transition: "transform 520ms cubic-bezier(0.35, 0.6, 0.4, 1)",
-          }}
-        >
-          🎾
-        </div>
-      )}
       <TugOfWarModal open={tugOpen} onClose={() => setTugOpen(false)} />
     </div>
   );

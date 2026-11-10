@@ -89,9 +89,9 @@ export function TugOfWarModal({ open, onClose }: TugOfWarModalProps) {
 
   const resultLine =
     phase === "won"
-      ? zh ? "你赢了！露娜不服气地摇尾巴" : "You win! Luna wags her tail, unconvinced"
+      ? zh ? "你赢了！Luna 不服气地摇尾巴" : "You win! Luna wags her tail, unconvinced"
       : phase === "lost"
-        ? zh ? "露娜赢了！得意地叼着绳子跑了两圈" : "Luna wins! She parades the rope around twice"
+        ? zh ? "Luna 赢了！得意地叼着绳子跑了两圈" : "Luna wins! She parades the rope around twice"
         : null;
 
   return (
@@ -107,7 +107,7 @@ export function TugOfWarModal({ open, onClose }: TugOfWarModalProps) {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted">
           <span className="text-sm font-semibold text-foreground">
-            {zh ? "和露娜拔河 🪢" : "Tug-of-war with Luna 🪢"}
+            {zh ? "和 Luna 拔河 🪢" : "Tug-of-war with Luna 🪢"}
           </span>
           <button
             onClick={onClose}
@@ -127,13 +127,20 @@ export function TugOfWarModal({ open, onClose }: TugOfWarModalProps) {
             <div className="absolute left-1/2 top-0 bottom-0 border-l border-dashed border-border" />
             <Dog size={16} className="absolute left-1.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <User size={16} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            {/* Knot bar: mapped into a 37px inset on each side — bar half
+                width (13px) + icon zone (22px) — so it never reaches the
+                end icons even at the extreme game values (2/98). */}
             <div
               className="absolute top-1/2 h-2.5 rounded-full bg-primary"
-              style={{ left: `${knot}%`, width: 26, transform: "translate(-50%, -50%)" }}
+              style={{
+                left: `calc(37px + (100% - 74px) * ${knot} / 100)`,
+                width: 26,
+                transform: "translate(-50%, -50%)",
+              }}
             />
           </div>
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{zh ? "露娜这头" : "Luna's end"}</span>
+            <span>{zh ? "Luna 这头" : "Luna's end"}</span>
             <span>{zh ? "把你这头拉过中线就输啦" : "She drags it across and you lose"}</span>
             <span>{zh ? "你这头" : "Your end"}</span>
           </div>
