@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.3] — 2026-11-20
+
+### Added
+
+- **表格编辑「修改立即应用」开关**——设置 → 数据编辑新增开关（默认开启）：单元格保存、删除行、新增行右键保存即按单条事务立刻写入数据库并自动刷新表格；关闭后回到原暂存流程（底部变更集栏审阅后单事务批量应用）。逐条立即保存不再累积回滚 SQL（撤销 Ctrl+Z 仅保留给批量变更集应用）；新增自绘 Switch 开关组件；设置存储增加深合并迁移，旧配置缺省的新字段自动取默认值
+
+### Changed
+
+- **右键菜单翻转定位**——菜单渲染后实测尺寸，贴近右缘改为向左开、贴近底缘改为向上开（原生菜单习惯），不再被窗口裁切；仅当窗口比菜单还矮时才内部滚动兜底
+- **ResultGrid 组件拆分**——1857 行拆为 9 个职责单一的模块（编辑管线与 FK 关系两个 hook、右键菜单/变更集栏/列选择器/选中统计/钉住行组件、列定义与行数据纯函数构建器），行为不变
+
+### Fixed
+
+- **修复"应用修改"报 1295 错误**——变更集事务此前把 `persistent(false)` 当成文本协议执行，实际 sqlx `query()` 零参数仍走 COM_STMT_PREPARE，`START TRANSACTION` 在不支持 PREPARE 事务语句的服务端/代理上报 1295 "This command is not supported in the prepared statement protocol yet"；现改用 `conn.execute(&str)`（无参数 → COM_QUERY 文本协议）开启/提交/回滚事务，事务内单条语句遇 1295 也在同一连接上以文本协议重试，批量应用的整体回滚语义不变
+
 ## [0.4.2] — 2026-11-10
 
 ### Changed
