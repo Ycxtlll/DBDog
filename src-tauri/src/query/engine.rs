@@ -4,6 +4,7 @@ use crate::error::AppError;
 use futures_util::stream::TryStreamExt;
 use sqlx::mysql::{MySqlConnection, MySqlPool};
 use sqlx::Column;
+use sqlx::Executor;
 use sqlx::Row;
 use sqlx::TypeInfo;
 use std::time::Instant;
@@ -121,15 +122,20 @@ async fn run_text_protocol(
     Ok(result)
 }
 
-/// One executor call per function — same HRTB discipline as run_prepared.
-/// `persistent(false)` runs the text protocol (no PREPARE), so transaction
-/// control statements and DDL work; raw_sql + &mut connection trips
-/// "Executor is not general enough" (sqlx HRTB gap).
-async fn run_raw_on_conn(
+/// Text protocol (COM_QUERY, no COM_STMT_PREPARE) on an explicit connection.
+/// `sqlx::query()` ALWAYS prepares — even with zero binds it carries an empty
+/// argument set — so transaction control statements die with 1295 on servers
+/// and proxies that cannot prepare them. `persistent(false)` only skips the
+/// statement cache; it does NOT change protocol. `raw_sql` IS a text-protocol
+/// path but trips "Executor is not general enough" under Tauri's boxed
+/// command futures; `conn.execute(&str)` also runs arguments-free (None →
+/// COM_QUERY — this is how sqlx's own TransactionManager issues
+/// BEGIN/COMMIT) and compiles in the same position.
+async fn run_text_on_conn(
     conn: &mut MySqlConnection,
     sql: &str,
 ) -> Result<sqlx::mysql::MySqlQueryResult, sqlx::Error> {
-    sqlx::query(sql).persistent(false).execute(&mut *conn).await
+    conn.execute(sql).await
 }
 
 /// Apply a staged changeset: every statement runs inside ONE transaction on
@@ -146,16 +152,17 @@ pub async fn execute_transaction(
         .acquire()
         .await
         .map_err(|e| AppError::QueryFailed(e.to_string()))?;
-    run_raw_on_conn(&mut conn, "START TRANSACTION")
+    // Transaction control goes over the text protocol — never preparable.
+    run_text_on_conn(&mut conn, "START TRANSACTION")
         .await
         .map_err(|e| AppError::QueryFailed(format!("开启事务失败: {}", e)))?;
 
     let mut affected: u64 = 0;
     for (idx, stmt) in statements.iter().enumerate() {
-        match run_raw_on_conn(&mut conn, stmt).await {
+        match run_in_transaction(&mut conn, stmt).await {
             Ok(n) => affected += n.rows_affected(),
             Err(e) => {
-                let _ = run_raw_on_conn(&mut conn, "ROLLBACK").await;
+                let _ = run_text_on_conn(&mut conn, "ROLLBACK").await;
                 return Err(AppError::QueryFailed(format!(
                     "第 {}/{} 条失败，已全部回滚: {}",
                     idx + 1,
@@ -166,8 +173,24 @@ pub async fn execute_transaction(
         }
     }
 
-    run_raw_on_conn(&mut conn, "COMMIT")
+    run_text_on_conn(&mut conn, "COMMIT")
         .await
         .map_err(|e| AppError::QueryFailed(format!("事务提交失败: {}", e)))?;
     Ok(affected)
+}
+
+/// Run one changeset statement inside the open transaction: prepared
+/// protocol first; on ER_UNSUPPORTED_PS (1295 — CREATE TRIGGER/PROCEDURE and
+/// proxies that cannot prepare) rerun the statement over the text protocol
+/// on the SAME connection, so the surrounding transaction still covers it
+/// (unlike execute_update's pool fallback, which would break atomicity).
+async fn run_in_transaction(
+    conn: &mut MySqlConnection,
+    sql: &str,
+) -> Result<sqlx::mysql::MySqlQueryResult, sqlx::Error> {
+    match run_prepared(conn, sql).await {
+        Ok(result) => Ok(result),
+        Err(e) if is_unsupported_prepared_statement(&e) => run_text_on_conn(conn, sql).await,
+        Err(e) => Err(e),
+    }
 }

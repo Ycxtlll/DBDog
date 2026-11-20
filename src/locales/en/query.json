@@ -82,6 +82,7 @@
   "formatted": "Formatted",
   "copyFull": "Copy full text",
   "stagedToast": "Added to changeset (pending)",
+  "appliedToast": "Applied to database",
   "changesetBar": "{{count}} changes pending",
   "changesetView": "Review",
   "changesetApply": "Apply all",

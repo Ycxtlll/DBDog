@@ -6,6 +6,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { SKINS } from "../../lib/themes";
 import { useModalFocus } from "../../lib/useModalFocus";
 import { useDelayedUnmount } from "../../lib/useDelayedUnmount";
+import { Switch } from "../ui/Switch";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -20,7 +21,7 @@ const segInactive = "bg-background border-border hover:border-primary/50 hover:b
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { t, i18n } = useTranslation(["settings", "common"]);
-  const { theme, language, setTheme, setLanguage } = useUiStore();
+  const { theme, language, setTheme, setLanguage, query, updateQuery } = useUiStore();
   const [version, setVersion] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   useModalFocus(panelRef, { active: isOpen, onEscape: onClose });
@@ -143,6 +144,26 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <span className="whitespace-nowrap">{item.label}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Data editing */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              {t("settings:dataEditing")}
+            </label>
+            <div className="rounded-md border border-border bg-background px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-foreground">{t("settings:applyImmediately")}</span>
+                <Switch
+                  checked={query.applyImmediately}
+                  onChange={(e) => updateQuery({ applyImmediately: e.target.checked })}
+                  aria-label={t("settings:applyImmediately")}
+                />
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                {t("settings:applyImmediatelyHint")}
+              </p>
             </div>
           </div>
         </div>

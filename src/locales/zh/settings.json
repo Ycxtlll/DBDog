@@ -5,6 +5,9 @@
   "editor": "编辑器",
   "query": "查询",
   "performance": "性能",
+  "dataEditing": "数据编辑",
+  "applyImmediately": "修改立即应用",
+  "applyImmediatelyHint": "保存表格编辑后立即写入数据库；关闭后修改暂存到底部变更集，点\"应用\"一次性提交。",
   "chinese": "中文",
   "english": "English"
 }

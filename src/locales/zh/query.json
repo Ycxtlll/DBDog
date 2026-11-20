@@ -82,6 +82,7 @@
   "formatted": "格式化",
   "copyFull": "复制全文",
   "stagedToast": "已加入变更集，待应用",
+  "appliedToast": "已应用到数据库",
   "changesetBar": "{{count}} 处修改待应用",
   "changesetView": "查看",
   "changesetApply": "全部应用",

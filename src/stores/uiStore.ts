@@ -30,6 +30,7 @@ const defaultSettings: AppSettings = {
   query: {
     defaultLimit: 1000,
     cancelOnNavigate: true,
+    applyImmediately: true,
   },
   performance: {
     connectionTimeoutSecs: 30,
@@ -64,6 +65,19 @@ export const useUiStore = create<UiState>()(
         query: state.query,
         performance: state.performance,
       }),
+      // Storage predates newer nested settings — merge each group over the
+      // defaults so fields added later (e.g. query.applyImmediately) get
+      // their default instead of overwriting the whole group as undefined.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<UiState>;
+        return {
+          ...current,
+          ...p,
+          editor: { ...current.editor, ...(p.editor ?? {}) },
+          query: { ...current.query, ...(p.query ?? {}) },
+          performance: { ...current.performance, ...(p.performance ?? {}) },
+        };
+      },
     },
   ),
 );

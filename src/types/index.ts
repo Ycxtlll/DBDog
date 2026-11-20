@@ -313,6 +313,9 @@ export interface AppSettings {
   query: {
     defaultLimit: number;
     cancelOnNavigate: boolean;
+    /** true (default) = saving a grid edit writes to the DB at once;
+     *  false = stage edits into the changeset bar for one batch transaction. */
+    applyImmediately: boolean;
   };
   performance: {
     connectionTimeoutSecs: number;

@@ -5,6 +5,9 @@
   "editor": "Editor",
   "query": "Query",
   "performance": "Performance",
+  "dataEditing": "Data Editing",
+  "applyImmediately": "Apply edits immediately",
+  "applyImmediatelyHint": "Saving a grid edit writes it to the database right away. Turn off to stage edits in the changeset bar and apply them together as one transaction.",
   "chinese": "中文",
   "english": "English"
 }
